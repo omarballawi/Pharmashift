@@ -28,7 +28,7 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(result.tradeNames, ["Glucophage"])
         XCTAssertEqual(result.dosageForms, ["Tablet"])
         XCTAssertEqual(result.strengths, ["500 mg"])
-        XCTAssertEqual(result.halfLifeHours, 6.2, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(result.halfLifeHours), 6.2, accuracy: 0.001)
         XCTAssertEqual(result.onsetMinutes, 30)
         XCTAssertEqual(result.durationHours, 12)
         XCTAssertTrue(result.rawSectionText.keys.contains("34067-9"))
@@ -68,8 +68,10 @@ final class DrugImportServiceTests: XCTestCase {
     func testMockProviderIsDeterministic() async throws {
         let search = DrugSearchResult(genericName: "Imported name", brandNames: [], formulation: "Tablet", labelTitle: "IMPORTED NAME TABLET", updateDate: nil, labelID: "test")
         let provider = MockDrugInfoProvider(results: [search], details: ["test": makeInfo()])
-        XCTAssertEqual(try await provider.searchDrug(query: "Imported").map(\.labelID), ["test"])
-        XCTAssertEqual(try await provider.fetchDrugDetails(id: "test").scientificName, "Imported name")
+        let found = try await provider.searchDrug(query: "Imported")
+        let details = try await provider.fetchDrugDetails(id: "test")
+        XCTAssertEqual(found.map(\.labelID), ["test"])
+        XCTAssertEqual(details.scientificName, "Imported name")
     }
 
     private func makeInfo() -> ImportedDrugInfo {

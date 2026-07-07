@@ -20,6 +20,7 @@ struct DrugEditorView: View {
     @State private var selectedSection: DrugEditorSection = .basics
     @State private var photoItem: PhotosPickerItem?
     @State private var imageFlow: ImageFlowDestination?
+    @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
 
@@ -86,11 +87,13 @@ struct DrugEditorView: View {
                 HStack {
                     Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
                         .accessibilityIdentifier("drugEditor.camera")
+                        .accessibilityValue(lastImageSource == .camera ? "Selected" : "Not selected")
                     Spacer()
                     Button { beginImageFlow(.library) } label: {
                         Label(drug.imageData == nil ? "Photo Library" : "Replace", systemImage: "photo.on.rectangle")
                     }
                     .accessibilityIdentifier("drugEditor.photoLibrary")
+                    .accessibilityValue(lastImageSource == .library ? "Selected" : "Not selected")
                 }
                 if drug.imageData != nil {
                     Button(role: .destructive) {
@@ -339,6 +342,11 @@ struct DrugEditorView: View {
         if case .camera = destination, !UIImagePickerController.isSourceTypeAvailable(.camera) {
             errorMessage = "Camera is unavailable on this device. Choose a photo from the library instead."
             return
+        }
+        switch destination {
+        case .camera: lastImageSource = .camera
+        case .library: lastImageSource = .library
+        case .crop: break
         }
         imageFlow = destination
     }

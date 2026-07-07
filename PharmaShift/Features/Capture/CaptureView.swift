@@ -23,6 +23,7 @@ struct CaptureView: View {
     @State private var thumbnailData: Data?
     @State private var photoItem: PhotosPickerItem?
     @State private var imageFlow: ImageFlowDestination?
+    @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
     @State private var savedDrug: Drug?
@@ -42,14 +43,14 @@ struct CaptureView: View {
                     Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
                         .frame(minHeight: 48)
                         .accessibilityIdentifier("capture.camera")
-                        .accessibilityValue(isCameraFlow ? "Selected" : "Not selected")
+                        .accessibilityValue(lastImageSource == .camera ? "Selected" : "Not selected")
                     Spacer()
                     Button { beginImageFlow(.library) } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
                     .frame(minHeight: 48)
                     .accessibilityIdentifier("capture.photoLibrary")
-                    .accessibilityValue(isLibraryFlow ? "Selected" : "Not selected")
+                    .accessibilityValue(lastImageSource == .library ? "Selected" : "Not selected")
                 }
                 if imageData != nil {
                     Button(role: .destructive) {
@@ -217,9 +218,6 @@ struct CaptureView: View {
         )
     }
 
-    private var isCameraFlow: Bool { if case .camera? = imageFlow { true } else { false } }
-    private var isLibraryFlow: Bool { if case .library? = imageFlow { true } else { false } }
-
     private var libraryPresentation: Binding<Bool> {
         Binding(
             get: { if case .library? = imageFlow { true } else { false } },
@@ -240,6 +238,11 @@ struct CaptureView: View {
         if case .camera = destination, !UIImagePickerController.isSourceTypeAvailable(.camera) {
             message = "Camera is unavailable on this device. Choose a photo from the library instead."
             return
+        }
+        switch destination {
+        case .camera: lastImageSource = .camera
+        case .library: lastImageSource = .library
+        case .crop: break
         }
         imageFlow = destination
     }

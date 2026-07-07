@@ -14,6 +14,11 @@ struct ImageDraft: Identifiable {
     let image: UIImage
 }
 
+enum ImageAcquisitionSource: String {
+    case camera
+    case library
+}
+
 enum ImageFlowDestination: Identifiable {
     case camera
     case library

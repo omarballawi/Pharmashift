@@ -172,6 +172,6 @@ final class ModelAndPersistenceTests: XCTestCase {
         let verificationContext = ModelContext(container)
         let retainedLog = try XCTUnwrap(verificationContext.fetch(FetchDescriptor<ReviewLog>()).first)
         XCTAssertEqual(retainedLog.drugNameSnapshot, "Test Drug")
-        XCTAssertNil(retainedLog.drug)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<Drug>()), 0)
     }
 }

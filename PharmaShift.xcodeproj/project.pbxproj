@@ -1,0 +1,150 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000001 /* Models.swift */; };
+		B00000000000000000000002 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000002 /* AppTheme.swift */; };
+		B00000000000000000000003 /* PharmaShiftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000003 /* PharmaShiftApp.swift */; };
+		B00000000000000000000004 /* AppShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000004 /* AppShell.swift */; };
+		B00000000000000000000005 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000005 /* Components.swift */; };
+		B00000000000000000000006 /* ImageCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000006 /* ImageCapture.swift */; };
+		B00000000000000000000007 /* StarterContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000007 /* StarterContent.swift */; };
+		B00000000000000000000008 /* ReviewScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000008 /* ReviewScheduler.swift */; };
+		B00000000000000000000009 /* ReportFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000009 /* ReportFile.swift */; };
+		B0000000000000000000000A /* ReportBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000A /* ReportBuilder.swift */; };
+		B0000000000000000000000B /* PrivacyValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000B /* PrivacyValidator.swift */; };
+		B0000000000000000000000C /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000C /* CaptureView.swift */; };
+		B0000000000000000000000D /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000D /* LibraryView.swift */; };
+		B0000000000000000000000E /* DrugEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000E /* DrugEditorView.swift */; };
+		B0000000000000000000000F /* DrugDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000F /* DrugDetailView.swift */; };
+		B00000000000000000000010 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000010 /* ReportView.swift */; };
+		B00000000000000000000011 /* PracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* PracticeView.swift */; };
+		B00000000000000000000012 /* ShiftView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ShiftView.swift */; };
+		B00000000000000000000013 /* ReviewSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* ReviewSchedulerTests.swift */; };
+		B00000000000000000000014 /* ModelAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* ModelAndPersistenceTests.swift */; };
+		B00000000000000000000015 /* ReportBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000016 /* ReportBuilderTests.swift */; };
+		B00000000000000000000016 /* PharmaShiftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* PharmaShiftUITests.swift */; };
+		B00000000000000000000017 /* PreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* PreviewSupport.swift */; };
+		B00000000000000000000018 /* DrugFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001C /* DrugFilter.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D00000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = C00000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = C00000000000000000000002; remoteInfo = PharmaShift; };
+		D00000000000000000000002 = {isa = PBXContainerItemProxy; containerPortal = C00000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = C00000000000000000000002; remoteInfo = PharmaShift; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A00000000000000000000001 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Models/Models.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000002 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/App/AppTheme.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000003 /* PharmaShiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/App/PharmaShiftApp.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000004 /* AppShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/App/AppShell.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000005 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Shared/Components.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000006 /* ImageCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Shared/ImageCapture.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000007 /* StarterContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/StarterContent.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000008 /* ReviewScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/ReviewScheduler.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000009 /* ReportFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/ReportFile.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000A /* ReportBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/ReportBuilder.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000B /* PrivacyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/PrivacyValidator.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000C /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Capture/CaptureView.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000D /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Library/LibraryView.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000E /* DrugEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Library/DrugEditorView.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000000F /* DrugDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Library/DrugDetailView.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000010 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Report/ReportView.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000011 /* PracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Practice/PracticeView.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000012 /* ShiftView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Features/Shift/ShiftView.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PharmaShift/Info.plist; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000014 /* ReviewSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/ReviewSchedulerTests.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000015 /* ModelAndPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/ModelAndPersistenceTests.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000016 /* ReportBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/ReportBuilderTests.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000017 /* PharmaShiftUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftUITests/PharmaShiftUITests.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000018 /* PharmaShift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PharmaShift.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000019 /* PharmaShiftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PharmaShiftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000001A /* PharmaShiftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PharmaShiftUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000001B /* PreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Shared/PreviewSupport.swift; sourceTree = SOURCE_ROOT; };
+		A0000000000000000000001C /* DrugFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/DrugFilter.swift; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E00000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C00000000000000000000010 = {isa = PBXGroup; children = (
+			C00000000000000000000011 /* PharmaShift */,
+			C00000000000000000000012 /* PharmaShiftTests */,
+			C00000000000000000000013 /* PharmaShiftUITests */,
+			C00000000000000000000014 /* Products */,
+		); sourceTree = "<group>"; };
+		C00000000000000000000011 /* PharmaShift */ = {isa = PBXGroup; children = (
+			A00000000000000000000003, A00000000000000000000004, A00000000000000000000002,
+			A00000000000000000000001, A00000000000000000000005, A00000000000000000000006, A0000000000000000000001B,
+			A00000000000000000000008, A0000000000000000000000B, A00000000000000000000007, A0000000000000000000001C,
+			A0000000000000000000000A, A00000000000000000000009, A0000000000000000000000C,
+			A0000000000000000000000D, A0000000000000000000000F, A0000000000000000000000E,
+			A00000000000000000000012, A00000000000000000000011, A00000000000000000000010,
+			A00000000000000000000013,
+		); name = PharmaShift; sourceTree = "<group>"; };
+		C00000000000000000000012 /* PharmaShiftTests */ = {isa = PBXGroup; children = (A00000000000000000000014, A00000000000000000000015, A00000000000000000000016,); name = PharmaShiftTests; sourceTree = "<group>"; };
+		C00000000000000000000013 /* PharmaShiftUITests */ = {isa = PBXGroup; children = (A00000000000000000000017,); name = PharmaShiftUITests; sourceTree = "<group>"; };
+		C00000000000000000000014 /* Products */ = {isa = PBXGroup; children = (A00000000000000000000018, A00000000000000000000019, A0000000000000000000001A,); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C00000000000000000000002 /* PharmaShift */ = {isa = PBXNativeTarget; buildConfigurationList = F00000000000000000000002; buildPhases = (E00000000000000000000011, E00000000000000000000001, E00000000000000000000021,); buildRules = (); dependencies = (); name = PharmaShift; productName = PharmaShift; productReference = A00000000000000000000018; productType = "com.apple.product-type.application"; };
+		C00000000000000000000003 /* PharmaShiftTests */ = {isa = PBXNativeTarget; buildConfigurationList = F00000000000000000000003; buildPhases = (E00000000000000000000012, E00000000000000000000002, E00000000000000000000022,); buildRules = (); dependencies = (D00000000000000000000011,); name = PharmaShiftTests; productName = PharmaShiftTests; productReference = A00000000000000000000019; productType = "com.apple.product-type.bundle.unit-test"; };
+		C00000000000000000000004 /* PharmaShiftUITests */ = {isa = PBXNativeTarget; buildConfigurationList = F00000000000000000000004; buildPhases = (E00000000000000000000013, E00000000000000000000003, E00000000000000000000023,); buildRules = (); dependencies = (D00000000000000000000012,); name = PharmaShiftUITests; productName = PharmaShiftUITests; productReference = A0000000000000000000001A; productType = "com.apple.product-type.bundle.ui-testing"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C00000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {C00000000000000000000002 = {CreatedOnToolsVersion = 16.0;}; C00000000000000000000003 = {CreatedOnToolsVersion = 16.0; TestTargetID = C00000000000000000000002;}; C00000000000000000000004 = {CreatedOnToolsVersion = 16.0; TestTargetID = C00000000000000000000002;};};}; buildConfigurationList = F00000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = C00000000000000000000010; productRefGroup = C00000000000000000000014; projectDirPath = ""; projectRoot = ""; targets = (C00000000000000000000002, C00000000000000000000003, C00000000000000000000004,); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E00000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000022 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000023 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E00000000000000000000011 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004,
+			B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008,
+			B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C,
+			B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010,
+			B00000000000000000000011, B00000000000000000000012, B00000000000000000000017, B00000000000000000000018,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000012 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000013, B00000000000000000000014, B00000000000000000000015,); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000013 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D00000000000000000000011 = {isa = PBXTargetDependency; target = C00000000000000000000002; targetProxy = D00000000000000000000001; };
+		D00000000000000000000012 = {isa = PBXTargetDependency; target = C00000000000000000000002; targetProxy = D00000000000000000000002; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		F00000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_OPTIMIZATION_LEVEL = 0; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		F00000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; VALIDATE_PRODUCT = YES; }; name = Release; };
+		F00000000000000000000021 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		F00000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+		F00000000000000000000031 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PharmaShift.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PharmaShift"; }; name = Debug; };
+		F00000000000000000000032 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PharmaShift.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PharmaShift"; }; name = Release; };
+		F00000000000000000000041 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Debug; };
+		F00000000000000000000042 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F00000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (F00000000000000000000011, F00000000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (F00000000000000000000021, F00000000000000000000022,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F00000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (F00000000000000000000031, F00000000000000000000032,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F00000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (F00000000000000000000041, F00000000000000000000042,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = C00000000000000000000001 /* Project object */;
+}

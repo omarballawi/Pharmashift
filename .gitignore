@@ -12,3 +12,4 @@ xcuserdata/
 
 # Graphify keeps the durable graph/report in git; extraction caches stay local.
 graphify-out/cache/
+graphify-out/????-??-??/

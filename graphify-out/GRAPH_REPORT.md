@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 486 nodes · 1117 edges · 30 communities (27 shown, 3 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 63 edges (avg confidence: 0.8)
+- 508 nodes · 1079 edges · 31 communities (24 shown, 7 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 27 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8db701d6`
+- Built from commit: `2152e50f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -45,71 +45,72 @@
 - [[_COMMUNITY_AppTheme|AppTheme]]
 - [[_COMMUNITY_Foundation|Foundation]]
 - [[_COMMUNITY_ReportEditorView|ReportEditorView]]
+- [[_COMMUNITY_Path|Path]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `String` - 82 edges
-2. `Drug` - 77 edges
-3. `Chapter` - 37 edges
+1. `String` - 68 edges
+2. `Drug` - 54 edges
+3. `Chapter` - 35 edges
 4. `DrugEditorView` - 34 edges
-5. `ShiftLog` - 22 edges
-6. `Coordinator` - 22 edges
-7. `SafetySeverity` - 18 edges
-8. `ReviewLog` - 18 edges
-9. `CaptureView` - 17 edges
-10. `QuestionType` - 17 edges
+5. `Coordinator` - 22 edges
+6. `ShiftLog` - 21 edges
+7. `CaptureView` - 17 edges
+8. `QuestionType` - 17 edges
+9. `ReviewLog` - 17 edges
+10. `DrugDetailView` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `AppTab` --references--> `String`  [EXTRACTED]
-  PharmaShift/App/AppShell.swift → PharmaShift/Models/Models.swift
-- `PharmaShiftApp` --calls--> `AppTheme`  [INFERRED]
-  PharmaShift/App/PharmaShiftApp.swift → PharmaShift/App/AppTheme.swift
-- `CaptureView` --references--> `Chapter`  [EXTRACTED]
-  PharmaShift/Features/Capture/CaptureView.swift → PharmaShift/Models/Models.swift
-- `CaptureView` --references--> `Drug`  [EXTRACTED]
-  PharmaShift/Features/Capture/CaptureView.swift → PharmaShift/Models/Models.swift
-- `CaptureView` --references--> `String`  [EXTRACTED]
-  PharmaShift/Features/Capture/CaptureView.swift → PharmaShift/Models/Models.swift
+- `PreviewData` --calls--> `Drug`  [INFERRED]
+  PharmaShift/Shared/PreviewSupport.swift → PharmaShift/Models/Models.swift
+- `PreviewData` --calls--> `ShiftLog`  [INFERRED]
+  PharmaShift/Shared/PreviewSupport.swift → PharmaShift/Models/Models.swift
+- `CaptureView` --references--> `ImageAcquisitionSource`  [EXTRACTED]
+  PharmaShift/Features/Capture/CaptureView.swift → PharmaShift/Shared/ImageCapture.swift
+- `CaptureView` --references--> `ImageDraft`  [EXTRACTED]
+  PharmaShift/Features/Capture/CaptureView.swift → PharmaShift/Shared/ImageCapture.swift
+- `DrugEditorView` --references--> `ImageDraft`  [EXTRACTED]
+  PharmaShift/Features/Library/DrugEditorView.swift → PharmaShift/Shared/ImageCapture.swift
 
 ## Import Cycles
 - None detected.
 
-## Communities (30 total, 3 thin omitted)
+## Communities (31 total, 7 thin omitted)
 
 ### Community 0 - "ShiftLog"
-Cohesion: 0.06
-Nodes (34): ModelContainer, PracticeView, ReportView, Double, WeaknessRadarView, EndShiftView, Binding, ReferenceWritableKeyPath (+26 more)
+Cohesion: 0.10
+Nodes (27): ReportEditorView, ReportView, Binding, Date, Double, ReferenceWritableKeyPath, WeaknessRadarView, EncounterEditorView (+19 more)
 
 ### Community 1 - "SwiftUI"
-Cohesion: 0.20
-Nodes (10): DrugCardAnchor, arabic, counseling, identity, mastery, notes, pharmacology, review (+2 more)
+Cohesion: 0.08
+Nodes (24): App, ModelContainer, Observation, AppTheme, Color, PharmaShiftApp, DrugCardAnchor, arabic (+16 more)
 
 ### Community 2 - "Drug"
-Cohesion: 0.10
-Nodes (24): ClosedRange, DrugEditorView, Binding, Bool, Double, PhotosPickerItem, ReferenceWritableKeyPath, SafetySeverity (+16 more)
+Cohesion: 0.07
+Nodes (31): ClosedRange, Content, DrugDetailView, Color, DrugRow, SafetySeverity, high, low (+23 more)
 
 ### Community 3 - "ImageCapture.swift"
-Cohesion: 0.06
-Nodes (40): Any, CGRect, CGSize, Context, ImageIO, LocalizedError, NSObject, CameraPicker (+32 more)
+Cohesion: 0.07
+Nodes (37): Any, CGFloat, CGPoint, CGRect, CGSize, Context, ImageIO, Int (+29 more)
 
 ### Community 4 - "String"
-Cohesion: 0.08
-Nodes (28): Content, HomeView, Color, Double, Int, SystemDashboardCard, SystemDashboardMetrics, DrugDetailSheet (+20 more)
+Cohesion: 0.17
+Nodes (9): PracticeMode, cases, counseling, drugClass, nameFlip, use, warning, PracticeSessionView (+1 more)
 
 ### Community 5 - "Chapter"
 Cohesion: 0.07
-Nodes (30): AboutView, AppNavigation, AppShell, AppTab, capture, home, library, more (+22 more)
+Nodes (29): AboutView, AppNavigation, AppShell, AppTab, capture, home, library, more (+21 more)
 
 ### Community 6 - "QuestionType"
-Cohesion: 0.19
-Nodes (6): PharmaShift, ReportBuilderTests, PharmaShiftUITests, UIKit, XCTest, XCTestCase
+Cohesion: 0.10
+Nodes (6): PharmaShift, ModelAndPersistenceTests, ReportBuilderTests, PharmaShiftUITests, XCTest, XCTestCase
 
 ### Community 7 - "LibraryView"
-Cohesion: 0.24
-Nodes (5): ModelContext, LibraryView, Int, StarterContent, Int
+Cohesion: 0.07
+Nodes (19): CoreTransferable, Foundation, Hashable, ModelContext, LibraryView, Int, DrugFilter, Bool (+11 more)
 
 ### Community 8 - "PracticeSessionView"
-Cohesion: 0.33
-Nodes (3): PhotosUI, SwiftData, SwiftUI
+Cohesion: 0.25
+Nodes (8): Identifiable, DrugDetailSheet, editor, review, ReviewRating, correct, partlyCorrect, wrong
 
 ### Community 9 - "ShiftView"
 Cohesion: 0.33
@@ -140,12 +141,12 @@ Cohesion: 0.40
 Nodes (5): CaseIterable, ProdrugStatus, no, unknown, yes
 
 ### Community 16 - "Codable"
-Cohesion: 0.22
-Nodes (9): Codable, ReviewRating, correct, partlyCorrect, wrong, VerificationStatus, pendingPharmacist, personal (+1 more)
+Cohesion: 0.40
+Nodes (5): Codable, VerificationStatus, pendingPharmacist, personal, pharmacistVerified
 
 ### Community 17 - "ConfidenceLevel"
-Cohesion: 0.25
-Nodes (8): Hashable, Identifiable, ConfidenceLevel, mastered, medium, strong, weak, PracticeCase
+Cohesion: 0.40
+Nodes (5): ConfidenceLevel, mastered, medium, strong, weak
 
 ### Community 18 - "DurationBand"
 Cohesion: 0.40
@@ -160,48 +161,36 @@ Cohesion: 0.09
 Nodes (20): CaptureView, FocusField, scientific, trade, unknownLabel, SaveAction, another, later (+12 more)
 
 ### Community 22 - "QuestionType"
-Cohesion: 0.25
-Nodes (8): QuestionType, casePractice, counseling, drugClass, scientificName, tradeName, use, warning
+Cohesion: 0.14
+Nodes (14): QuestionType, casePractice, counseling, drugClass, scientificName, tradeName, use, warning (+6 more)
 
 ### Community 23 - "ReportEditorView"
-Cohesion: 0.29
-Nodes (7): DrugEditorSection, basics, counseling, notes, pk, safety, uses
+Cohesion: 0.10
+Nodes (32): DosingFrequency, Double, DurationBand, ExcretionRoute, HalfLifeBand, LocalizedError, OnsetBand, PharmacologyScale (+24 more)
 
 ### Community 24 - "Q: What should PharmaShift do after Phase 1?"
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: What should PharmaShift do after Phase 1?, Source Nodes
 
-### Community 25 - "Identifiable"
-Cohesion: 0.38
-Nodes (4): ReportEditorView, Binding, Date, ReferenceWritableKeyPath
-
-### Community 27 - "AppTheme"
-Cohesion: 0.40
-Nodes (5): App, AppTheme, Color, PharmaShiftApp, Scene
-
-### Community 28 - "Foundation"
-Cohesion: 0.33
-Nodes (5): CoreTransferable, ReportFile, Transferable, TransferRepresentation, UniformTypeIdentifiers
-
 ## Knowledge Gaps
-- **125 isolated node(s):** `home`, `library`, `capture`, `practice`, `more` (+120 more)
+- **125 isolated node(s):** `another`, `later`, `open`, `scientific`, `trade` (+120 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `String` connect `String` to `ShiftLog`, `SwiftUI`, `Drug`, `ImageCapture.swift`, `Chapter`, `LibraryView`, `ShiftView`, `Identifiable`, `SafetyFlag`, `DosingFrequency`, `HalfLifeBand`, `CaseIterable`, `Codable`, `ConfidenceLevel`, `DurationBand`, `OnsetBand`, `ModelAndPersistenceTests`, `QuestionType`, `ReportEditorView`, `Identifiable`, `Foundation`, `ReportEditorView`?**
-  _High betweenness centrality (0.339) - this node is a cross-community bridge._
-- **Why does `Drug` connect `ShiftLog` to `Drug`, `ImageCapture.swift`, `String`, `Chapter`, `LibraryView`, `ShiftView`, `Identifiable`, `SafetyFlag`, `DosingFrequency`, `HalfLifeBand`, `CaseIterable`, `Codable`, `ConfidenceLevel`, `DurationBand`, `OnsetBand`, `ModelAndPersistenceTests`?**
-  _High betweenness centrality (0.209) - this node is a cross-community bridge._
-- **Why does `Chapter` connect `Chapter` to `ShiftLog`, `Drug`, `String`, `ShiftView`, `CaseIterable`, `Codable`, `ConfidenceLevel`, `ModelAndPersistenceTests`, `AppTheme`?**
-  _High betweenness centrality (0.084) - this node is a cross-community bridge._
-- **Are the 15 inferred relationships involving `Drug` (e.g. with `.safetyFlagBinding()` and `.grade()`) actually correct?**
-  _`Drug` has 15 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `home`, `library`, `capture` to the rest of the system?**
+- **Why does `String` connect `ShiftLog` to `SwiftUI`, `Drug`, `String`, `Chapter`, `LibraryView`, `PracticeSessionView`, `ShiftView`, `Identifiable`, `SafetyFlag`, `DosingFrequency`, `HalfLifeBand`, `CaseIterable`, `Codable`, `ConfidenceLevel`, `DurationBand`, `OnsetBand`, `QuestionType`?**
+  _High betweenness centrality (0.189) - this node is a cross-community bridge._
+- **Why does `Drug` connect `ShiftLog` to `SwiftUI`, `Drug`, `String`, `Chapter`, `LibraryView`, `ShiftView`, `Identifiable`, `SafetyFlag`, `DosingFrequency`, `HalfLifeBand`, `CaseIterable`, `Codable`, `ConfidenceLevel`, `DurationBand`, `OnsetBand`, `QuestionType`?**
+  _High betweenness centrality (0.126) - this node is a cross-community bridge._
+- **Why does `DrugEditorView` connect `ReportEditorView` to `SwiftUI`, `Drug`, `ImageCapture.swift`, `ModelAndPersistenceTests`?**
+  _High betweenness centrality (0.085) - this node is a cross-community bridge._
+- **Are the 6 inferred relationships involving `Drug` (e.g. with `.grade()` and `PreviewData`) actually correct?**
+  _`Drug` has 6 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `another`, `later`, `open` to the rest of the system?**
   _125 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ShiftLog` be split into smaller, more focused modules?**
-  _Cohesion score 0.06342342342342343 - nodes in this community are weakly interconnected._
-- **Should `Drug` be split into smaller, more focused modules?**
-  _Cohesion score 0.0966183574879227 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0962962962962963 - nodes in this community are weakly interconnected._
+- **Should `SwiftUI` be split into smaller, more focused modules?**
+  _Cohesion score 0.07765151515151515 - nodes in this community are weakly interconnected._

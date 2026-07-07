@@ -1,0 +1,162 @@
+{
+  ".codex/hooks.json": {
+    "mtime": 1783417166.6888452,
+    "ast_hash": "13b70c45cd1d4e51eb1706396986196a",
+    "semantic_hash": ""
+  },
+  "PharmaShiftTests/ModelAndPersistenceTests.swift": {
+    "mtime": 1783393330.1237729,
+    "ast_hash": "a61f4a66593246a85abe063240fdbd69",
+    "semantic_hash": ""
+  },
+  "PharmaShiftTests/ReportBuilderTests.swift": {
+    "mtime": 1783393104.0117955,
+    "ast_hash": "4ab0e9437e5d380935fa8f5832270639",
+    "semantic_hash": ""
+  },
+  "PharmaShiftTests/ReviewSchedulerTests.swift": {
+    "mtime": 1783387544.497605,
+    "ast_hash": "7d0c148d3b8a8f04c978648c6a4070ff",
+    "semantic_hash": ""
+  },
+  "PharmaShiftUITests/PharmaShiftUITests.swift": {
+    "mtime": 1783393296.9159105,
+    "ast_hash": "b50a9d895a3eb9310bb3c34817e40c1e",
+    "semantic_hash": ""
+  },
+  "PharmaShift/App/AppShell.swift": {
+    "mtime": 1783392883.284895,
+    "ast_hash": "eb684aa504883f00e623b1df5ccdf667",
+    "semantic_hash": ""
+  },
+  "PharmaShift/App/AppTheme.swift": {
+    "mtime": 1783392686.1318953,
+    "ast_hash": "af94e7830271b204410e8a0dac64f0fd",
+    "semantic_hash": ""
+  },
+  "PharmaShift/App/PharmaShiftApp.swift": {
+    "mtime": 1783387078.872175,
+    "ast_hash": "ad33ef3334619fa434fd0d30f49dbc77",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Capture/CaptureView.swift": {
+    "mtime": 1783392878.2752905,
+    "ast_hash": "07064c4d0934f3cd6467379a0958b942",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Home/HomeView.swift": {
+    "mtime": 1783392777.231631,
+    "ast_hash": "abdb89396a8c1f96c76f065724f7fffc",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Library/DrugDetailView.swift": {
+    "mtime": 1783393417.3794668,
+    "ast_hash": "b3a69b9959e439069e8404905dac8dd3",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Library/DrugEditorView.swift": {
+    "mtime": 1783393229.4567187,
+    "ast_hash": "d4ca9d3ba48465b4568c593c7bbcf7a3",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Library/LibraryView.swift": {
+    "mtime": 1783393390.1819968,
+    "ast_hash": "0c01b9686de6d2f8a28fdf796e943e36",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Practice/PracticeView.swift": {
+    "mtime": 1783393349.9872108,
+    "ast_hash": "e8d2402a2cf1b1f274c4aab7e334ff3e",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Report/ReportView.swift": {
+    "mtime": 1783388125.708499,
+    "ast_hash": "aa8fc4fc20188fdc5f180ab8fcb9f89d",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Features/Shift/ShiftView.swift": {
+    "mtime": 1783389747.475196,
+    "ast_hash": "67b840d64eabc90673dbfc965061b3b5",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Models/Models.swift": {
+    "mtime": 1783393330.122773,
+    "ast_hash": "a673ff369ad6cdbb5a8100d69b25da3e",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/DrugFilter.swift": {
+    "mtime": 1783392893.5783696,
+    "ast_hash": "4af2ac99c9c3ce2c85bc64242f2cd21b",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/PrivacyValidator.swift": {
+    "mtime": 1783387157.3156972,
+    "ast_hash": "3a7bfe60122379e145c304324ecb4a6e",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/ReportBuilder.swift": {
+    "mtime": 1783393104.0107949,
+    "ast_hash": "0b175c5c2ba38edeab6457d1b7422564",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/ReportFile.swift": {
+    "mtime": 1783387890.084068,
+    "ast_hash": "eb31a72025bff038e9788ad2711474fc",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/ReviewScheduler.swift": {
+    "mtime": 1783387157.3054008,
+    "ast_hash": "34b666aa87ec8dae3e20e17b0eac3bc2",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Services/StarterContent.swift": {
+    "mtime": 1783387801.263691,
+    "ast_hash": "07d1038ce88c3420dd2aea0bc2438123",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Shared/Components.swift": {
+    "mtime": 1783393151.464512,
+    "ast_hash": "e8cb428b216c6e4bd0f3d3461452a397",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Shared/ImageCapture.swift": {
+    "mtime": 1783392851.0818975,
+    "ast_hash": "fba43a396064e7f3d16d80af23b0f088",
+    "semantic_hash": ""
+  },
+  "PharmaShift/Shared/PreviewSupport.swift": {
+    "mtime": 1783393158.3637538,
+    "ast_hash": "20be57550124c056a06aa13cc5d5185d",
+    "semantic_hash": ""
+  },
+  ".github/workflows/build-unsigned-ipa.yml": {
+    "mtime": 1783416710.5319316,
+    "ast_hash": "2ac08d693236964d6669ba72f55c67fc",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1783417166.6797006,
+    "ast_hash": "21ceb6533048be51308e69e7b74a35cf",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1783417330.4892426,
+    "ast_hash": "bbec7144b0d0184dc789e40c9562854a",
+    "semantic_hash": ""
+  },
+  "WINDOWS_IPA.md": {
+    "mtime": 1783388710.671577,
+    "ast_hash": "33d0674736c35caa3f56241a2ac28d77",
+    "semantic_hash": ""
+  },
+  "PHASE_ROADMAP.md": {
+    "mtime": 1783417330.4892426,
+    "ast_hash": "77a447717bc539e903820f059ddc4692",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260707_094235_what_should_pharmashift_do_after_phase_1.md": {
+    "mtime": 1783417355.207331,
+    "ast_hash": "47e6ca21e4fa0aaf863072900fc84a7d",
+    "semantic_hash": ""
+  }
+}

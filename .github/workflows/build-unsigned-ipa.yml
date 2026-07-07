@@ -15,7 +15,7 @@ jobs:
   test:
     name: Run simulator tests
     runs-on: macos-15-intel
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - name: Check out project

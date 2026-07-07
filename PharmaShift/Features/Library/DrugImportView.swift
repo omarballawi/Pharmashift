@@ -26,7 +26,14 @@ struct DrugImportView: View {
         .navigationTitle("Import from DailyMed")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-        .overlay { if isLoading { ProgressView("Loading official label…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
+        .overlay {
+            if isLoading {
+                Label("Loading official label…", systemImage: "hourglass")
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .accessibilityIdentifier("import.loading")
+            }
+        }
         .disabled(isLoading)
         .alert("Import error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }

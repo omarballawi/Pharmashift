@@ -398,7 +398,7 @@ final class Drug {
 @Model
 final class ReviewLog {
     @Attribute(.unique) var id: UUID
-    var drug: Drug?
+    @Relationship(deleteRule: .nullify) var drug: Drug?
     var drugNameSnapshot: String
     var date: Date
     var questionTypeRaw: String
@@ -473,7 +473,7 @@ final class EncounterNote {
     @Attribute(.unique) var id: UUID
     var date: Date
     var topic: String
-    var relatedDrug: Drug?
+    @Relationship(deleteRule: .nullify) var relatedDrug: Drug?
     var relatedDrugNameSnapshot: String
     var whatHappened: String
     var whatILearned: String

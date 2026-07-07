@@ -41,11 +41,9 @@ final class PharmaShiftUITests: XCTestCase {
         app.tabBars.buttons["Add"].tap()
         let library = app.buttons["capture.photoLibrary"]
         XCTAssertTrue(library.waitForExistence(timeout: 5))
+        XCTAssertEqual(library.value as? String, "Not selected")
         library.tap()
-
-        let cancel = app.buttons["Cancel"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.alerts.staticTexts["Camera is unavailable on this device. Choose a photo from the library instead."].exists)
-        cancel.tap()
+        XCTAssertEqual(library.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["capture.camera"].value as? String, "Not selected")
     }
 }

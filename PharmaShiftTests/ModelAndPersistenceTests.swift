@@ -169,7 +169,8 @@ final class ModelAndPersistenceTests: XCTestCase {
         XCTAssertEqual(try context.fetch(FetchDescriptor<ShiftLog>()).filter { !$0.isCompleted }.count, 1)
         context.delete(drug)
         try context.save()
-        let retainedLog = try XCTUnwrap(context.fetch(FetchDescriptor<ReviewLog>()).first)
+        let verificationContext = ModelContext(container)
+        let retainedLog = try XCTUnwrap(verificationContext.fetch(FetchDescriptor<ReviewLog>()).first)
         XCTAssertEqual(retainedLog.drugNameSnapshot, "Test Drug")
         XCTAssertNil(retainedLog.drug)
     }

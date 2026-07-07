@@ -82,8 +82,8 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
         formulation.tap()
         XCTAssertTrue(app.descendants(matching: .any)["import.preview"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.switches["import.field.Trade names"].isOn)
-        XCTAssertFalse(app.switches["import.field.Scientific name"].isOn)
+        XCTAssertEqual(app.switches["import.field.Trade names"].value as? String, "1")
+        XCTAssertEqual(app.switches["import.field.Scientific name"].value as? String, "0")
         XCTAssertTrue(app.buttons["import.apply"].isEnabled)
     }
 

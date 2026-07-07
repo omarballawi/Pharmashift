@@ -193,10 +193,13 @@ final class Drug {
     var interactions: [String] = []
     var toxicity: String = ""
     var halfLifeText: String = ""
+    var halfLifeHours: Double? = nil
     var halfLifeBandRaw: String = "Unknown"
     var onsetText: String = ""
+    var onsetMinutes: Double? = nil
     var onsetBandRaw: String = "Unknown"
     var durationText: String = ""
+    var durationHours: Double? = nil
     var durationBandRaw: String = "Unknown"
     var dosingFrequencyRaw: String = "Unknown"
     var timesPerDay: Int?
@@ -219,6 +222,7 @@ final class Drug {
     var arabicPersonalNotes: String = ""
     var sourceURL: String = ""
     var importedSourceName: String = ""
+    var sourceUpdatedAt: Date? = nil
     @Attribute(.externalStorage) var thumbnailData: Data?
 
     init(

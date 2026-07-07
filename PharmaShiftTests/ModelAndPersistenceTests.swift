@@ -106,8 +106,29 @@ final class ModelAndPersistenceTests: XCTestCase {
         let full = try XCTUnwrap(UIImage(data: payload.imageData))
         let thumbnail = try XCTUnwrap(UIImage(data: payload.thumbnailData))
         XCTAssertLessThanOrEqual(max(full.size.width, full.size.height), 1600)
+        XCTAssertEqual(full.size.width / full.size.height, 4.0 / 3.0, accuracy: 0.01)
         XCTAssertEqual(thumbnail.size.width, 256)
         XCTAssertEqual(thumbnail.size.height, 256)
+    }
+
+    func testPharmacologyLogarithmicMappingAndClamping() {
+        for scale in PharmacologyScale.allCases {
+            XCTAssertEqual(scale.normalized(scale.bounds.lowerBound), 0, accuracy: 0.0001)
+            XCTAssertEqual(scale.normalized(scale.bounds.upperBound), 1, accuracy: 0.0001)
+            XCTAssertEqual(scale.normalized(scale.bounds.lowerBound / 10), 0, accuracy: 0.0001)
+            XCTAssertEqual(scale.normalized(scale.bounds.upperBound * 10), 1, accuracy: 0.0001)
+            XCTAssertEqual(scale.value(at: 0.5), sqrt(scale.bounds.lowerBound * scale.bounds.upperBound), accuracy: 0.001)
+        }
+    }
+
+    func testImageIODownsamplingBeforeEditing() throws {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4_800, height: 3_600)).image { context in
+            UIColor.systemBlue.setFill()
+            context.cgContext.fill(CGRect(x: 0, y: 0, width: 4_800, height: 3_600))
+        }
+        let data = try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
+        let decoded = try ImageCompressor.image(from: data, maxDimension: 1_200)
+        XCTAssertLessThanOrEqual(max(decoded.size.width, decoded.size.height), 1_200)
     }
 
     func testFutureReadyFieldsPersist() throws {
@@ -116,6 +137,9 @@ final class ModelAndPersistenceTests: XCTestCase {
         let drug = Drug(scientificName: "Ramipril", chapter: .cardiovascular)
         drug.mechanism = "ACE inhibition"
         drug.halfLifeBand = .long
+        drug.halfLifeHours = 35
+        drug.onsetMinutes = 30
+        drug.durationHours = 12
         drug.arabicExplanation = "دواء لتدريب البطاقة"
         drug.sourceURL = "https://example.test/ramipril"
         drug.importedSourceName = "Mock provider"
@@ -125,6 +149,9 @@ final class ModelAndPersistenceTests: XCTestCase {
         let saved = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Drug>()).first)
         XCTAssertEqual(saved.mechanism, "ACE inhibition")
         XCTAssertEqual(saved.halfLifeBand, .long)
+        XCTAssertEqual(saved.halfLifeHours, 35)
+        XCTAssertEqual(saved.onsetMinutes, 30)
+        XCTAssertEqual(saved.durationHours, 12)
         XCTAssertEqual(saved.arabicExplanation, "دواء لتدريب البطاقة")
         XCTAssertTrue(saved.isImported)
     }

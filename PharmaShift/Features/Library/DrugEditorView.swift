@@ -10,7 +10,6 @@ private enum DrugEditorSection: String, CaseIterable, Identifiable {
     case safety = "Safety"
     case counseling = "Counseling"
     case notes = "My Notes"
-    case source = "Source"
     var id: String { rawValue }
 }
 
@@ -20,8 +19,8 @@ struct DrugEditorView: View {
     let drug: Drug
     @State private var selectedSection: DrugEditorSection = .basics
     @State private var photoItem: PhotosPickerItem?
-    @State private var imageDraft: ImageDraft?
-    @State private var showsCamera = false
+    @State private var imageFlow: ImageFlowDestination?
+    @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -36,14 +35,16 @@ struct DrugEditorView: View {
             ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
         }
         .task(id: photoItem) { await loadPhoto() }
-        .sheet(isPresented: $showsCamera) {
-            CameraPicker { imageDraft = ImageDraft(image: $0) }.ignoresSafeArea()
+        .photosPicker(isPresented: libraryPresentation, selection: $photoItem, matching: .images)
+        .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
+            CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }.ignoresSafeArea()
         }
-        .sheet(item: $imageDraft) { draft in
+        .fullScreenCover(item: cropPresentation) { draft in
             ImageEditorView(draft: draft) { payload in
                 drug.imageData = payload.imageData
                 drug.thumbnailData = payload.thumbnailData
             }
+            .interactiveDismissDisabled()
         }
         .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -75,7 +76,6 @@ struct DrugEditorView: View {
         case .safety: safety
         case .counseling: counseling
         case .notes: notes
-        case .source: source
         }
     }
 
@@ -84,11 +84,13 @@ struct DrugEditorView: View {
             Section("Photo / الصورة") {
                 DrugPhotoView(data: drug.imageData, height: 170)
                 HStack {
-                    Button { openCamera() } label: { Label("Camera", systemImage: "camera.fill") }
+                    Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
+                        .accessibilityIdentifier("drugEditor.camera")
                     Spacer()
-                    PhotosPicker(selection: $photoItem, matching: .images) {
+                    Button { beginImageFlow(.library) } label: {
                         Label(drug.imageData == nil ? "Photo Library" : "Replace", systemImage: "photo.on.rectangle")
                     }
+                    .accessibilityIdentifier("drugEditor.photoLibrary")
                 }
                 if drug.imageData != nil {
                     Button(role: .destructive) {
@@ -135,12 +137,15 @@ struct DrugEditorView: View {
     private var pk: some View {
         Group {
             Section("Half-life") {
+                numericControl(keyPath: \.halfLifeHours, scale: .halfLife)
                 Picker("Band", selection: halfLifeBinding) { ForEach(HalfLifeBand.allCases) { Text($0.rawValue).tag($0) } }
                 TextField("Exact value or note", text: binding(\.halfLifeText))
             }
             Section("Onset & duration") {
+                numericControl(keyPath: \.onsetMinutes, scale: .onset)
                 Picker("Onset", selection: onsetBinding) { ForEach(OnsetBand.allCases) { Text($0.rawValue).tag($0) } }
                 TextField("Onset note", text: binding(\.onsetText))
+                numericControl(keyPath: \.durationHours, scale: .duration)
                 Picker("Duration", selection: durationBinding) { ForEach(DurationBand.allCases) { Text($0.rawValue).tag($0) } }
                 TextField("Duration note", text: binding(\.durationText))
             }
@@ -197,17 +202,6 @@ struct DrugEditorView: View {
         }
     }
 
-    private var source: some View {
-        Group {
-            Section("Source / المصدر") {
-                TextField("Imported source name", text: binding(\.importedSourceName))
-                TextField("Source URL", text: binding(\.sourceURL))
-                    .textInputAutocapitalization(.never).keyboardType(.URL)
-                TextField("Source notes", text: binding(\.sourceNote), axis: .vertical).lineLimit(3...8)
-            }
-        }
-    }
-
     private func safetySection(_ title: String, lines: ReferenceWritableKeyPath<Drug, [String]>, severity: Binding<SafetySeverity>) -> some View {
         Section(title) {
             Picker("Severity", selection: severity) { ForEach(SafetySeverity.allCases) { Text($0.rawValue).tag($0) } }
@@ -233,6 +227,47 @@ struct DrugEditorView: View {
             get: { drug.timesPerDay.map(String.init) ?? "" },
             set: { drug.timesPerDay = Int($0.filter { $0.isNumber }) }
         )
+    }
+
+    private func optionalDoubleBinding(_ keyPath: ReferenceWritableKeyPath<Drug, Double?>) -> Binding<String> {
+        Binding(
+            get: { drug[keyPath: keyPath].map { String(format: "%g", $0) } ?? "" },
+            set: { value in
+                drug[keyPath: keyPath] = Double(value.replacingOccurrences(of: ",", with: "."))
+            }
+        )
+    }
+
+    private func normalizedBinding(_ keyPath: ReferenceWritableKeyPath<Drug, Double?>, scale: PharmacologyScale) -> Binding<Double> {
+        Binding(
+            get: { drug[keyPath: keyPath].map(scale.normalized) ?? 0.5 },
+            set: { drug[keyPath: keyPath] = scale.value(at: $0) }
+        )
+    }
+
+    private func numericControl(keyPath: ReferenceWritableKeyPath<Drug, Double?>, scale: PharmacologyScale) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Numeric value", text: optionalDoubleBinding(keyPath)).keyboardType(.decimalPad)
+                Text(scale.unit).foregroundStyle(.secondary)
+            }
+            Slider(value: normalizedBinding(keyPath, scale: scale), in: 0...1) { editing in
+                if !editing { UISelectionFeedbackGenerator().selectionChanged() }
+            }
+            .disabled(drug[keyPath: keyPath] == nil)
+            HStack {
+                Text(scale.formatted(scale.bounds.lowerBound))
+                Spacer()
+                if let value = drug[keyPath: keyPath] { Text(scale.formatted(value)).fontWeight(.semibold) }
+                Spacer()
+                Text(scale.formatted(scale.bounds.upperBound))
+            }
+            .font(.caption2).foregroundStyle(.secondary)
+            Button(drug[keyPath: keyPath] == nil ? "Set numeric value" : "Clear numeric value") {
+                drug[keyPath: keyPath] = drug[keyPath: keyPath] == nil ? scale.value(at: 0.5) : nil
+            }
+            .font(.caption.weight(.semibold))
+        }
     }
     private var chapterBinding: Binding<Chapter> { Binding(get: { drug.chapter }, set: { drug.chapter = $0 }) }
     private var halfLifeBinding: Binding<HalfLifeBand> { Binding(get: { drug.halfLifeBand }, set: { drug.halfLifeBand = $0 }) }
@@ -277,19 +312,49 @@ struct DrugEditorView: View {
         Binding(get: { drug[keyPath: keyPath] }, set: { drug[keyPath: keyPath] = $0; drug.recalculateConfidence() })
     }
 
-    private func openCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+    private var cameraPresentation: Binding<Bool> {
+        Binding(
+            get: { if case .camera? = imageFlow { true } else { false } },
+            set: { if !$0, case .camera? = imageFlow { imageFlow = nil } }
+        )
+    }
+
+    private var libraryPresentation: Binding<Bool> {
+        Binding(
+            get: { if case .library? = imageFlow { true } else { false } },
+            set: { if !$0, case .library? = imageFlow { imageFlow = nil } }
+        )
+    }
+
+    private var cropPresentation: Binding<ImageDraft?> {
+        Binding(
+            get: { if case .crop(let draft)? = imageFlow { draft } else { nil } },
+            set: { draft in
+                if let draft { imageFlow = .crop(draft) } else { imageFlow = nil }
+            }
+        )
+    }
+
+    private func beginImageFlow(_ destination: ImageFlowDestination) {
+        if case .camera = destination, !UIImagePickerController.isSourceTypeAvailable(.camera) {
             errorMessage = "Camera is unavailable on this device. Choose a photo from the library instead."
             return
         }
-        showsCamera = true
+        imageFlow = destination
+    }
+
+    private func presentPendingCameraDraft() {
+        guard let draft = pendingCameraDraft else { return }
+        pendingCameraDraft = nil
+        imageFlow = .crop(draft)
     }
 
     private func loadPhoto() async {
         guard let photoItem else { return }
         do {
             guard let data = try await photoItem.loadTransferable(type: Data.self) else { throw ImagePipelineError.invalidImage }
-            imageDraft = ImageDraft(image: try ImageCompressor.image(from: data))
+            imageFlow = .crop(ImageDraft(image: try ImageCompressor.image(from: data)))
+            self.photoItem = nil
         } catch { errorMessage = error.localizedDescription }
     }
 

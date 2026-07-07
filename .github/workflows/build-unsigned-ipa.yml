@@ -12,8 +12,29 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Run simulator tests
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v6
+
+      - name: Run unit and UI tests
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project PharmaShift.xcodeproj \
+            -scheme PharmaShift \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -derivedDataPath build/TestDerivedData \
+            test
+
   build:
     name: Build IPA for Windows sideloading
+    needs: test
     runs-on: macos-15
     timeout-minutes: 20
 

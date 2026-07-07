@@ -22,8 +22,8 @@ struct CaptureView: View {
     @State private var imageData: Data?
     @State private var thumbnailData: Data?
     @State private var photoItem: PhotosPickerItem?
-    @State private var imageDraft: ImageDraft?
-    @State private var showsCamera = false
+    @State private var imageFlow: ImageFlowDestination?
+    @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
@@ -39,13 +39,15 @@ struct CaptureView: View {
             Section {
                 DrugPhotoView(data: imageData, height: 170)
                 HStack {
-                    Button { openCamera() } label: { Label("Camera", systemImage: "camera.fill") }
+                    Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
                         .frame(minHeight: 48)
+                        .accessibilityIdentifier("capture.camera")
                     Spacer()
-                    PhotosPicker(selection: $photoItem, matching: .images) {
+                    Button { beginImageFlow(.library) } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
                     .frame(minHeight: 48)
+                    .accessibilityIdentifier("capture.photoLibrary")
                 }
                 if imageData != nil {
                     Button(role: .destructive) {
@@ -121,20 +123,23 @@ struct CaptureView: View {
                 guard let data = try await photoItem.loadTransferable(type: Data.self) else {
                     throw ImagePipelineError.invalidImage
                 }
-                imageDraft = ImageDraft(image: try ImageCompressor.image(from: data))
+                imageFlow = .crop(ImageDraft(image: try ImageCompressor.image(from: data)))
+                self.photoItem = nil
             } catch {
                 message = error.localizedDescription
             }
         }
-        .sheet(isPresented: $showsCamera) {
-            CameraPicker { imageDraft = ImageDraft(image: $0) }
+        .photosPicker(isPresented: libraryPresentation, selection: $photoItem, matching: .images)
+        .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
+            CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }
                 .ignoresSafeArea()
         }
-        .sheet(item: $imageDraft) { draft in
+        .fullScreenCover(item: cropPresentation) { draft in
             ImageEditorView(draft: draft) { payload in
                 imageData = payload.imageData
                 thumbnailData = payload.thumbnailData
             }
+            .interactiveDismissDisabled()
         }
         .alert("PharmaShift", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
@@ -203,11 +208,40 @@ struct CaptureView: View {
         focus = .scientific
     }
 
-    private func openCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+    private var cameraPresentation: Binding<Bool> {
+        Binding(
+            get: { if case .camera? = imageFlow { true } else { false } },
+            set: { if !$0, case .camera? = imageFlow { imageFlow = nil } }
+        )
+    }
+
+    private var libraryPresentation: Binding<Bool> {
+        Binding(
+            get: { if case .library? = imageFlow { true } else { false } },
+            set: { if !$0, case .library? = imageFlow { imageFlow = nil } }
+        )
+    }
+
+    private var cropPresentation: Binding<ImageDraft?> {
+        Binding(
+            get: { if case .crop(let draft)? = imageFlow { draft } else { nil } },
+            set: { draft in
+                if let draft { imageFlow = .crop(draft) } else { imageFlow = nil }
+            }
+        )
+    }
+
+    private func beginImageFlow(_ destination: ImageFlowDestination) {
+        if case .camera = destination, !UIImagePickerController.isSourceTypeAvailable(.camera) {
             message = "Camera is unavailable on this device. Choose a photo from the library instead."
             return
         }
-        showsCamera = true
+        imageFlow = destination
+    }
+
+    private func presentPendingCameraDraft() {
+        guard let draft = pendingCameraDraft else { return }
+        pendingCameraDraft = nil
+        imageFlow = .crop(draft)
     }
 }

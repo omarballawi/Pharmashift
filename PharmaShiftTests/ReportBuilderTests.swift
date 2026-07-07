@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class ReportBuilderTests: XCTestCase {
-    func testReportIncludesAggregatesAndSafetyNotice() {
+    func testReportIncludesAggregatesWithoutRepeatedSafetyNotice() {
         let now = Date.now
         let drug = Drug(scientificName: "Metformin", chapter: .endocrine, dosageForms: ["Tablet"], counselingSentence: "Take with food if instructed.", dateAdded: now)
         drug.masteryScientificName = true
@@ -23,6 +23,6 @@ final class ReportBuilderTests: XCTestCase {
 
         XCTAssertTrue(output.contains("Metformin"))
         XCTAssertTrue(output.contains("Endocrine"))
-        XCTAssertTrue(output.contains("confirm with pharmacist"))
+        XCTAssertFalse(output.contains("EDUCATIONAL USE NOTICE"))
     }
 }

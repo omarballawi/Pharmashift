@@ -1,47 +1,191 @@
+import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
+
+private enum DrugEditorSection: String, CaseIterable, Identifiable {
+    case basics = "Basics"
+    case uses = "Uses"
+    case pk = "PK"
+    case safety = "Safety"
+    case counseling = "Counseling"
+    case notes = "My Notes"
+    case source = "Source"
+    var id: String { rawValue }
+}
 
 struct DrugEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     let drug: Drug
+    @State private var selectedSection: DrugEditorSection = .basics
+    @State private var photoItem: PhotosPickerItem?
+    @State private var imageDraft: ImageDraft?
+    @State private var showsCamera = false
     @State private var errorMessage: String?
 
     var body: some View {
-        Form {
-            Section("Identity") {
+        VStack(spacing: 0) {
+            sectionPicker
+            Form { editorContent }
+        }
+        .navigationTitle("Edit Drug / تعديل الدواء")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { context.rollback(); dismiss() } }
+            ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
+        }
+        .task(id: photoItem) { await loadPhoto() }
+        .sheet(isPresented: $showsCamera) {
+            CameraPicker { imageDraft = ImageDraft(image: $0) }.ignoresSafeArea()
+        }
+        .sheet(item: $imageDraft) { draft in
+            ImageEditorView(draft: draft) { payload in
+                drug.imageData = payload.imageData
+                drug.thumbnailData = payload.thumbnailData
+            }
+        }
+        .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK") { errorMessage = nil }
+        } message: { Text(errorMessage ?? "") }
+    }
+
+    private var sectionPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(DrugEditorSection.allCases) { section in
+                    Button(section.rawValue) { selectedSection = section }
+                        .buttonStyle(.borderedProminent)
+                        .tint(selectedSection == section ? .accentColor : Color.secondary.opacity(0.16))
+                        .foregroundStyle(selectedSection == section ? .white : .primary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .background(.bar)
+    }
+
+    @ViewBuilder
+    private var editorContent: some View {
+        switch selectedSection {
+        case .basics: basics
+        case .uses: uses
+        case .pk: pk
+        case .safety: safety
+        case .counseling: counseling
+        case .notes: notes
+        case .source: source
+        }
+    }
+
+    private var basics: some View {
+        Group {
+            Section("Photo / الصورة") {
+                DrugPhotoView(data: drug.imageData, height: 170)
+                HStack {
+                    Button { openCamera() } label: { Label("Camera", systemImage: "camera.fill") }
+                    Spacer()
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        Label(drug.imageData == nil ? "Photo Library" : "Replace", systemImage: "photo.on.rectangle")
+                    }
+                }
+                if drug.imageData != nil {
+                    Button(role: .destructive) {
+                        drug.imageData = nil
+                        drug.thumbnailData = nil
+                    } label: { Label("Remove photo", systemImage: "trash") }
+                }
+            }
+            Section("Identity / الهوية") {
                 Toggle("Unknown drug", isOn: binding(\.isUnknown))
                 TextField("Capture label", text: binding(\.captureLabel))
                 TextField("Scientific name", text: binding(\.scientificName)).autocorrectionDisabled()
                 linesField("Trade names — one per line", keyPath: \.tradeNames)
-                Picker("Chapter", selection: chapterBinding) { ForEach(Chapter.allCases) { Text($0.rawValue).tag($0) } }
+                Picker("System / Chapter", selection: chapterBinding) { ForEach(Chapter.allCases) { Text($0.rawValue).tag($0) } }
                 TextField("Class", text: binding(\.drugClass))
-                TextField("Shelf location", text: binding(\.shelfLocation))
-            }
-
-            Section("Products") {
                 linesField("Dosage forms — one per line", keyPath: \.dosageForms)
                 linesField("Strengths — one per line", keyPath: \.strengths)
+                linesField("Routes — one per line", keyPath: \.routes)
+                TextField("Shelf location", text: binding(\.shelfLocation))
             }
+        }
+    }
 
-            Section("Learning card") {
-                linesField("Indications — one per line", keyPath: \.indications)
-                TextField("How to take", text: binding(\.howToTake), axis: .vertical).lineLimit(2...5)
-                TextField("Food instruction", text: binding(\.foodInstruction), axis: .vertical).lineLimit(2...5)
-                linesField("Common side effects — one per line", keyPath: \.commonSideEffects)
-                linesField("Warnings — one per line", keyPath: \.warnings)
-                TextField("Counseling sentence", text: binding(\.counselingSentence), axis: .vertical).lineLimit(2...6)
-                linesField("Patient questions — one per line", keyPath: \.patientQuestions)
-                TextField("My notes (Arabic or English)", text: binding(\.notes), axis: .vertical)
-                    .lineLimit(3...8)
-            }
-
-            Section("Safety — urgent pharmacist check") {
-                ForEach(SafetyFlag.allCases) { flag in
-                    Toggle(flag.rawValue, isOn: safetyBinding(flag))
+    private var uses: some View {
+        Group {
+            Section("Clinical learning") {
+                linesField("Indications / Uses — one per line", keyPath: \.indications)
+                TextField("Mechanism", text: binding(\.mechanism), axis: .vertical).lineLimit(3...8)
+                TextField("How to take", text: binding(\.howToTake), axis: .vertical).lineLimit(2...6)
+                TextField("Food instructions", text: binding(\.foodInstruction), axis: .vertical).lineLimit(2...6)
+                Picker("Dosing frequency", selection: dosingFrequencyBinding) {
+                    ForEach(DosingFrequency.allCases) { Text($0.rawValue).tag($0) }
                 }
+                TextField("Times per day (optional)", text: timesPerDayBinding)
+                    .keyboardType(.numberPad)
             }
+            Section("Arabic / العربية") {
+                arabicField("الشرح بالعربية", keyPath: \.arabicExplanation)
+                arabicField("شرح آلية العمل بالعربية", keyPath: \.arabicMechanism)
+            }
+        }
+    }
 
+    private var pk: some View {
+        Group {
+            Section("Half-life") {
+                Picker("Band", selection: halfLifeBinding) { ForEach(HalfLifeBand.allCases) { Text($0.rawValue).tag($0) } }
+                TextField("Exact value or note", text: binding(\.halfLifeText))
+            }
+            Section("Onset & duration") {
+                Picker("Onset", selection: onsetBinding) { ForEach(OnsetBand.allCases) { Text($0.rawValue).tag($0) } }
+                TextField("Onset note", text: binding(\.onsetText))
+                Picker("Duration", selection: durationBinding) { ForEach(DurationBand.allCases) { Text($0.rawValue).tag($0) } }
+                TextField("Duration note", text: binding(\.durationText))
+            }
+            Section("Disposition") {
+                Picker("Prodrug", selection: prodrugBinding) { ForEach(ProdrugStatus.allCases) { Text($0.rawValue).tag($0) } }
+                Picker("Excretion", selection: excretionBinding) { ForEach(ExcretionRoute.allCases) { Text($0.rawValue).tag($0) } }
+                TextField("Excretion notes", text: binding(\.excretionNotes), axis: .vertical).lineLimit(2...5)
+            }
+        }
+    }
+
+    private var safety: some View {
+        Group {
+            safetySection("Contraindications", lines: \.contraindications, severity: contraindicationSeverityBinding)
+            safetyTextSection("Toxicity", text: \.toxicity, severity: toxicitySeverityBinding)
+            safetySection("Warnings", lines: \.warnings, severity: warningSeverityBinding)
+            safetySection("Interactions", lines: \.interactions, severity: interactionSeverityBinding)
+            safetyTextSection("Renal caution", text: \.renalCaution, severity: renalSeverityBinding)
+            safetyTextSection("Hepatic caution", text: \.hepaticCaution, severity: hepaticSeverityBinding)
+            safetyTextSection("Pregnancy caution", text: \.pregnancyCaution, severity: pregnancySeverityBinding)
+            Section("Legacy safety flags") {
+                ForEach(SafetyFlag.allCases) { flag in Toggle(flag.rawValue, isOn: safetyFlagBinding(flag)) }
+            }
+        }
+    }
+
+    private var counseling: some View {
+        Group {
+            Section("Counseling") {
+                TextField("Counseling sentence", text: binding(\.counselingSentence), axis: .vertical).lineLimit(3...8)
+                arabicField("جملة الإرشاد بالعربية", keyPath: \.arabicCounseling)
+                linesField("Patient questions — one per line", keyPath: \.patientQuestions)
+            }
+            Section("Adverse effects") {
+                linesField("Adverse effects — one per line", keyPath: \.commonSideEffects)
+            }
+        }
+    }
+
+    private var notes: some View {
+        Group {
+            Section("Personal notes") {
+                TextField("My notes (English or mixed)", text: binding(\.notes), axis: .vertical).lineLimit(4...12)
+                arabicField("ملاحظاتي بالعربية", keyPath: \.arabicPersonalNotes)
+            }
             Section("Mastery checks") {
                 Toggle("Scientific name", isOn: masteryBinding(\.masteryScientificName))
                 Toggle("Trade name", isOn: masteryBinding(\.masteryTradeName))
@@ -51,57 +195,106 @@ struct DrugEditorView: View {
                 Toggle("Counseling", isOn: masteryBinding(\.masteryCounseling))
             }
         }
-        .navigationTitle("Edit Drug")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { context.rollback(); dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("Save") { save() } }
+    }
+
+    private var source: some View {
+        Group {
+            Section("Source / المصدر") {
+                TextField("Imported source name", text: binding(\.importedSourceName))
+                TextField("Source URL", text: binding(\.sourceURL))
+                    .textInputAutocapitalization(.never).keyboardType(.URL)
+                TextField("Source notes", text: binding(\.sourceNote), axis: .vertical).lineLimit(3...8)
+            }
         }
-        .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+    }
+
+    private func safetySection(_ title: String, lines: ReferenceWritableKeyPath<Drug, [String]>, severity: Binding<SafetySeverity>) -> some View {
+        Section(title) {
+            Picker("Severity", selection: severity) { ForEach(SafetySeverity.allCases) { Text($0.rawValue).tag($0) } }
+            linesField("One item per line", keyPath: lines)
+        }
+    }
+
+    private func safetyTextSection(_ title: String, text: ReferenceWritableKeyPath<Drug, String>, severity: Binding<SafetySeverity>) -> some View {
+        Section(title) {
+            Picker("Severity", selection: severity) { ForEach(SafetySeverity.allCases) { Text($0.rawValue).tag($0) } }
+            TextField("Notes", text: binding(text), axis: .vertical).lineLimit(2...6)
+        }
     }
 
     private func binding(_ keyPath: ReferenceWritableKeyPath<Drug, String>) -> Binding<String> {
         Binding(get: { drug[keyPath: keyPath] }, set: { drug[keyPath: keyPath] = $0 })
     }
-
     private func binding(_ keyPath: ReferenceWritableKeyPath<Drug, Bool>) -> Binding<Bool> {
         Binding(get: { drug[keyPath: keyPath] }, set: { drug[keyPath: keyPath] = $0 })
     }
+    private var timesPerDayBinding: Binding<String> {
+        Binding(
+            get: { drug.timesPerDay.map(String.init) ?? "" },
+            set: { drug.timesPerDay = Int($0.filter { $0.isNumber }) }
+        )
+    }
+    private var chapterBinding: Binding<Chapter> { Binding(get: { drug.chapter }, set: { drug.chapter = $0 }) }
+    private var halfLifeBinding: Binding<HalfLifeBand> { Binding(get: { drug.halfLifeBand }, set: { drug.halfLifeBand = $0 }) }
+    private var onsetBinding: Binding<OnsetBand> { Binding(get: { drug.onsetBand }, set: { drug.onsetBand = $0 }) }
+    private var durationBinding: Binding<DurationBand> { Binding(get: { drug.durationBand }, set: { drug.durationBand = $0 }) }
+    private var dosingFrequencyBinding: Binding<DosingFrequency> { Binding(get: { drug.dosingFrequency }, set: { drug.dosingFrequency = $0 }) }
+    private var prodrugBinding: Binding<ProdrugStatus> { Binding(get: { drug.prodrugStatus }, set: { drug.prodrugStatus = $0 }) }
+    private var excretionBinding: Binding<ExcretionRoute> { Binding(get: { drug.excretionRoute }, set: { drug.excretionRoute = $0 }) }
+    private var contraindicationSeverityBinding: Binding<SafetySeverity> { severityBinding(\.contraindicationSeverityRaw) }
+    private var toxicitySeverityBinding: Binding<SafetySeverity> { severityBinding(\.toxicitySeverityRaw) }
+    private var warningSeverityBinding: Binding<SafetySeverity> { severityBinding(\.warningSeverityRaw) }
+    private var interactionSeverityBinding: Binding<SafetySeverity> { severityBinding(\.interactionSeverityRaw) }
+    private var renalSeverityBinding: Binding<SafetySeverity> { severityBinding(\.renalSeverityRaw) }
+    private var hepaticSeverityBinding: Binding<SafetySeverity> { severityBinding(\.hepaticSeverityRaw) }
+    private var pregnancySeverityBinding: Binding<SafetySeverity> { severityBinding(\.pregnancySeverityRaw) }
 
-    private var chapterBinding: Binding<Chapter> {
-        Binding(get: { drug.chapter }, set: { drug.chapter = $0 })
+    private func severityBinding(_ keyPath: ReferenceWritableKeyPath<Drug, String>) -> Binding<SafetySeverity> {
+        Binding(get: { SafetySeverity(rawValue: drug[keyPath: keyPath]) ?? .unknown }, set: { drug[keyPath: keyPath] = $0.rawValue })
     }
 
     private func linesField(_ title: String, keyPath: ReferenceWritableKeyPath<Drug, [String]>) -> some View {
-        TextField(title, text: Binding(
-            get: { drug[keyPath: keyPath].joined(separator: "\n") },
-            set: { drug[keyPath: keyPath] = $0.splitLines }
-        ), axis: .vertical).lineLimit(2...7)
+        TextField(title, text: Binding(get: { drug[keyPath: keyPath].joined(separator: "\n") }, set: { drug[keyPath: keyPath] = $0.splitLines }), axis: .vertical)
+            .lineLimit(2...8)
     }
 
-    private func safetyBinding(_ flag: SafetyFlag) -> Binding<Bool> {
-        Binding(
-            get: { drug.safetyFlags.contains(flag) },
-            set: { enabled in
-                var values = drug.safetyFlags
-                if enabled { if !values.contains(flag) { values.append(flag) } }
-                else { values.removeAll { $0 == flag } }
-                drug.safetyFlags = values
-            }
-        )
+    private func arabicField(_ title: String, keyPath: ReferenceWritableKeyPath<Drug, String>) -> some View {
+        TextField(title, text: binding(keyPath), axis: .vertical)
+            .lineLimit(3...10)
+            .multilineTextAlignment(.trailing)
+            .environment(\.layoutDirection, .rightToLeft)
     }
 
-    private func masteryBinding(_ keyPath: ReferenceWritableKeyPath<Drug, Bool>) -> Binding<Bool> {
-        Binding(get: { drug[keyPath: keyPath] }, set: { value in
-            drug[keyPath: keyPath] = value
-            drug.recalculateConfidence()
+    private func safetyFlagBinding(_ flag: SafetyFlag) -> Binding<Bool> {
+        Binding(get: { drug.safetyFlags.contains(flag) }, set: { enabled in
+            var values = drug.safetyFlags
+            if enabled { if !values.contains(flag) { values.append(flag) } } else { values.removeAll { $0 == flag } }
+            drug.safetyFlags = values
         })
     }
 
+    private func masteryBinding(_ keyPath: ReferenceWritableKeyPath<Drug, Bool>) -> Binding<Bool> {
+        Binding(get: { drug[keyPath: keyPath] }, set: { drug[keyPath: keyPath] = $0; drug.recalculateConfidence() })
+    }
+
+    private func openCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            errorMessage = "Camera is unavailable on this device. Choose a photo from the library instead."
+            return
+        }
+        showsCamera = true
+    }
+
+    private func loadPhoto() async {
+        guard let photoItem else { return }
+        do {
+            guard let data = try await photoItem.loadTransferable(type: Data.self) else { throw ImagePipelineError.invalidImage }
+            imageDraft = ImageDraft(image: try ImageCompressor.image(from: data))
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     private func save() {
-        if drug.isUnknown == false && drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty {
+        if !drug.isUnknown && drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty {
             errorMessage = "Add a scientific or trade name, or keep this card marked Unknown."
             return
         }

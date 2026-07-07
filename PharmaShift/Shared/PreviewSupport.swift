@@ -45,6 +45,15 @@ private enum PreviewData {
 #Preview("Library: due, unknown, Arabic note") {
     NavigationStack { LibraryView() }
         .environment(AppTheme())
+        .environment(AppNavigation())
+        .environment(ReviewScheduler())
+        .modelContainer(PreviewData.container)
+}
+
+#Preview("Systems dashboard") {
+    NavigationStack { HomeView() }
+        .environment(AppTheme())
+        .environment(AppNavigation())
         .environment(ReviewScheduler())
         .modelContainer(PreviewData.container)
 }

@@ -1,38 +1,5 @@
 import SwiftUI
 
-struct SafetyBanner: View {
-    var body: some View {
-        Label("Educational only — confirm with pharmacist before counseling or dispensing.", systemImage: "cross.case.fill")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color(red: 0.02, green: 0.36, blue: 0.33))
-            .accessibilityIdentifier("safety.banner")
-    }
-}
-
-struct UrgentSafetyNotice: View {
-    let flags: [SafetyFlag]
-
-    var body: some View {
-        if !flags.isEmpty {
-            VStack(alignment: .leading, spacing: 5) {
-                Label("Ask pharmacist immediately", systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline)
-                Text(flags.map(\.rawValue).joined(separator: " • "))
-                    .font(.caption)
-            }
-            .foregroundStyle(.red)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-            .accessibilityIdentifier("safety.urgent")
-        }
-    }
-}
-
 struct MasteryBadge: View {
     let drug: Drug
 

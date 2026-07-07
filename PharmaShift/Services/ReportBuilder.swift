@@ -36,9 +36,6 @@ enum ReportBuilder {
         PHARMASHIFT — FINAL TRAINING REPORT
         Period: \(formatter.string(from: report.periodStart)) – \(formatter.string(from: report.periodEnd))
 
-        EDUCATIONAL USE NOTICE
-        Educational only — confirm with pharmacist before counseling or dispensing.
-
         TRAINING PERIOD SUMMARY
         \(report.trainingSummary)
 

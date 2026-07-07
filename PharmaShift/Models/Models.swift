@@ -12,9 +12,44 @@ enum Chapter: String, Codable, CaseIterable, Identifiable {
     case dermatology = "Dermatology"
     case antibiotics = "Antibiotics"
     case otc = "OTC"
+    case vitaminsSupplements = "Vitamins/Supplements"
     case other = "Other"
 
     var id: String { rawValue }
+
+    var arabicName: String {
+        switch self {
+        case .cardiovascular: "القلب والأوعية الدموية"
+        case .respiratory: "الجهاز التنفسي"
+        case .endocrine: "جهاز الغدد الصماء"
+        case .musculoskeletal: "العضلات والمفاصل"
+        case .eye: "العين"
+        case .earNoseOropharynx: "الأذن والأنف والبلعوم"
+        case .gastrointestinal: "الجهاز الهضمي"
+        case .dermatology: "الأمراض الجلدية"
+        case .antibiotics: "المضادات الحيوية"
+        case .otc: "أدوية بدون وصفة"
+        case .vitaminsSupplements: "الفيتامينات والمكملات"
+        case .other: "أخرى"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .cardiovascular: "heart.fill"
+        case .respiratory: "lungs.fill"
+        case .endocrine: "drop.fill"
+        case .musculoskeletal: "figure.strengthtraining.traditional"
+        case .eye: "eye.fill"
+        case .earNoseOropharynx: "ear.fill"
+        case .gastrointestinal: "cross.vial.fill"
+        case .dermatology: "allergens.fill"
+        case .antibiotics: "shield.lefthalf.filled"
+        case .otc: "basket.fill"
+        case .vitaminsSupplements: "leaf.fill"
+        case .other: "square.grid.2x2.fill"
+        }
+    }
 
     var quickClasses: [String] {
         switch self {
@@ -28,6 +63,42 @@ enum Chapter: String, Codable, CaseIterable, Identifiable {
             []
         }
     }
+}
+
+enum HalfLifeBand: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", short = "Short", medium = "Medium", long = "Long", veryLong = "Very long"
+    var id: String { rawValue }
+}
+
+enum OnsetBand: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", fast = "Fast", moderate = "Moderate", slow = "Slow"
+    var id: String { rawValue }
+}
+
+enum DurationBand: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", short = "Short", medium = "Medium", long = "Long"
+    var id: String { rawValue }
+}
+
+enum DosingFrequency: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", onceDaily = "Once daily", twiceDaily = "Twice daily"
+    case threeTimesDaily = "Three times daily", fourTimesDaily = "Four times daily", asNeeded = "PRN"
+    var id: String { rawValue }
+}
+
+enum ProdrugStatus: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", yes = "Yes", no = "No"
+    var id: String { rawValue }
+}
+
+enum ExcretionRoute: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", renal = "Renal", hepatic = "Hepatic", mixed = "Mixed"
+    var id: String { rawValue }
+}
+
+enum SafetySeverity: String, Codable, CaseIterable, Identifiable {
+    case unknown = "Unknown", low = "Low", medium = "Medium", high = "High"
+    var id: String { rawValue }
 }
 
 enum ConfidenceLevel: String, Codable, CaseIterable, Identifiable {
@@ -116,6 +187,39 @@ final class Drug {
     var starterSeedID: String?
     var sourceNote: String
     var verificationRaw: String
+    var routes: [String] = []
+    var mechanism: String = ""
+    var contraindications: [String] = []
+    var interactions: [String] = []
+    var toxicity: String = ""
+    var halfLifeText: String = ""
+    var halfLifeBandRaw: String = "Unknown"
+    var onsetText: String = ""
+    var onsetBandRaw: String = "Unknown"
+    var durationText: String = ""
+    var durationBandRaw: String = "Unknown"
+    var dosingFrequencyRaw: String = "Unknown"
+    var timesPerDay: Int?
+    var prodrugStatusRaw: String = "Unknown"
+    var excretionRouteRaw: String = "Unknown"
+    var excretionNotes: String = ""
+    var renalCaution: String = ""
+    var hepaticCaution: String = ""
+    var pregnancyCaution: String = ""
+    var contraindicationSeverityRaw: String = "Unknown"
+    var toxicitySeverityRaw: String = "Unknown"
+    var warningSeverityRaw: String = "Unknown"
+    var interactionSeverityRaw: String = "Unknown"
+    var renalSeverityRaw: String = "Unknown"
+    var hepaticSeverityRaw: String = "Unknown"
+    var pregnancySeverityRaw: String = "Unknown"
+    var arabicExplanation: String = ""
+    var arabicMechanism: String = ""
+    var arabicCounseling: String = ""
+    var arabicPersonalNotes: String = ""
+    var sourceURL: String = ""
+    var importedSourceName: String = ""
+    @Attribute(.externalStorage) var thumbnailData: Data?
 
     init(
         id: UUID = UUID(),
@@ -184,6 +288,8 @@ final class Drug {
         self.starterSeedID = starterSeedID
         self.sourceNote = sourceNote
         self.verificationRaw = verificationStatus.rawValue
+        self.timesPerDay = nil
+        self.thumbnailData = nil
     }
 
     var chapter: Chapter {
@@ -204,6 +310,41 @@ final class Drug {
     var verificationStatus: VerificationStatus {
         get { VerificationStatus(rawValue: verificationRaw) ?? .personal }
         set { verificationRaw = newValue.rawValue }
+    }
+
+    var halfLifeBand: HalfLifeBand {
+        get { HalfLifeBand(rawValue: halfLifeBandRaw) ?? .unknown }
+        set { halfLifeBandRaw = newValue.rawValue }
+    }
+
+    var onsetBand: OnsetBand {
+        get { OnsetBand(rawValue: onsetBandRaw) ?? .unknown }
+        set { onsetBandRaw = newValue.rawValue }
+    }
+
+    var durationBand: DurationBand {
+        get { DurationBand(rawValue: durationBandRaw) ?? .unknown }
+        set { durationBandRaw = newValue.rawValue }
+    }
+
+    var dosingFrequency: DosingFrequency {
+        get { DosingFrequency(rawValue: dosingFrequencyRaw) ?? .unknown }
+        set { dosingFrequencyRaw = newValue.rawValue }
+    }
+
+    var prodrugStatus: ProdrugStatus {
+        get { ProdrugStatus(rawValue: prodrugStatusRaw) ?? .unknown }
+        set { prodrugStatusRaw = newValue.rawValue }
+    }
+
+    var excretionRoute: ExcretionRoute {
+        get { ExcretionRoute(rawValue: excretionRouteRaw) ?? .unknown }
+        set { excretionRouteRaw = newValue.rawValue }
+    }
+
+    var isImported: Bool { !importedSourceName.trimmed.isEmpty }
+    var isIncomplete: Bool {
+        isUnknown || scientificName.trimmed.isEmpty || tradeNames.isEmpty || drugClass.trimmed.isEmpty || dosageForms.isEmpty
     }
 
     var displayName: String {

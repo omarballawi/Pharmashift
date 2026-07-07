@@ -1,6 +1,7 @@
 import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct CaptureView: View {
     enum SaveAction { case another, later, open }
@@ -8,6 +9,7 @@ struct CaptureView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(AppTheme.self) private var theme
+    @Environment(AppNavigation.self) private var navigation
     @State private var scientificName = ""
     @State private var tradeName = ""
     @State private var strength = ""
@@ -18,7 +20,9 @@ struct CaptureView: View {
     @State private var unknownLabel = ""
     @State private var isUnknown = false
     @State private var imageData: Data?
+    @State private var thumbnailData: Data?
     @State private var photoItem: PhotosPickerItem?
+    @State private var imageDraft: ImageDraft?
     @State private var showsCamera = false
     @State private var message: String?
     @State private var savedDrug: Drug?
@@ -33,15 +37,22 @@ struct CaptureView: View {
     var body: some View {
         Form {
             Section {
-                DrugPhotoView(data: imageData, height: 132)
+                DrugPhotoView(data: imageData, height: 170)
                 HStack {
-                    Button { showsCamera = true } label: { Label("Camera", systemImage: "camera.fill") }
+                    Button { openCamera() } label: { Label("Camera", systemImage: "camera.fill") }
                         .frame(minHeight: 48)
                     Spacer()
                     PhotosPicker(selection: $photoItem, matching: .images) {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
                     .frame(minHeight: 48)
+                }
+                if imageData != nil {
+                    Button(role: .destructive) {
+                        imageData = nil
+                        thumbnailData = nil
+                        photoItem = nil
+                    } label: { Label("Remove photo", systemImage: "trash") }
                 }
             }
 
@@ -105,12 +116,25 @@ struct CaptureView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(theme.background)
         .task(id: photoItem) {
-            guard let photoItem, let data = try? await photoItem.loadTransferable(type: Data.self) else { return }
-            imageData = ImageCompressor.jpegData(from: data)
+            guard let photoItem else { return }
+            do {
+                guard let data = try await photoItem.loadTransferable(type: Data.self) else {
+                    throw ImagePipelineError.invalidImage
+                }
+                imageDraft = ImageDraft(image: try ImageCompressor.image(from: data))
+            } catch {
+                message = error.localizedDescription
+            }
         }
         .sheet(isPresented: $showsCamera) {
-            CameraPicker { imageData = ImageCompressor.jpegData(from: $0) }
+            CameraPicker { imageDraft = ImageDraft(image: $0) }
                 .ignoresSafeArea()
+        }
+        .sheet(item: $imageDraft) { draft in
+            ImageEditorView(draft: draft) { payload in
+                imageData = payload.imageData
+                thumbnailData = payload.thumbnailData
+            }
         }
         .alert("PharmaShift", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
@@ -119,6 +143,17 @@ struct CaptureView: View {
             if let savedDrug { DrugDetailView(drug: savedDrug) }
         }
         .onAppear { focus = isUnknown ? .unknownLabel : .scientific }
+        .onAppear {
+            if let requested = navigation.captureChapter {
+                chapter = requested
+                navigation.captureChapter = nil
+            }
+        }
+        .onChange(of: navigation.captureChapter) { _, requested in
+            guard let requested else { return }
+            chapter = requested
+            navigation.captureChapter = nil
+        }
         .onChange(of: isUnknown) { _, value in focus = value ? .unknownLabel : .scientific }
     }
 
@@ -141,6 +176,7 @@ struct CaptureView: View {
             captureLabel: unknownLabel.trimmed,
             isUnknown: isUnknown
         )
+        drug.thumbnailData = thumbnailData
         context.insert(drug)
         do {
             try context.save()
@@ -163,7 +199,15 @@ struct CaptureView: View {
     private func reset() {
         scientificName = ""; tradeName = ""; strength = ""; dosageForm = ""
         chapter = .other; drugClass = ""; shelfLocation = ""; unknownLabel = ""
-        isUnknown = false; imageData = nil; photoItem = nil
+        isUnknown = false; imageData = nil; thumbnailData = nil; photoItem = nil
         focus = .scientific
+    }
+
+    private func openCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            message = "Camera is unavailable on this device. Choose a photo from the library instead."
+            return
+        }
+        showsCamera = true
     }
 }

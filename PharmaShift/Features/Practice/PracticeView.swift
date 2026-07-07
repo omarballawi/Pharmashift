@@ -34,9 +34,11 @@ enum PracticeMode: String, CaseIterable, Identifiable {
 
 struct PracticeView: View {
     @Environment(ReviewScheduler.self) private var scheduler
+    @Environment(AppNavigation.self) private var navigation
     @Query(sort: \Drug.nextReviewDate) private var drugs: [Drug]
     @Query private var reviews: [ReviewLog]
     @State private var selectedMode: PracticeMode?
+    @State private var selectedChapter: Chapter?
 
     private var available: [Drug] { drugs.filter { !$0.isUnknown } }
     private var due: [Drug] { available.filter { scheduler.isDue($0) } }
@@ -72,9 +74,18 @@ struct PracticeView: View {
             .padding()
         }
         .navigationTitle("Practice")
-        .sheet(item: $selectedMode) { mode in
-            NavigationStack { PracticeSessionView(mode: mode) }
+        .sheet(item: $selectedMode, onDismiss: { selectedChapter = nil }) { mode in
+            NavigationStack { PracticeSessionView(mode: mode, chapter: selectedChapter) }
         }
+        .onAppear { openRequestedReview() }
+        .onChange(of: navigation.reviewChapter) { _, _ in openRequestedReview() }
+    }
+
+    private func openRequestedReview() {
+        guard let chapter = navigation.reviewChapter else { return }
+        selectedChapter = chapter
+        navigation.reviewChapter = nil
+        selectedMode = .nameFlip
     }
 }
 
@@ -85,15 +96,17 @@ struct PracticeSessionView: View {
     @Query(sort: \Drug.nextReviewDate) private var allDrugs: [Drug]
     let initialDrug: Drug?
     let mode: PracticeMode
+    let chapter: Chapter?
     @State private var index = 0
     @State private var answerRevealed = false
     @State private var counselingText = ""
     @State private var completed = false
     @State private var sessionDrugs: [Drug] = []
 
-    init(initialDrug: Drug? = nil, mode: PracticeMode = .nameFlip) {
+    init(initialDrug: Drug? = nil, mode: PracticeMode = .nameFlip, chapter: Chapter? = nil) {
         self.initialDrug = initialDrug
         self.mode = mode
+        self.chapter = chapter
     }
 
     private var drug: Drug? { sessionDrugs.indices.contains(index) ? sessionDrugs[index] : nil }
@@ -108,7 +121,6 @@ struct PracticeSessionView: View {
                 } else if mode == .cases {
                     caseCard
                 } else if let drug {
-                    UrgentSafetyNotice(flags: drug.safetyFlags)
                     Text("Card \(index + 1) of \(sessionDrugs.count)").font(.caption).foregroundStyle(.secondary)
                     Text(question(for: drug)).font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading)
                     if mode == .counseling {
@@ -132,7 +144,6 @@ struct PracticeSessionView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Case \(index + 1) of \(StarterContent.cases.count)").font(.caption).foregroundStyle(.secondary)
             Text(practiceCase.prompt).font(.title2.bold())
-            UrgentSafetyNotice(flags: [.severeSymptoms])
             answerArea(answer: practiceCase.expectedIdea)
         }
     }
@@ -143,7 +154,6 @@ struct PracticeSessionView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Expected idea").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Text(answer).font(.body)
-                Text("Confirm with the pharmacist.").font(.headline).foregroundStyle(.red)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,7 +243,7 @@ struct PracticeSessionView: View {
             sessionDrugs = [initialDrug]
             return
         }
-        let available = allDrugs.filter { !$0.isUnknown }
+        let available = allDrugs.filter { !$0.isUnknown && (chapter == nil || $0.chapter == chapter) }
         let due = available.filter { scheduler.isDue($0) }
         sessionDrugs = Array((due.isEmpty ? available : due).prefix(20))
     }

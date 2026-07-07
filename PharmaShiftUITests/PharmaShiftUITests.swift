@@ -1,11 +1,12 @@
 import XCTest
 
 final class PharmaShiftUITests: XCTestCase {
-    func testSafetyBannerAndFastCaptureAreReachable() {
+    func testHomeDashboardAndFastCaptureAreReachable() {
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.otherElements["safety.banner"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Capture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["home.dashboard"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements["safety.banner"].exists)
+        app.tabBars.buttons["Add"].tap()
         let scientific = app.textFields["capture.scientificName"]
         XCTAssertTrue(scientific.waitForExistence(timeout: 3))
         scientific.tap()

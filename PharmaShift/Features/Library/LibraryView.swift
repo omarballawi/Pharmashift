@@ -3,6 +3,7 @@ import SwiftUI
 
 struct LibraryView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppNavigation.self) private var navigation
     @Query(sort: \Drug.dateAdded, order: .reverse) private var drugs: [Drug]
     @State private var searchText = ""
     @State private var showsFilters = false
@@ -13,6 +14,10 @@ struct LibraryView: View {
     @State private var unknownOnly = false
     @State private var dueOnly = false
     @State private var masteredOnly = false
+    @State private var weakOnly = false
+    @State private var incompleteOnly = false
+    @State private var missingImageOnly = false
+    @State private var importedOnly = false
     @State private var message: String?
     @State private var asksVerification = false
 
@@ -25,7 +30,11 @@ struct LibraryView: View {
             shelf: shelfFilter,
             unknownOnly: unknownOnly,
             dueOnly: dueOnly,
-            masteredOnly: masteredOnly
+            masteredOnly: masteredOnly,
+            weakOnly: weakOnly,
+            incompleteOnly: incompleteOnly,
+            missingImageOnly: missingImageOnly,
+            importedOnly: importedOnly
         )
         return drugs.filter { filter.matches($0) }
     }
@@ -48,7 +57,10 @@ struct LibraryView: View {
             }
         }
         .navigationTitle("Library")
-        .searchable(text: $searchText, prompt: "Name, class, chapter, shelf")
+        .searchable(text: $searchText, prompt: "Name, class, system, notes, Arabic")
+        .task(id: drugs.count) { backfillThumbnails() }
+        .onAppear { applyRequestedChapter() }
+        .onChange(of: navigation.libraryChapter) { _, _ in applyRequestedChapter() }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { showsFilters = true } label: {
@@ -69,7 +81,11 @@ struct LibraryView: View {
                     shelf: $shelfFilter,
                     unknownOnly: $unknownOnly,
                     dueOnly: $dueOnly,
-                    masteredOnly: $masteredOnly
+                    masteredOnly: $masteredOnly,
+                    weakOnly: $weakOnly,
+                    incompleteOnly: $incompleteOnly,
+                    missingImageOnly: $missingImageOnly,
+                    importedOnly: $importedOnly
                 )
             }
         }
@@ -83,7 +99,7 @@ struct LibraryView: View {
     }
 
     private var activeFilterCount: Int {
-        [!chapterFilter.isEmpty, !confidenceFilter.isEmpty, !classFilter.isEmpty, !shelfFilter.isEmpty, unknownOnly, dueOnly, masteredOnly].filter { $0 }.count
+        [!chapterFilter.isEmpty, !confidenceFilter.isEmpty, !classFilter.isEmpty, !shelfFilter.isEmpty, unknownOnly, dueOnly, masteredOnly, weakOnly, incompleteOnly, missingImageOnly, importedOnly].filter { $0 }.count
     }
 
     private func importStarterPack() {
@@ -99,13 +115,33 @@ struct LibraryView: View {
             message = "Imported examples are now marked pharmacist verified."
         } catch { message = error.localizedDescription }
     }
+
+    private func applyRequestedChapter() {
+        guard let chapter = navigation.libraryChapter else { return }
+        chapterFilter = chapter.rawValue
+        navigation.libraryChapter = nil
+    }
+
+    private func backfillThumbnails() {
+        var changed = false
+        for drug in drugs where drug.thumbnailData == nil {
+            guard let data = drug.imageData,
+                  let image = try? ImageCompressor.image(from: data),
+                  let payload = try? ImageCompressor.payload(from: image) else { continue }
+            drug.thumbnailData = payload.thumbnailData
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
 }
 
 private struct DrugRow: View {
+    @Environment(ReviewScheduler.self) private var scheduler
     let drug: Drug
 
     var body: some View {
         HStack(spacing: 12) {
+            DrugThumbnailView(drug: drug, size: 68)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(drug.displayName).font(.headline)
@@ -115,12 +151,31 @@ private struct DrugRow: View {
                 Text(drug.firstTradeName).font(.subheadline).foregroundStyle(.secondary)
                 Text([drug.chapterRaw, drug.drugClass].filter { !$0.isEmpty }.joined(separator: " • "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 5) {
+                    if let form = drug.dosageForms.first { miniBadge(form) }
+                    if let strength = drug.strengths.first { miniBadge(strength) }
+                    if scheduler.isDue(drug) { Image(systemName: "calendar.badge.clock").foregroundStyle(.orange) }
+                }
             }
             Spacer()
-            MasteryBadge(drug: drug)
+            VStack(alignment: .trailing, spacing: 6) {
+                MasteryBadge(drug: drug)
+                Text(drug.confidenceLevel.rawValue)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(drug.isMastered ? .green : .secondary)
+            }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+    }
+
+    private func miniBadge(_ value: String) -> some View {
+        Text(value)
+            .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.secondary.opacity(0.1), in: Capsule())
     }
 }
 
@@ -133,6 +188,10 @@ private struct LibraryFilterView: View {
     @Binding var unknownOnly: Bool
     @Binding var dueOnly: Bool
     @Binding var masteredOnly: Bool
+    @Binding var weakOnly: Bool
+    @Binding var incompleteOnly: Bool
+    @Binding var missingImageOnly: Bool
+    @Binding var importedOnly: Bool
 
     var body: some View {
         Form {
@@ -152,11 +211,16 @@ private struct LibraryFilterView: View {
                 Toggle("Unknown drugs", isOn: $unknownOnly)
                 Toggle("Due for review", isOn: $dueOnly)
                 Toggle("Mastered drugs", isOn: $masteredOnly)
+                Toggle("Weak or confusing", isOn: $weakOnly)
+                Toggle("Unknown or incomplete", isOn: $incompleteOnly)
+                Toggle("Missing photo", isOn: $missingImageOnly)
+                Toggle("Imported source", isOn: $importedOnly)
             }
             Section {
                 Button("Clear all") {
                     chapter = ""; confidence = ""; drugClass = ""; shelf = ""
                     unknownOnly = false; dueOnly = false; masteredOnly = false
+                    weakOnly = false; incompleteOnly = false; missingImageOnly = false; importedOnly = false
                 }
             }
         }

@@ -82,13 +82,14 @@ private enum Phase1DrugSchema: VersionedSchema {
         @Attribute(.externalStorage) var thumbnailData: Data?
 
         init(id: UUID, imageData: Data, thumbnailData: Data) {
+            let fixtureDate = Date(timeIntervalSince1970: 1_700_000_000)
             self.id = id; scientificName = "Legacy medicine"; tradeNames = ["Legacy brand"]
             chapterRaw = Chapter.endocrine.rawValue; drugClass = "Legacy class"; dosageForms = ["Tablet"]; strengths = ["500 mg"]
             indications = ["Legacy use"]; howToTake = "With food"; foodInstruction = "After a meal"
             commonSideEffects = ["Nausea"]; warnings = ["Legacy warning"]; counselingSentence = "Legacy counseling"
             patientQuestions = ["Legacy question"]; shelfLocation = "A1"; self.imageData = imageData; self.thumbnailData = thumbnailData
-            confidenceRaw = ConfidenceLevel.medium.rawValue; timesSeen = 4; dateAdded = Date(timeIntervalSince1970: 1_700_000_000)
-            lastSeenDate = dateAdded; lastReviewed = dateAdded; nextReviewDate = dateAdded.addingTimeInterval(86_400)
+            confidenceRaw = ConfidenceLevel.medium.rawValue; timesSeen = 4; dateAdded = fixtureDate
+            lastSeenDate = fixtureDate; lastReviewed = fixtureDate; nextReviewDate = fixtureDate.addingTimeInterval(86_400)
             masteryScientificName = true; masteryTradeName = true; masteryClass = false; masteryUse = false; masteryWarning = false; masteryCounseling = false
             notes = "Legacy notes"; captureLabel = "Legacy box"; isUnknown = false; isConfusing = true; correctStreak = 2
             safetyFlagsRaw = [SafetyFlag.pregnancy.rawValue]; starterSeedID = "legacy-seed"; sourceNote = "Legacy source"; verificationRaw = VerificationStatus.personal.rawValue

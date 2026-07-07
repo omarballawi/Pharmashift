@@ -116,53 +116,112 @@ private struct ActiveShiftCard: View {
     let shift: ShiftLog
     let newDrugCount: Int
     let reviewCount: Int
-    private let phases: [(String, Int)] = [
-        ("Capture shelf drugs", 30), ("Understand selected drugs", 60), ("Quiz and review", 45),
-        ("Observe with pharmacist", 30), ("End-shift reflection", 15)
-    ]
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            let elapsedMinutes = max(0, context.date.timeIntervalSince(shift.startedAt) / 60)
-            let progress = min(1, elapsedMinutes / 180)
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(shift.chapterFocus.rawValue).font(.title2.bold())
-                        Text("3-hour pharmacy mode • flexible guidance").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("\(Int(progress * 100))%").font(.headline.monospacedDigit())
-                }
-                ProgressView(value: progress).tint(.accentColor)
-                HStack {
-                    LabeledContent("New drugs", value: "\(newDrugCount)/10")
-                    Divider()
-                    LabeledContent("Reviews", value: "\(reviewCount)")
-                }
-                if !shift.pharmacistQuestions.isEmpty {
-                    Label("\(shift.pharmacistQuestions.count) pharmacist questions recorded", systemImage: "questionmark.bubble")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                ForEach(Array(phases.enumerated()), id: \.offset) { index, phase in
-                    let range = phaseRange(index)
-                    HStack {
-                        Image(systemName: elapsedMinutes >= Double(range.upperBound) ? "checkmark.circle.fill" : elapsedMinutes >= Double(range.lowerBound) ? "circle.inset.filled" : "circle")
-                            .foregroundStyle(elapsedMinutes >= Double(range.lowerBound) ? .tint : .secondary)
-                        Text(phase.0)
-                        Spacer()
-                        Text("\(phase.1) min").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            ActiveShiftContent(
+                shift: shift,
+                newDrugCount: newDrugCount,
+                reviewCount: reviewCount,
+                currentDate: timeline.date
+            )
+        }
+    }
+}
+
+private struct ShiftPhase: Identifiable {
+    let title: String
+    let startMinute: Double
+    let duration: Int
+
+    var id: String { title }
+    var endMinute: Double { startMinute + Double(duration) }
+}
+
+private struct ActiveShiftContent: View {
+    let shift: ShiftLog
+    let newDrugCount: Int
+    let reviewCount: Int
+    let currentDate: Date
+
+    private let phases: [ShiftPhase] = [
+        ShiftPhase(title: "Capture shelf drugs", startMinute: 0, duration: 30),
+        ShiftPhase(title: "Understand selected drugs", startMinute: 30, duration: 60),
+        ShiftPhase(title: "Quiz and review", startMinute: 90, duration: 45),
+        ShiftPhase(title: "Observe with pharmacist", startMinute: 135, duration: 30),
+        ShiftPhase(title: "End-shift reflection", startMinute: 165, duration: 15)
+    ]
+
+    private var elapsedMinutes: Double {
+        max(0, currentDate.timeIntervalSince(shift.startedAt) / 60)
+    }
+
+    private var progress: Double { min(1, elapsedMinutes / 180) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            ProgressView(value: progress).tint(.accentColor)
+            counters
+            if !shift.pharmacistQuestions.isEmpty {
+                Label("\(shift.pharmacistQuestions.count) pharmacist questions recorded", systemImage: "questionmark.bubble")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(18)
-            .background(.background, in: RoundedRectangle(cornerRadius: 20))
+            ForEach(phases) { phase in
+                ShiftPhaseRow(phase: phase, elapsedMinutes: elapsedMinutes)
+            }
+        }
+        .padding(18)
+        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(shift.chapterFocus.rawValue).font(.title2.bold())
+                Text("3-hour pharmacy mode • flexible guidance")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text("\(Int(progress * 100))%")
+                .font(.headline.monospacedDigit())
         }
     }
 
-    private func phaseRange(_ index: Int) -> Range<Int> {
-        let start = phases.prefix(index).reduce(0) { $0 + $1.1 }
-        return start..<(start + phases[index].1)
+    private var counters: some View {
+        HStack {
+            LabeledContent("New drugs", value: "\(newDrugCount)/10")
+            Divider()
+            LabeledContent("Reviews", value: "\(reviewCount)")
+        }
+    }
+}
+
+private struct ShiftPhaseRow: View {
+    let phase: ShiftPhase
+    let elapsedMinutes: Double
+
+    private var isComplete: Bool { elapsedMinutes >= phase.endMinute }
+    private var isCurrent: Bool { elapsedMinutes >= phase.startMinute && !isComplete }
+
+    private var icon: String {
+        if isComplete { return "checkmark.circle.fill" }
+        if isCurrent { return "circle.inset.filled" }
+        return "circle"
+    }
+
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(isComplete || isCurrent ? Color.accentColor : Color.secondary)
+            Text(phase.title)
+            Spacer()
+            Text("\(phase.duration) min")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

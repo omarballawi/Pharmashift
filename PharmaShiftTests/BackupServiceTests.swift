@@ -53,7 +53,7 @@ final class BackupServiceTests: XCTestCase {
         let sourceDrug = Drug(id: id, scientificName: "Updated name", imageData: Data([1]))
         source.mainContext.insert(sourceDrug)
         try source.mainContext.save()
-        let backup = BackupService.makeBackup(context: source.mainContext, includesImages: false)
+        let backup = try BackupService.makeBackup(context: source.mainContext, includesImages: false)
 
         let destination = try makeContainer()
         let local = Drug(id: id, scientificName: "Old name", imageData: Data([9, 9]))
@@ -72,7 +72,7 @@ final class BackupServiceTests: XCTestCase {
         let source = try makeContainer()
         source.mainContext.insert(Drug(scientificName: "Only backup drug"))
         try source.mainContext.save()
-        let backup = BackupService.makeBackup(context: source.mainContext, includesImages: false)
+        let backup = try BackupService.makeBackup(context: source.mainContext, includesImages: false)
 
         let destination = try makeContainer()
         destination.mainContext.insert(Drug(scientificName: "Delete me"))

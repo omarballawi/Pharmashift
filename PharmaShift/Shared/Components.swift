@@ -183,11 +183,11 @@ struct DosingFrequencyMeter: View {
     private let labels = ["1×", "2×", "3×", "4×", "PRN"]
     private var selectedIndex: Int? {
         switch frequency {
-        case .onceDaily: 0
-        case .twiceDaily: 1
-        case .threeTimesDaily: 2
-        case .fourTimesDaily: 3
-        case .asNeeded: 4
+        case .onceDaily: return 0
+        case .twiceDaily: return 1
+        case .threeTimesDaily: return 2
+        case .fourTimesDaily: return 3
+        case .asNeeded: return 4
         case .unknown:
             guard let timesPerDay, (1...4).contains(timesPerDay) else { return nil }
             return timesPerDay - 1

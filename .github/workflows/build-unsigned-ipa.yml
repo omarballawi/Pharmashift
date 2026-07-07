@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     name: Run simulator tests
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 20
 
     steps:

@@ -5,7 +5,7 @@ import SwiftUI
 private enum PreviewData {
     static let container: ModelContainer = {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, configurations: configuration)
+        let container = try! ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let context = container.mainContext
         let known = Drug(
             scientificName: "Salbutamol",

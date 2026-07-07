@@ -29,5 +29,20 @@
   "27": "AppTheme",
   "28": "Foundation",
   "29": "ReportEditorView",
-  "30": "Path"
+  "30": "Path",
+  "31": "ModelAndPersistenceTests",
+  "32": "Design",
+  "33": "PharmacologyScale",
+  "34": ".reportSection",
+  "35": "LibraryView",
+  "36": "Components.swift",
+  "37": "Drug",
+  "38": "SafetyRadar",
+  "39": "DrugEditorSection",
+  "40": "DrugSearchResult",
+  "41": "AppTheme",
+  "42": "Foundation",
+  "43": "AppTab",
+  "44": ".containsObviousIdentifier",
+  "45": "LearningSettingsView"
 }

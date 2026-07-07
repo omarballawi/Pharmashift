@@ -21,6 +21,9 @@ struct HomeView: View {
     @Environment(ReviewScheduler.self) private var scheduler
     @Query(sort: \Drug.dateAdded, order: .reverse) private var drugs: [Drug]
     @Query(sort: \ShiftLog.startedAt, order: .reverse) private var shifts: [ShiftLog]
+    @Query private var profiles: [LearningProfile]
+    @Query(sort: \DailyActivity.day, order: .reverse) private var activities: [DailyActivity]
+    @State private var showsShift = false
 
     private let trainingChapters: [Chapter] = [
         .cardiovascular, .respiratory, .endocrine, .musculoskeletal, .eye, .earNoseOropharynx
@@ -32,12 +35,17 @@ struct HomeView: View {
     private var activeShift: ShiftLog? { shifts.first { !$0.isCompleted } }
     private var totalDue: Int { drugs.filter { !$0.isUnknown && scheduler.isDue($0) }.count }
     private var totalWeak: Int { drugs.filter { $0.confidenceLevel == .weak || $0.isConfusing }.count }
+    private var focus: FocusRecommendation { FocusModeEngine.recommendation(drugs: drugs, activeShift: activeShift) }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 hero
-                shiftCard
+                dailyMission
+                if (profiles.first?.weakDrugRemindersEnabled ?? true) && totalWeak > 0 {
+                    Label("\(totalWeak) weak drug\(totalWeak == 1 ? "" : "s") ready for a future Focus step", systemImage: "bell.badge")
+                        .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
+                }
                 sectionHeader("Training Book", arabic: "كتاب التدريب", icon: "book.closed.fill")
                 chapterGrid(trainingChapters)
                 sectionHeader("Pharmacy Shelf", arabic: "أقسام الصيدلية", icon: "shippingbox.fill")
@@ -49,6 +57,7 @@ struct HomeView: View {
         .background(theme.background)
         .navigationTitle("PharmaShift")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showsShift) { ShiftView() }
         .accessibilityIdentifier("home.dashboard")
     }
 
@@ -68,19 +77,23 @@ struct HomeView: View {
             }
             HStack(spacing: 10) {
                 heroMetric(value: "\(drugs.count)", title: "Drugs")
+                Divider().overlay(.white.opacity(0.35)).frame(height: 34)
                 heroMetric(value: "\(totalDue)", title: "Due")
+                Divider().overlay(.white.opacity(0.35)).frame(height: 34)
                 heroMetric(value: "\(totalWeak)", title: "Weak")
             }
-            Button {
-                navigation.openCapture()
-            } label: {
-                Label("Add today’s drug / أضف دواء اليوم", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 48)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Focus Mode").font(.caption.weight(.bold)).textCase(.uppercase).opacity(0.85)
+                Text(focus.title).font(.title3.bold())
+                Text(focus.subtitle).font(.subheadline).opacity(0.9)
+            }
+            Button { performFocusAction() } label: {
+                Label(focus.title, systemImage: focus.icon).font(.headline).frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.borderedProminent)
             .tint(.white)
             .foregroundStyle(theme.tint)
+            .accessibilityIdentifier("home.focus.\(focus.action.rawValue)")
         }
         .foregroundStyle(.white)
         .padding(20)
@@ -90,6 +103,28 @@ struct HomeView: View {
         )
     }
 
+    private var dailyMission: some View {
+        let completed = activities.first.map { Calendar.current.isDateInToday($0.day) && $0.missionCompleted } ?? false
+        return HStack(spacing: 12) {
+            Image(systemName: completed ? "checkmark.circle.fill" : "circle.dashed").font(.title2).foregroundStyle(completed ? .green : theme.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(completed ? "Daily mission complete" : "Daily mission").font(.headline)
+                Text(completed ? "Five thoughtful questions—done." : "Complete one five-question practice session.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func performFocusAction() {
+        switch focus.action {
+        case .addDrug: navigation.openCapture()
+        case .reviewDue: navigation.startReview(mode: .dueReview)
+        case .practiceWeak: navigation.startReview(mode: .weakDrug)
+        case .finishShift: showsShift = true
+        }
+    }
+
     private func heroMetric(value: String, title: String) -> some View {
         VStack(spacing: 2) {
             Text(value).font(.title2.bold()).monospacedDigit()
@@ -97,7 +132,6 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var shiftCard: some View {

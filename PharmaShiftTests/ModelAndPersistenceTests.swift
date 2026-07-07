@@ -34,7 +34,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testStarterImportIsIdempotent() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let first = try StarterContent.importIfNeeded(into: container.mainContext)
         let second = try StarterContent.importIfNeeded(into: container.mainContext)
         XCTAssertEqual(first, 12)
@@ -133,7 +133,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testFutureReadyFieldsPersist() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let drug = Drug(scientificName: "Ramipril", chapter: .cardiovascular)
         drug.mechanism = "ACE inhibition"
         drug.halfLifeBand = .long
@@ -158,7 +158,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testIncompleteShiftRestoresAndDeletedDrugLeavesReviewSnapshot() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let context = container.mainContext
         let drug = Drug(scientificName: "Test Drug")
         let log = ReviewLog(drug: drug, drugNameSnapshot: drug.displayName, questionType: .use, rating: .correct, scoreBefore: 0, scoreAfter: 1)

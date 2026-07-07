@@ -1,4 +1,5 @@
 import Observation
+import SwiftData
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
@@ -27,6 +28,7 @@ final class AppNavigation {
     var captureChapter: Chapter?
     var libraryChapter: Chapter?
     var reviewChapter: Chapter?
+    var requestedPracticeMode: PracticeMode?
 
     func openCapture(chapter: Chapter? = nil) {
         captureChapter = chapter
@@ -38,8 +40,9 @@ final class AppNavigation {
         selection = .library
     }
 
-    func startReview(chapter: Chapter? = nil) {
+    func startReview(chapter: Chapter? = nil, mode: PracticeMode? = nil) {
         reviewChapter = chapter
+        requestedPracticeMode = mode ?? (chapter == nil ? .tradeToScientific : .systemSpecific)
         selection = .practice
     }
 }
@@ -88,12 +91,54 @@ private struct MoreView: View {
                 }
             }
             Section("App") {
+                NavigationLink { BackupDataView() } label: {
+                    Label("Backup & Data", systemImage: "externaldrive.fill")
+                }
+                NavigationLink { LearningSettingsView() } label: {
+                    Label("Practice preferences", systemImage: "slider.horizontal.3")
+                }
                 NavigationLink { AboutView() } label: {
                     Label("About & Safety / حول التطبيق", systemImage: "info.circle.fill")
                 }
             }
         }
         .navigationTitle("More / المزيد")
+    }
+}
+
+private struct LearningSettingsView: View {
+    @Environment(\.modelContext) private var context
+    @Query private var profiles: [LearningProfile]
+
+    var body: some View {
+        Form {
+            Section("In-app reminders") {
+                Toggle("Show weak-drug reminders", isOn: reminderBinding)
+                Text("This reminder appears only inside PharmaShift and never requests notification permission.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let profile = profiles.first {
+                Section("Learning progress") {
+                    LabeledContent("Current streak", value: "\(profile.currentStreak) days")
+                    LabeledContent("Longest streak", value: "\(profile.longestStreak) days")
+                    LabeledContent("Completed sessions", value: "\(profile.completedSessions)")
+                }
+            }
+        }
+        .navigationTitle("Practice Preferences")
+    }
+
+    private var reminderBinding: Binding<Bool> {
+        Binding(
+            get: { profiles.first?.weakDrugRemindersEnabled ?? true },
+            set: { enabled in
+                do {
+                    let profile = try LearningProgressService.profile(in: context)
+                    profile.weakDrugRemindersEnabled = enabled
+                    try context.save()
+                } catch { }
+            }
+        )
     }
 }
 

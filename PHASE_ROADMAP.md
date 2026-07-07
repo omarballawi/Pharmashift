@@ -1,6 +1,6 @@
 # PharmaShift Delivery Roadmap
 
-Phase 1 is complete: the bilingual systems dashboard, future-ready drug model, modern Drug Card/editor, image crop and preview flow, thumbnail library, filters, and automatic IPA packaging are implemented.
+Phases 1–5 are implemented in the current source. Phase 2 has a verified IPA milestone; the consolidated Phases 3–5 release is awaiting its final simulator/IPA gate.
 
 Every later phase follows the same release gate: update the Graphify knowledge graph, run tests on GitHub's macOS runner, commit and push the complete change, build an unsigned IPA, verify its archive, and commit the generated IPA.
 
@@ -57,6 +57,8 @@ Goal: make daily use ADHD-friendly and rewarding without turning learning into n
 
 Acceptance: Focus Mode never presents competing primary actions, sessions contain exactly five questions, streak calculations tolerate missed days/time-zone changes, mastery remains consistent, and all motivational effects remain optional and accessible.
 
-## Recommended Next Step
+## Final Release Gate
 
-Implement Phase 2 as one release milestone. It is mostly a UI layer over fields already stored in `Drug`, so it has the lowest migration risk and immediately makes the app more useful without adding network or restore complexity.
+- Run the migration, unit, and UI suites on the pinned iOS 18.5 simulator after the complete change set is committed.
+- Package only after the test job succeeds, verify the IPA archive and bundle metadata, then commit the generated IPA.
+- Perform the remaining physical-device checks for Camera, Photo Library, crop pan/pinch/rotation, persistence, and memory behavior on an iPhone.

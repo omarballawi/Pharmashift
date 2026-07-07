@@ -17,12 +17,19 @@ struct DrugEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     let drug: Drug
+    let infoProvider: any DrugInfoProvider
     @State private var selectedSection: DrugEditorSection = .basics
     @State private var photoItem: PhotosPickerItem?
     @State private var imageFlow: ImageFlowDestination?
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
+    @State private var showsImport = false
+
+    init(drug: Drug, infoProvider: any DrugInfoProvider = DrugInfoProviderFactory.appDefault()) {
+        self.drug = drug
+        self.infoProvider = infoProvider
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +53,9 @@ struct DrugEditorView: View {
                 drug.thumbnailData = payload.thumbnailData
             }
             .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showsImport) {
+            NavigationStack { DrugImportView(drug: drug, provider: infoProvider) }
         }
         .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -103,6 +113,11 @@ struct DrugEditorView: View {
                 }
             }
             Section("Identity / الهوية") {
+                Button { showsImport = true } label: {
+                    Label("Import official DailyMed information", systemImage: "square.and.arrow.down")
+                }
+                .disabled(drug.scientificName.trimmed.isEmpty)
+                .accessibilityIdentifier("drugEditor.import")
                 Toggle("Unknown drug", isOn: binding(\.isUnknown))
                 TextField("Capture label", text: binding(\.captureLabel))
                 TextField("Scientific name", text: binding(\.scientificName)).autocorrectionDisabled()

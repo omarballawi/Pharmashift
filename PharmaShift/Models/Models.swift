@@ -148,6 +148,57 @@ enum ReviewRating: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum PracticeInteraction: String, Codable {
+    case multipleChoice
+    case recall
+}
+
+struct PracticeQuestion: Identifiable, Codable, Equatable {
+    var id: UUID
+    var drugID: UUID?
+    var drugName: String
+    var prompt: String
+    var correctAnswer: String
+    var choices: [String]
+    var explanation: String?
+    var questionType: QuestionType
+    var interaction: PracticeInteraction
+    var imageData: Data?
+    var caseID: String?
+
+    init(id: UUID = UUID(), drugID: UUID?, drugName: String, prompt: String, correctAnswer: String, choices: [String] = [], explanation: String? = nil, questionType: QuestionType, interaction: PracticeInteraction, imageData: Data? = nil, caseID: String? = nil) {
+        self.id = id; self.drugID = drugID; self.drugName = drugName; self.prompt = prompt
+        self.correctAnswer = correctAnswer; self.choices = choices; self.explanation = explanation
+        self.questionType = questionType; self.interaction = interaction; self.imageData = imageData; self.caseID = caseID
+    }
+}
+
+struct PracticeAnswer: Identifiable, Codable, Equatable {
+    var id: UUID
+    var questionID: UUID
+    var response: String
+    var rating: ReviewRating
+    var isCorrect: Bool
+
+    init(id: UUID = UUID(), questionID: UUID, response: String, rating: ReviewRating) {
+        self.id = id; self.questionID = questionID; self.response = response; self.rating = rating; self.isCorrect = rating == .correct
+    }
+}
+
+struct PracticeSessionResult: Identifiable, Codable, Equatable {
+    var id: UUID
+    var completedAt: Date
+    var modeRaw: String
+    var answers: [PracticeAnswer]
+    var questionCount: Int
+    var correctCount: Int
+
+    init(id: UUID = UUID(), completedAt: Date = .now, modeRaw: String, answers: [PracticeAnswer]) {
+        self.id = id; self.completedAt = completedAt; self.modeRaw = modeRaw; self.answers = answers
+        self.questionCount = answers.count; self.correctCount = answers.filter(\.isCorrect).count
+    }
+}
+
 @Model
 final class Drug {
     @Attribute(.unique) var id: UUID
@@ -408,8 +459,8 @@ final class ReviewLog {
     var scoreAfter: Int
     var caseID: String?
 
-    init(drug: Drug?, drugNameSnapshot: String, date: Date = .now, questionType: QuestionType, rating: ReviewRating, scoreBefore: Int, scoreAfter: Int, caseID: String? = nil) {
-        self.id = UUID()
+    init(id: UUID = UUID(), drug: Drug?, drugNameSnapshot: String, date: Date = .now, questionType: QuestionType, rating: ReviewRating, scoreBefore: Int, scoreAfter: Int, caseID: String? = nil) {
+        self.id = id
         self.drug = drug
         self.drugNameSnapshot = drugNameSnapshot
         self.date = date
@@ -441,8 +492,8 @@ final class ShiftLog {
     var tomorrowReview: String
     var isCompleted: Bool
 
-    init(date: Date = .now, chapterFocus: Chapter = .other) {
-        self.id = UUID()
+    init(id: UUID = UUID(), date: Date = .now, chapterFocus: Chapter = .other) {
+        self.id = id
         self.date = date
         self.startedAt = date
         self.endedAt = nil
@@ -480,8 +531,8 @@ final class EncounterNote {
     var pharmacistNote: String
     var privacyConfirmed: Bool
 
-    init(date: Date = .now, topic: String = "", relatedDrug: Drug? = nil, whatHappened: String = "", whatILearned: String = "", pharmacistNote: String = "", privacyConfirmed: Bool = false) {
-        self.id = UUID()
+    init(id: UUID = UUID(), date: Date = .now, topic: String = "", relatedDrug: Drug? = nil, whatHappened: String = "", whatILearned: String = "", pharmacistNote: String = "", privacyConfirmed: Bool = false) {
+        self.id = id
         self.date = date
         self.topic = topic
         self.relatedDrug = relatedDrug
@@ -512,8 +563,8 @@ final class TrainingReport {
     var notesAndRecommendations: String
     var masteredDrugs: String
 
-    init(periodStart: Date, periodEnd: Date) {
-        self.id = UUID()
+    init(id: UUID = UUID(), periodStart: Date, periodEnd: Date) {
+        self.id = id
         self.periodStart = periodStart
         self.periodEnd = periodEnd
         self.generatedAt = .now
@@ -527,6 +578,40 @@ final class TrainingReport {
         self.challenges = ""
         self.notesAndRecommendations = ""
         self.masteredDrugs = ""
+    }
+}
+
+@Model
+final class LearningProfile {
+    @Attribute(.unique) var id: UUID
+    var currentStreak: Int
+    var longestStreak: Int
+    var completedSessions: Int
+    var completedQuestions: Int
+    var correctAnswers: Int
+    var badges: [String]
+    var lastActivityDate: Date?
+    var weakDrugRemindersEnabled: Bool
+
+    init(id: UUID = UUID(), currentStreak: Int = 0, longestStreak: Int = 0, completedSessions: Int = 0, completedQuestions: Int = 0, correctAnswers: Int = 0, badges: [String] = [], lastActivityDate: Date? = nil, weakDrugRemindersEnabled: Bool = true) {
+        self.id = id; self.currentStreak = currentStreak; self.longestStreak = longestStreak
+        self.completedSessions = completedSessions; self.completedQuestions = completedQuestions; self.correctAnswers = correctAnswers
+        self.badges = badges; self.lastActivityDate = lastActivityDate; self.weakDrugRemindersEnabled = weakDrugRemindersEnabled
+    }
+}
+
+@Model
+final class DailyActivity {
+    @Attribute(.unique) var id: UUID
+    var day: Date
+    var sessionsCompleted: Int
+    var questionsAnswered: Int
+    var correctAnswers: Int
+    var missionCompleted: Bool
+
+    init(id: UUID = UUID(), day: Date, sessionsCompleted: Int = 0, questionsAnswered: Int = 0, correctAnswers: Int = 0, missionCompleted: Bool = false) {
+        self.id = id; self.day = day; self.sessionsCompleted = sessionsCompleted
+        self.questionsAnswered = questionsAnswered; self.correctAnswers = correctAnswers; self.missionCompleted = missionCompleted
     }
 }
 

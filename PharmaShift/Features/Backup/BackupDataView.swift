@@ -20,7 +20,7 @@ private enum BackupExportKind: String, Identifiable {
     var id: String { rawValue }
     var filename: String {
         let day = Date.now.formatted(.iso8601.year().month().day())
-        switch self {
+        return switch self {
         case .lightweight: "PharmaShift-Lightweight-\(day).json"
         case .complete: "PharmaShift-Complete-\(day).json"
         case .csv: "PharmaShift-Drug-Library-\(day).csv"

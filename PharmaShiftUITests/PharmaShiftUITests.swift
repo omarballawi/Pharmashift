@@ -84,7 +84,10 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["import.preview"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.switches["import.field.Trade names"].value as? String, "1")
         XCTAssertEqual(app.switches["import.field.Scientific name"].value as? String, "0")
-        XCTAssertTrue(app.buttons["import.apply"].isEnabled)
+        app.swipeUp()
+        let apply = app.descendants(matching: .any)["import.apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        XCTAssertTrue(apply.isEnabled)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

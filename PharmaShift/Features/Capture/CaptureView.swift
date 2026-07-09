@@ -21,42 +21,60 @@ struct CaptureView: View {
     @State private var isUnknown = false
     @State private var imageData: Data?
     @State private var thumbnailData: Data?
-    @State private var photoItem: PhotosPickerItem?
+    @State private var additionalImageData: [Data] = []
+    @State private var additionalThumbnailData: [Data] = []
+    @State private var photoItems: [PhotosPickerItem] = []
     @State private var imageFlow: ImageFlowDestination?
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
+    @State private var showsTrustedImport = false
     @FocusState private var focus: FocusField?
 
     private var canSave: Bool {
-        if isUnknown { return !unknownLabel.trimmed.isEmpty || imageData != nil || !tradeName.trimmed.isEmpty }
+        if isUnknown { return !unknownLabel.trimmed.isEmpty || imageData != nil || !additionalImageData.isEmpty || !tradeName.trimmed.isEmpty }
         return !scientificName.trimmed.isEmpty || !tradeName.trimmed.isEmpty
     }
 
     var body: some View {
         Form {
             Section {
-                DrugPhotoView(data: imageData, height: 170)
-                HStack {
+                Button { showsTrustedImport = true } label: {
+                    Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(theme.tint)
+                Text("Use this when you want OCR, trusted-source search, DeepSeek formatting, preview, and a memory challenge.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                DrugPhotoGalleryView(images: currentImages, height: 150) { removePhoto(at: $0) }
+                VStack(spacing: 10) {
                     Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
-                        .frame(minHeight: 48)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("capture.camera")
                         .accessibilityValue(lastImageSource == .camera ? "Selected" : "Not selected")
-                    Spacer()
                     Button { beginImageFlow(.library) } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
-                    .frame(minHeight: 48)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .buttonStyle(.bordered)
                     .accessibilityIdentifier("capture.photoLibrary")
                     .accessibilityValue(lastImageSource == .library ? "Selected" : "Not selected")
                 }
-                if imageData != nil {
+                if !currentImages.isEmpty {
                     Button(role: .destructive) {
                         imageData = nil
                         thumbnailData = nil
-                        photoItem = nil
+                        additionalImageData = []
+                        additionalThumbnailData = []
+                        photoItems = []
                     } label: { Label("Remove photo", systemImage: "trash") }
                 }
             }
@@ -120,29 +138,20 @@ struct CaptureView: View {
         .navigationTitle("Capture")
         .scrollDismissesKeyboard(.interactively)
         .background(theme.background)
-        .task(id: photoItem) {
-            guard let photoItem else { return }
-            do {
-                guard let data = try await photoItem.loadTransferable(type: Data.self) else {
-                    throw ImagePipelineError.invalidImage
-                }
-                imageFlow = .crop(ImageDraft(image: try ImageCompressor.image(from: data)))
-                self.photoItem = nil
-            } catch {
-                message = error.localizedDescription
-            }
-        }
-        .photosPicker(isPresented: libraryPresentation, selection: $photoItem, matching: .images)
+        .task(id: photoItemsLoadID) { await loadPhotoItems() }
+        .photosPicker(isPresented: libraryPresentation, selection: $photoItems, maxSelectionCount: 8, matching: .images)
         .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
             CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }
                 .ignoresSafeArea()
         }
         .fullScreenCover(item: cropPresentation) { draft in
             ImageEditorView(draft: draft) { payload in
-                imageData = payload.imageData
-                thumbnailData = payload.thumbnailData
+                appendPhoto(payload)
             }
             .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showsTrustedImport) {
+            NavigationStack { DrugImportView() }
         }
         .alert("PharmaShift", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
@@ -185,6 +194,8 @@ struct CaptureView: View {
             isUnknown: isUnknown
         )
         drug.thumbnailData = thumbnailData
+        drug.additionalImageData = additionalImageData
+        drug.additionalThumbnailData = additionalThumbnailData
         context.insert(drug)
         do {
             try context.save()
@@ -207,8 +218,49 @@ struct CaptureView: View {
     private func reset() {
         scientificName = ""; tradeName = ""; strength = ""; dosageForm = ""
         chapter = .other; drugClass = ""; shelfLocation = ""; unknownLabel = ""
-        isUnknown = false; imageData = nil; thumbnailData = nil; photoItem = nil
+        isUnknown = false; imageData = nil; thumbnailData = nil; additionalImageData = []; additionalThumbnailData = []; photoItems = []
         focus = .scientific
+    }
+
+    private var currentImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
+    private var photoItemsLoadID: String { "\(photoItems.count)-\(photoItems.compactMap(\.itemIdentifier).joined(separator: "|"))" }
+
+    private func appendPhoto(_ payload: DrugImagePayload) {
+        if imageData == nil {
+            imageData = payload.imageData
+            thumbnailData = payload.thumbnailData
+        } else {
+            additionalImageData.append(payload.imageData)
+            additionalThumbnailData.append(payload.thumbnailData)
+        }
+    }
+
+    private func removePhoto(at index: Int) {
+        if index == 0 {
+            imageData = additionalImageData.first
+            thumbnailData = additionalThumbnailData.first
+            if !additionalImageData.isEmpty { additionalImageData.removeFirst() }
+            if !additionalThumbnailData.isEmpty { additionalThumbnailData.removeFirst() }
+        } else {
+            let additionalIndex = index - 1
+            if additionalImageData.indices.contains(additionalIndex) { additionalImageData.remove(at: additionalIndex) }
+            if additionalThumbnailData.indices.contains(additionalIndex) { additionalThumbnailData.remove(at: additionalIndex) }
+        }
+    }
+
+    private func loadPhotoItems() async {
+        guard !photoItems.isEmpty else { return }
+        do {
+            for item in photoItems {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                let image = try ImageCompressor.image(from: data)
+                let payload = try ImageCompressor.payload(from: image)
+                await MainActor.run { appendPhoto(payload) }
+            }
+            await MainActor.run { photoItems = [] }
+        } catch {
+            await MainActor.run { message = error.localizedDescription; photoItems = [] }
+        }
     }
 
     private var cameraPresentation: Binding<Bool> {

@@ -17,18 +17,24 @@ struct DrugEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     let drug: Drug
-    let infoProvider: any DrugInfoProvider
+    let providers: [any DrugSourceProvider]
+    let aiService: any DrugImportFormattingService
     @State private var selectedSection: DrugEditorSection = .basics
-    @State private var photoItem: PhotosPickerItem?
+    @State private var photoItems: [PhotosPickerItem] = []
     @State private var imageFlow: ImageFlowDestination?
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
     @State private var showsImport = false
 
-    init(drug: Drug, infoProvider: any DrugInfoProvider = DrugInfoProviderFactory.appDefault()) {
+    init(
+        drug: Drug,
+        providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
+        aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault()
+    ) {
         self.drug = drug
-        self.infoProvider = infoProvider
+        self.providers = providers
+        self.aiService = aiService
     }
 
     var body: some View {
@@ -42,20 +48,19 @@ struct DrugEditorView: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { context.rollback(); dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
         }
-        .task(id: photoItem) { await loadPhoto() }
-        .photosPicker(isPresented: libraryPresentation, selection: $photoItem, matching: .images)
+        .task(id: photoItemsLoadID) { await loadPhotos() }
+        .photosPicker(isPresented: libraryPresentation, selection: $photoItems, maxSelectionCount: 8, matching: .images)
         .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
             CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }.ignoresSafeArea()
         }
         .fullScreenCover(item: cropPresentation) { draft in
             ImageEditorView(draft: draft) { payload in
-                drug.imageData = payload.imageData
-                drug.thumbnailData = payload.thumbnailData
+                appendPhoto(payload)
             }
             .interactiveDismissDisabled()
         }
         .sheet(isPresented: $showsImport) {
-            NavigationStack { DrugImportView(drug: drug, provider: infoProvider) }
+            NavigationStack { DrugImportView(drug: drug, providers: providers, aiService: aiService) }
         }
         .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -93,30 +98,34 @@ struct DrugEditorView: View {
     private var basics: some View {
         Group {
             Section("Photo / الصورة") {
-                DrugPhotoView(data: drug.imageData, height: 170)
-                HStack {
+                DrugPhotoGalleryView(images: drug.packageImages, height: 150) { removePhoto(at: $0) }
+                VStack(spacing: 10) {
                     Button { beginImageFlow(.camera) } label: { Label("Camera", systemImage: "camera.fill") }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("drugEditor.camera")
                         .accessibilityValue(lastImageSource == .camera ? "Selected" : "Not selected")
-                    Spacer()
                     Button { beginImageFlow(.library) } label: {
-                        Label(drug.imageData == nil ? "Photo Library" : "Replace", systemImage: "photo.on.rectangle")
+                        Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .buttonStyle(.bordered)
                     .accessibilityIdentifier("drugEditor.photoLibrary")
                     .accessibilityValue(lastImageSource == .library ? "Selected" : "Not selected")
                 }
-                if drug.imageData != nil {
+                if !drug.packageImages.isEmpty {
                     Button(role: .destructive) {
                         drug.imageData = nil
                         drug.thumbnailData = nil
+                        drug.additionalImageData = []
+                        drug.additionalThumbnailData = []
                     } label: { Label("Remove photo", systemImage: "trash") }
                 }
             }
             Section("Identity / الهوية") {
                 Button { showsImport = true } label: {
-                    Label("Import official DailyMed information", systemImage: "square.and.arrow.down")
+                    Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
                 }
-                .disabled(drug.scientificName.trimmed.isEmpty)
                 .accessibilityIdentifier("drugEditor.import")
                 Toggle("Unknown drug", isOn: binding(\.isUnknown))
                 TextField("Capture label", text: binding(\.captureLabel))
@@ -344,6 +353,8 @@ struct DrugEditorView: View {
         )
     }
 
+    private var photoItemsLoadID: String { "\(photoItems.count)-\(photoItems.compactMap(\.itemIdentifier).joined(separator: "|"))" }
+
     private var cropPresentation: Binding<ImageDraft?> {
         Binding(
             get: { if case .crop(let draft)? = imageFlow { draft } else { nil } },
@@ -372,13 +383,42 @@ struct DrugEditorView: View {
         imageFlow = .crop(draft)
     }
 
-    private func loadPhoto() async {
-        guard let photoItem else { return }
+    private func appendPhoto(_ payload: DrugImagePayload) {
+        if drug.imageData == nil {
+            drug.imageData = payload.imageData
+            drug.thumbnailData = payload.thumbnailData
+        } else {
+            drug.additionalImageData.append(payload.imageData)
+            drug.additionalThumbnailData.append(payload.thumbnailData)
+        }
+    }
+
+    private func removePhoto(at index: Int) {
+        if index == 0 {
+            drug.imageData = drug.additionalImageData.first
+            drug.thumbnailData = drug.additionalThumbnailData.first
+            if !drug.additionalImageData.isEmpty { drug.additionalImageData.removeFirst() }
+            if !drug.additionalThumbnailData.isEmpty { drug.additionalThumbnailData.removeFirst() }
+        } else {
+            let additionalIndex = index - 1
+            if drug.additionalImageData.indices.contains(additionalIndex) { drug.additionalImageData.remove(at: additionalIndex) }
+            if drug.additionalThumbnailData.indices.contains(additionalIndex) { drug.additionalThumbnailData.remove(at: additionalIndex) }
+        }
+    }
+
+    private func loadPhotos() async {
+        guard !photoItems.isEmpty else { return }
         do {
-            guard let data = try await photoItem.loadTransferable(type: Data.self) else { throw ImagePipelineError.invalidImage }
-            imageFlow = .crop(ImageDraft(image: try ImageCompressor.image(from: data)))
-            self.photoItem = nil
-        } catch { errorMessage = error.localizedDescription }
+            for item in photoItems {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                let image = try ImageCompressor.image(from: data)
+                let payload = try ImageCompressor.payload(from: image)
+                await MainActor.run { appendPhoto(payload) }
+            }
+            await MainActor.run { photoItems = [] }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription; photoItems = [] }
+        }
     }
 
     private func save() {

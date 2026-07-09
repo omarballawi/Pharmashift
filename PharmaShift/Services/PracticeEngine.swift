@@ -119,7 +119,13 @@ enum PracticeGenerator {
             prompt = "Which drug package is shown?"; answer = drug.displayName; questionType = .scientificName
             candidates = all.map(\.displayName); image = drug.imageData
         case .counseling:
-            prompt = "Recall a patient counseling sentence for \(drug.displayName)."; answer = drug.counselingSentence.isEmpty ? "Draft and verify a counseling sentence with your pharmacist." : drug.counselingSentence
+            if let flashcard = drug.importedFlashcardPairs.first {
+                prompt = flashcard.question
+                answer = flashcard.answer
+            } else {
+                prompt = "Recall a patient counseling sentence for \(drug.displayName)."
+                answer = drug.counselingSentence.isEmpty ? "Draft and verify a counseling sentence with your pharmacist." : drug.counselingSentence
+            }
             questionType = .counseling; candidates = []; image = nil
         case .weakDrug, .dueReview, .systemSpecific, .casePractice:
             fatalError("Resolved above")
@@ -139,6 +145,16 @@ enum PracticeGenerator {
         var values = Array(unique.prefix(3))
         values.insert(correct, at: index % (values.count + 1))
         return values
+    }
+}
+
+private extension Drug {
+    var importedFlashcardPairs: [(question: String, answer: String)] {
+        flashcards.compactMap { raw in
+            let parts = raw.components(separatedBy: "\t")
+            guard parts.count >= 2 else { return nil }
+            return (parts[0], parts.dropFirst().joined(separator: "\t"))
+        }
     }
 }
 

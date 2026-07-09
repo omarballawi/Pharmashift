@@ -143,6 +143,14 @@ final class ModelAndPersistenceTests: XCTestCase {
         drug.arabicExplanation = "دواء لتدريب البطاقة"
         drug.sourceURL = "https://example.test/ramipril"
         drug.importedSourceName = "Mock provider"
+        drug.mechanismKeywords = ["ACE inhibition"]
+        drug.pkMemoryLineArabic = "PK memory"
+        drug.mustKnow = ["Ramipril = ACE inhibitor"]
+        drug.flashcards = ["Class?\tACE inhibitor"]
+        drug.sourceNeedsReview = true
+        drug.sourceMissingFields = ["local leaflet"]
+        drug.additionalImageData = [Data([1, 2, 3])]
+        drug.additionalThumbnailData = [Data([4])]
         container.mainContext.insert(drug)
         try container.mainContext.save()
 
@@ -154,6 +162,14 @@ final class ModelAndPersistenceTests: XCTestCase {
         XCTAssertEqual(saved.durationHours, 12)
         XCTAssertEqual(saved.arabicExplanation, "دواء لتدريب البطاقة")
         XCTAssertTrue(saved.isImported)
+        XCTAssertEqual(saved.mechanismKeywords, ["ACE inhibition"])
+        XCTAssertEqual(saved.pkMemoryLineArabic, "PK memory")
+        XCTAssertEqual(saved.mustKnow, ["Ramipril = ACE inhibitor"])
+        XCTAssertEqual(saved.flashcards, ["Class?\tACE inhibitor"])
+        XCTAssertTrue(saved.sourceNeedsReview)
+        XCTAssertEqual(saved.sourceMissingFields, ["local leaflet"])
+        XCTAssertEqual(saved.additionalImageData, [Data([1, 2, 3])])
+        XCTAssertEqual(saved.additionalThumbnailData, [Data([4])])
     }
 
     func testIncompleteShiftRestoresAndDeletedDrugLeavesReviewSnapshot() throws {

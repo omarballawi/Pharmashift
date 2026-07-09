@@ -3,85 +3,125 @@ import XCTest
 
 @MainActor
 final class DrugImportServiceTests: XCTestCase {
-    func testSPLParserMapsOfficialLOINCSectionsAndConservativePK() throws {
+    func testOCRCandidateExtractionIsConservative() {
+        let candidate = OCRService.candidate(from: [
+            "Coversyl",
+            "Perindopril arginine",
+            "5 mg tablets",
+            "Servier"
+        ])
+        XCTAssertEqual(candidate.possibleTradeName, "Coversyl")
+        XCTAssertEqual(candidate.possibleScientificName, "Perindopril arginine")
+        XCTAssertEqual(candidate.possibleStrength, "5 mg tablets")
+        XCTAssertEqual(candidate.possibleDosageForm, "5 mg tablets")
+        XCTAssertTrue(candidate.rawText.contains("Coversyl"))
+    }
+
+    func testSPLParserBuildsTrustedPacketAndTrimsUsefulSections() throws {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <document xmlns="urn:hl7-org:v3">
           <component><structuredBody>
-            <component><section><code code="34067-9"/><text><paragraph>Used for type 2 diabetes. Onset is 30 minutes. Duration is 12 hours.</paragraph></text></section></component>
+            <component><section><code code="34067-9"/><text><paragraph>Used for type 2 diabetes.</paragraph></text></section></component>
             <component><section><code code="34068-7"/><text><paragraph>Take with meals.</paragraph></text></section></component>
             <component><section><code code="34070-3"/><text><paragraph>Severe renal failure.</paragraph></text></section></component>
             <component><section><code code="43685-7"/><text><paragraph>Monitor for lactic acidosis.</paragraph></text></section></component>
             <component><section><code code="34084-4"/><text><paragraph>Nausea and diarrhea.</paragraph></text></section></component>
             <component><section><code code="34073-7"/><text><paragraph>Alcohol may increase risk.</paragraph></text></section></component>
-            <component><section><code code="43679-0"/><text><paragraph>Reduces hepatic glucose production.</paragraph></text></section></component>
             <component><section><code code="43682-4"/><text><paragraph>The terminal half-life is 6.2 hours.</paragraph></text></section></component>
-            <component><section><code code="88828-9"/><text><paragraph>Adjust for renal impairment.</paragraph></text></section></component>
-            <component><section><code code="88829-5"/><text><paragraph>Avoid in severe hepatic impairment.</paragraph></text></section></component>
-            <component><section><code code="42228-7"/><text><paragraph>Use in pregnancy only when appropriate.</paragraph></text></section></component>
           </structuredBody></component>
-          <manufacturedProduct><manufacturedMaterial><name>Glucophage</name><formCode displayName="Tablet"/><strength value="500 mg"/><asEntityWithGeneric><genericMedicine><name>Metformin hydrochloride</name></genericMedicine></asEntityWithGeneric></manufacturedMaterial></manufacturedProduct>
+          <manufacturedProduct><manufacturedMaterial><name>Glucophage</name><formCode displayName="Tablet"/><routeCode displayName="Oral"/><asEntityWithGeneric><genericMedicine><name>Metformin hydrochloride</name></genericMedicine></asEntityWithGeneric></manufacturedMaterial></manufacturedProduct>
         </document>
         """
-        let result = try SPLParser.parse(data: Data(xml.utf8), labelID: "abc")
-        XCTAssertEqual(result.scientificName, "Metformin hydrochloride")
-        XCTAssertEqual(result.tradeNames, ["Glucophage"])
-        XCTAssertEqual(result.dosageForms, ["Tablet"])
-        XCTAssertEqual(result.strengths, ["500 mg"])
-        XCTAssertEqual(try XCTUnwrap(result.halfLifeHours), 6.2, accuracy: 0.001)
-        XCTAssertEqual(result.onsetMinutes, 30)
-        XCTAssertEqual(result.durationHours, 12)
-        XCTAssertTrue(result.rawSectionText.keys.contains("34067-9"))
-        XCTAssertEqual(result.sourceName, "DailyMed")
+        let packet = try SPLParser.parsePacket(data: Data(xml.utf8), labelID: "abc")
+        XCTAssertEqual(packet.sourceName, "DailyMed")
+        XCTAssertTrue(packet.sourceURL.contains("setid=abc"))
+        XCTAssertEqual(packet.indicationsText, "Used for type 2 diabetes.")
+        XCTAssertEqual(packet.dosageFormsText, "Tablet")
+        XCTAssertEqual(packet.routeText, "Oral")
+        XCTAssertEqual(packet.activeIngredientText, "Metformin hydrochloride")
     }
 
-    func testNumericExtractionRejectsRangesAndConflictingMeasurements() {
-        XCTAssertNil(ConservativeNumericExtractor.halfLifeHours(from: "The half-life is 5 to 8 hours."))
-        XCTAssertNil(ConservativeNumericExtractor.halfLifeHours(from: "Half-life is 6 hours; a second half-life is 9 hours."))
-        XCTAssertNil(ConservativeNumericExtractor.halfLifeHours(from: "Pharmacokinetic information is unavailable."))
-        XCTAssertEqual(ConservativeNumericExtractor.halfLifeHours(from: "The half-life is 90 minutes."), 1.5)
+    func testTrustedPacketExtractorMarksTruncation() {
+        let long = String(repeating: "Long warning sentence. ", count: 300)
+        let packet = TrustedDrugSourcePacketExtractor.packet(sourceName: "Test", sourceURL: "https://example.test", sections: ["warnings": long])
+        XCTAssertTrue(packet.isTruncated)
+        XCTAssertLessThanOrEqual(packet.warningsText.count, TrustedDrugSourcePacketExtractor.sectionLimit)
     }
 
-    func testSelectiveImportDefaultsToEmptyFieldsAndPreservesProtectedContent() {
-        let drug = Drug(scientificName: "Existing", imageData: Data([7]))
-        drug.notes = "personal"
-        drug.arabicExplanation = "شرح شخصي"
-        drug.masteryScientificName = true
-        drug.warnings = []
-        let info = makeInfo()
-        let defaults = DrugImportApplier.defaultSelection(info: info, drug: drug)
-        XCTAssertFalse(defaults.contains(.scientificName))
-        XCTAssertTrue(defaults.contains(.warnings))
+    func testDeepSeekRequestUsesJSONModeAndNoImagePayload() throws {
+        let request = try DeepSeekDrugImportService.makeRequest(apiKey: "secret", packet: mockPacket(), identity: confirmedIdentity())
+        let body = try XCTUnwrap(request.httpBody)
+        let text = String(decoding: body, as: UTF8.self)
+        XCTAssertTrue(text.contains("\"model\":\"deepseek-v4-flash\""))
+        XCTAssertTrue(text.contains("\"response_format\":{\"type\":\"json_object\"}"))
+        XCTAssertTrue(text.contains("\"thinking\":{\"type\":\"disabled\"}"))
+        XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
+        XCTAssertFalse(text.localizedCaseInsensitiveContains("base64"))
+    }
 
-        DrugImportApplier.apply(info, selection: ImportSelection(fields: [.scientificName, .warnings, .halfLifeHours]), to: drug)
-        XCTAssertEqual(drug.scientificName, "Imported name")
-        XCTAssertEqual(drug.warnings, ["Imported warning"])
-        XCTAssertEqual(drug.halfLifeHours, 4)
-        XCTAssertEqual(drug.imageData, Data([7]))
-        XCTAssertEqual(drug.notes, "personal")
-        XCTAssertEqual(drug.arabicExplanation, "شرح شخصي")
-        XCTAssertTrue(drug.masteryScientificName)
+    func testValidatorOverridesIdentityAndFallsBackInvalidEnumsToUnknown() throws {
+        let json = """
+        {
+          "identity": {"scientificName": "Wrong", "tradeNames": ["Wrong"], "system": "Wrong", "class": "Wrong", "dosageForm": "Wrong", "strength": "Wrong", "route": "Wrong"},
+          "usesMechanism": {"mainUses": ["Use"], "simpleMechanismArabic": "شرح", "mechanismKeywords": ["ACE"]},
+          "pharmacokinetics": {"halfLifeDisplay": "unknown", "halfLifeBand": "nonsense", "onsetDisplay": "unknown", "onsetBand": "fast", "durationDisplay": "unknown", "durationBand": "long", "dosingFrequency": "onceDaily", "prodrugStatus": "prodrug", "excretionRoute": "renal", "pkMemoryLineArabic": "خط"},
+          "safety": {"contraindications": {"severity": "high", "items": ["A"]}, "toxicity": {"severity": "low", "items": []}, "warnings": {"severity": "medium", "items": ["W"]}, "interactions": {"severity": "medium", "items": []}, "renalCaution": {"severity": "medium", "note": "renal"}, "hepaticCaution": {"severity": "low", "note": "hepatic"}, "pregnancyCaution": {"severity": "high", "simpleNoteArabic": "حمل"}},
+          "counseling": {"howToTakeArabic": "خذ", "foodInstructionArabic": "بعد الاكل", "simplePatientSentenceArabic": "جملة", "whatPatientMayFeelArabic": ["دوخة"], "whenToSeekHelpArabic": ["تورم"], "missedDoseArabic": "لا تضاعف"},
+          "arabicExplanation": {"shortExplanation": "شرح", "memoryStory": "قصة", "importantNote": "ملاحظة"},
+          "adverseEffects": {"common": ["Nausea"], "serious": ["Angioedema"]},
+          "memorization": {"mustKnow": ["Know"], "flashcards": [{"question": "Q", "answer": "A"}], "oneLineSummaryArabic": "سطر"},
+          "sourceQuality": {"sourceName": "AI", "sourceURL": "AI", "needsReview": false, "missingImportantFields": [], "notes": ""}
+        }
+        """
+        let packet = mockPacket(isTruncated: true)
+        let info = try DrugImportValidator.parse(jsonString: json, confirmedIdentity: confirmedIdentity(), packet: packet)
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
+        XCTAssertEqual(info.identity.tradeNames, ["Coversyl"])
+        XCTAssertEqual(info.pharmacokinetics.halfLifeBand, .unknown)
+        XCTAssertEqual(info.sourceQuality.sourceName, "DailyMed")
+        XCTAssertTrue(info.sourceQuality.needsReview)
+    }
+
+    func testValidatorRejectsMarkdownWrappedJSON() {
+        XCTAssertThrowsError(try DrugImportValidator.parse(jsonString: "```json\n{}\n```", confirmedIdentity: confirmedIdentity(), packet: mockPacket()))
+    }
+
+    func testImportApplierSavesSelectedSectionsAndIdentityOverride() throws {
+        let drug = Drug(scientificName: "Existing")
+        let info = try DrugImportValidator.parse(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packet: mockPacket())
+        DrugImportApplier.apply(info, selection: ImportSelection(sections: [.identity, .safety, .memorization, .sourceQuality]), to: drug)
+        XCTAssertEqual(drug.scientificName, "Perindopril arginine")
+        XCTAssertEqual(drug.tradeNames, ["Coversyl"])
+        XCTAssertEqual(drug.warnings, ["Main warning"])
+        XCTAssertEqual(drug.warningSeverityRaw, SafetySeverity.high.rawValue)
+        XCTAssertEqual(drug.mustKnow, ["Coversyl = Perindopril"])
+        XCTAssertEqual(drug.flashcards, ["Scientific?\tPerindopril arginine"])
         XCTAssertEqual(drug.importedSourceName, "DailyMed")
-        XCTAssertTrue(drug.sourceURL.contains("setid=test"))
+        XCTAssertTrue(drug.mechanism.isEmpty)
     }
 
-    func testMockProviderIsDeterministic() async throws {
-        let search = DrugSearchResult(genericName: "Imported name", brandNames: [], formulation: "Tablet", labelTitle: "IMPORTED NAME TABLET", updateDate: nil, labelID: "test")
-        let provider = MockDrugInfoProvider(results: [search], details: ["test": makeInfo()])
-        let found = try await provider.searchDrug(query: "Imported")
-        let details = try await provider.fetchDrugDetails(id: "test")
-        XCTAssertEqual(found.map(\.labelID), ["test"])
-        XCTAssertEqual(details.scientificName, "Imported name")
+    private func confirmedIdentity() -> UserConfirmedDrugIdentity {
+        UserConfirmedDrugIdentity(scientificName: "Perindopril arginine", tradeNames: ["Coversyl"], strength: "5 mg", dosageForm: "Tablet", route: "Oral", system: "Cardiovascular", drugClass: "ACE inhibitor")
     }
 
-    private func makeInfo() -> ImportedDrugInfo {
-        ImportedDrugInfo(
-            scientificName: "Imported name", tradeNames: ["Brand"], dosageForms: ["Tablet"], strengths: ["10 mg"],
-            indications: ["Imported use"], howToTake: "Once daily", commonSideEffects: ["Nausea"], warnings: ["Imported warning"],
-            mechanism: "Mechanism", contraindications: ["Contraindication"], interactions: ["Interaction"], halfLifeText: "Half-life is 4 hours",
-            halfLifeHours: 4, onsetMinutes: nil, durationHours: nil, renalCaution: "Renal", hepaticCaution: "Hepatic",
-            pregnancyCaution: "Pregnancy", counselingSentence: "Counseling", rawSectionText: [:], sourceName: "DailyMed",
-            sourceURL: URL(string: "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=test")!, sourceUpdatedAt: nil
-        )
+    private func mockPacket(isTruncated: Bool = false) -> TrustedDrugSourcePacket {
+        TrustedDrugSourcePacket(sourceName: "DailyMed", sourceURL: "https://dailymed.nlm.nih.gov/test", indicationsText: "Hypertension", dosageText: "Once daily", contraindicationsText: "Pregnancy", warningsText: "Main warning", adverseReactionsText: "Dizziness", interactionsText: "NSAIDs", pharmacokineticsText: "Long duration", pregnancyText: "Avoid", dosageFormsText: "Tablet", routeText: "Oral", activeIngredientText: "Perindopril", lastUpdatedText: nil, isTruncated: isTruncated)
+    }
+
+    private func validJSON() -> String {
+        """
+        {
+          "identity": {"scientificName": "", "tradeNames": [], "system": "", "class": "", "dosageForm": "", "strength": "", "route": ""},
+          "usesMechanism": {"mainUses": ["Hypertension"], "simpleMechanismArabic": "Mechanism", "mechanismKeywords": ["ACE"]},
+          "pharmacokinetics": {"halfLifeDisplay": "long", "halfLifeBand": "long", "onsetDisplay": "moderate", "onsetBand": "moderate", "durationDisplay": "24h", "durationBand": "long", "dosingFrequency": "onceDaily", "prodrugStatus": "prodrug", "excretionRoute": "renal", "pkMemoryLineArabic": "PK"},
+          "safety": {"contraindications": {"severity": "high", "items": ["Contra"]}, "toxicity": {"severity": "medium", "items": ["Toxic"]}, "warnings": {"severity": "high", "items": ["Main warning"]}, "interactions": {"severity": "medium", "items": ["Interaction"]}, "renalCaution": {"severity": "medium", "note": "Renal"}, "hepaticCaution": {"severity": "low", "note": "Hepatic"}, "pregnancyCaution": {"severity": "high", "simpleNoteArabic": "Pregnancy"}},
+          "counseling": {"howToTakeArabic": "Take", "foodInstructionArabic": "Food", "simplePatientSentenceArabic": "Sentence", "whatPatientMayFeelArabic": ["Dizzy"], "whenToSeekHelpArabic": ["Swelling"], "missedDoseArabic": "Missed"},
+          "arabicExplanation": {"shortExplanation": "Short", "memoryStory": "Story", "importantNote": "Note"},
+          "adverseEffects": {"common": ["Dizziness"], "serious": ["Angioedema"]},
+          "memorization": {"mustKnow": ["Coversyl = Perindopril"], "flashcards": [{"question": "Scientific?", "answer": "Perindopril arginine"}], "oneLineSummaryArabic": "Summary"},
+          "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": false, "missingImportantFields": [], "notes": ""}
+        }
+        """
     }
 }

@@ -96,7 +96,7 @@ private enum Phase1DrugSchema: VersionedSchema {
             routes = ["Oral"]; mechanism = "Legacy mechanism"; contraindications = ["Legacy contraindication"]; interactions = ["Legacy interaction"]
             toxicity = "Legacy toxicity"; halfLifeText = "6 hours"; halfLifeBandRaw = HalfLifeBand.medium.rawValue
             onsetText = "30 minutes"; onsetBandRaw = OnsetBand.fast.rawValue; durationText = "12 hours"; durationBandRaw = DurationBand.medium.rawValue
-            dosingFrequencyRaw = DosingFrequency.twiceDaily.rawValue; timesPerDay = 2; prodrugStatusRaw = ProdrugStatus.no.rawValue
+            dosingFrequencyRaw = DosingFrequency.twiceDaily.rawValue; timesPerDay = 2; prodrugStatusRaw = ProdrugStatus.active.rawValue
             excretionRouteRaw = ExcretionRoute.renal.rawValue; excretionNotes = "Legacy excretion"; renalCaution = "Renal caution"
             hepaticCaution = "Hepatic caution"; pregnancyCaution = "Pregnancy caution"; contraindicationSeverityRaw = SafetySeverity.high.rawValue
             toxicitySeverityRaw = SafetySeverity.medium.rawValue; warningSeverityRaw = SafetySeverity.high.rawValue
@@ -109,7 +109,7 @@ private enum Phase1DrugSchema: VersionedSchema {
 }
 
 private enum CurrentDrugSchema: VersionedSchema {
-    static var versionIdentifier = Schema.Version(2, 0, 0)
+    static var versionIdentifier = Schema.Version(3, 0, 0)
     static var models: [any PersistentModel.Type] { [CurrentDrugModel.self] }
 }
 

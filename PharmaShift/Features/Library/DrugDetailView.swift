@@ -65,7 +65,7 @@ struct DrugDetailView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 14) {
-            DrugPhotoView(data: drug.imageData, height: 230)
+            DrugPhotoGalleryView(images: drug.packageImages, height: 220)
                 .overlay(alignment: .topTrailing) {
                     if scheduler.isDue(drug) {
                         Label("Due", systemImage: "calendar.badge.clock")
@@ -98,10 +98,10 @@ struct DrugDetailView: View {
     @ViewBuilder private var provenanceBadge: some View {
         if drug.isImported, let url = URL(string: drug.sourceURL), !drug.sourceURL.isEmpty {
             Link(destination: url) {
-                Label(provenanceText, systemImage: "checkmark.seal.fill")
+                Label(provenanceText, systemImage: drug.sourceNeedsReview ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 9).padding(.vertical, 6)
-                    .background(theme.softTint, in: Capsule())
+                    .background(drug.sourceNeedsReview ? Color.orange.opacity(0.16) : theme.softTint, in: Capsule())
             }
             .accessibilityHint("Opens the official label")
         }
@@ -135,6 +135,9 @@ struct DrugDetailView: View {
             value("Dosage forms", drug.dosageForms.joined(separator: ", "))
             value("Strengths", drug.strengths.joined(separator: ", "))
             value("Routes", drug.routes.joined(separator: ", "))
+            if drug.sourceNeedsReview {
+                safetyValue("Source quality", text: [drug.trustedSourceWasTruncated ? "Trusted packet was trimmed before AI formatting." : "", drug.sourceQualityNotes, drug.sourceMissingFields.isEmpty ? "" : "Missing: \(drug.sourceMissingFields.joined(separator: ", "))"].filter { !$0.trimmed.isEmpty }.joined(separator: "\n"), severity: SafetySeverity.medium.rawValue)
+            }
             value("Shelf", drug.shelfLocation)
         }
     }
@@ -143,6 +146,17 @@ struct DrugDetailView: View {
         card("Uses & mechanism", icon: "cross.case.fill") {
             expandableValue("Indications / Uses", drug.indications.joined(separator: "\n"))
             expandableValue("Mechanism", drug.mechanism)
+            if !drug.mechanismKeywords.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(drug.mechanismKeywords, id: \.self) { keyword in
+                            Text(keyword).font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(.tint.opacity(0.12), in: Capsule())
+                        }
+                    }
+                }
+            }
             value("How to take", drug.howToTake)
             value("Food instructions", drug.foodInstruction)
         }
@@ -156,6 +170,7 @@ struct DrugDetailView: View {
             DosingFrequencyMeter(frequency: drug.dosingFrequency, timesPerDay: drug.timesPerDay)
             PharmacologyStatusCard(title: "Prodrug", value: drug.prodrugStatus.rawValue, detail: "", icon: "arrow.triangle.2.circlepath")
             PharmacologyStatusCard(title: "Excretion", value: drug.excretionRoute.rawValue, detail: drug.excretionNotes, icon: "drop.triangle.fill")
+            arabicValue("PK memory line", drug.pkMemoryLineArabic)
         }
     }
 
@@ -186,7 +201,13 @@ struct DrugDetailView: View {
     private var counselingCard: some View {
         card("Counseling", icon: "quote.bubble.fill") {
             expandableValue("Counseling sentence", drug.counselingSentence)
-            expandableValue("Adverse effects", drug.commonSideEffects.joined(separator: "\n"))
+            arabicValue("How to take", drug.counselingHowToTakeArabic)
+            arabicValue("Food", drug.counselingFoodArabic)
+            expandableValue("What patient may feel", drug.patientFeelingsArabic.joined(separator: "\n"))
+            expandableValue("When to seek help", drug.seekHelpArabic.joined(separator: "\n"))
+            arabicValue("Missed dose", drug.missedDoseArabic)
+            expandableValue("Common adverse effects", drug.commonSideEffects.joined(separator: "\n"))
+            expandableValue("Serious adverse effects", drug.seriousSideEffects.joined(separator: "\n"))
             expandableValue("Patient questions", drug.patientQuestions.joined(separator: "\n"))
         }
     }
@@ -208,6 +229,20 @@ struct DrugDetailView: View {
         card("Drug Mastery", icon: "sparkles") {
             HStack { Text("Six mastery checks").font(.subheadline); Spacer(); Text("\(drug.masteryCount)/6").font(.headline.monospacedDigit()) }
             ProgressView(value: Double(drug.masteryCount), total: 6).tint(drug.isMastered ? .green : theme.tint)
+            expandableValue("Must know", drug.mustKnow.joined(separator: "\n"))
+            if !flashcardPairs.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Flashcards").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(flashcardPairs, id: \.0) { pair in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(pair.0).font(.subheadline.weight(.semibold))
+                            Text(pair.1).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            }
             Text("Scientific • Trade • Class • Use • Warning • Counseling").font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -239,6 +274,14 @@ struct DrugDetailView: View {
             ("Hepatic", severity(drug.hepaticSeverityRaw)),
             ("Pregnancy", severity(drug.pregnancySeverityRaw))
         ]
+    }
+
+    private var flashcardPairs: [(String, String)] {
+        drug.flashcards.compactMap { raw in
+            let parts = raw.components(separatedBy: "\t")
+            guard parts.count >= 2 else { return nil }
+            return (parts[0], parts.dropFirst().joined(separator: "\t"))
+        }
     }
 
     private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {

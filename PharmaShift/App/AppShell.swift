@@ -109,9 +109,27 @@ private struct MoreView: View {
 private struct LearningSettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [LearningProfile]
+    @State private var deepSeekKey = ""
+    @State private var keyStatus = DeepSeekKeyStore.shared.apiKey()?.trimmed.isEmpty == false ? "DeepSeek key saved" : "No DeepSeek key saved"
 
     var body: some View {
         Form {
+            Section("DeepSeek formatting") {
+                SecureField("DeepSeek API key", text: $deepSeekKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                HStack {
+                    Button { saveDeepSeekKey() } label: { Label("Save key", systemImage: "key.fill") }
+                    Spacer()
+                    Button(role: .destructive) { clearDeepSeekKey() } label: { Label("Clear", systemImage: "trash") }
+                }
+                Text(keyStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("DeepSeek receives only compact trusted source text and your confirmed identity fields. Drug photos stay on device.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("In-app reminders") {
                 Toggle("Show weak-drug reminders", isOn: reminderBinding)
                 Text("This reminder appears only inside PharmaShift and never requests notification permission.")
@@ -126,6 +144,22 @@ private struct LearningSettingsView: View {
             }
         }
         .navigationTitle("Practice Preferences")
+    }
+
+    private func saveDeepSeekKey() {
+        do {
+            try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey.trimmed)
+            deepSeekKey = ""
+            keyStatus = "DeepSeek key saved"
+        } catch {
+            keyStatus = "Could not save key"
+        }
+    }
+
+    private func clearDeepSeekKey() {
+        DeepSeekKeyStore.shared.delete()
+        deepSeekKey = ""
+        keyStatus = "No DeepSeek key saved"
     }
 
     private var reminderBinding: Binding<Bool> {

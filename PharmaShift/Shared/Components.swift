@@ -115,6 +115,15 @@ struct PharmacologyMeter: View {
         return fallback.trimmed.isEmpty ? "Unknown" : fallback
     }
 
+    private var normalizedFallback: Double {
+        let normalized = fallback.lowercased()
+        if normalized.contains("very") { return 1 }
+        if normalized.contains("long") || normalized.contains("slow") { return 0.82 }
+        if normalized.contains("medium") || normalized.contains("moderate") { return 0.5 }
+        if normalized.contains("short") || normalized.contains("fast") { return 0.22 }
+        return 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
@@ -148,8 +157,8 @@ struct PharmacologyMeter: View {
     }
 
     private func markerX(in width: CGFloat) -> CGFloat {
-        guard let value else { return 0 }
-        return width * CGFloat(scale.normalized(value))
+        if let value { return width * CGFloat(scale.normalized(value)) }
+        return width * CGFloat(normalizedFallback)
     }
 }
 
@@ -188,6 +197,7 @@ struct DosingFrequencyMeter: View {
         case .threeTimesDaily: return 2
         case .fourTimesDaily: return 3
         case .asNeeded: return 4
+        case .other: return nil
         case .unknown:
             guard let timesPerDay, (1...4).contains(timesPerDay) else { return nil }
             return timesPerDay - 1

@@ -82,12 +82,12 @@ enum DurationBand: String, Codable, CaseIterable, Identifiable {
 
 enum DosingFrequency: String, Codable, CaseIterable, Identifiable {
     case unknown = "Unknown", onceDaily = "Once daily", twiceDaily = "Twice daily"
-    case threeTimesDaily = "Three times daily", fourTimesDaily = "Four times daily", asNeeded = "PRN"
+    case threeTimesDaily = "Three times daily", fourTimesDaily = "Four times daily", asNeeded = "PRN", other = "Other"
     var id: String { rawValue }
 }
 
 enum ProdrugStatus: String, Codable, CaseIterable, Identifiable {
-    case unknown = "Unknown", yes = "Yes", no = "No"
+    case unknown = "Unknown", active = "Active", prodrug = "Prodrug"
     var id: String { rawValue }
 }
 
@@ -217,6 +217,7 @@ final class Drug {
     var patientQuestions: [String]
     var shelfLocation: String
     @Attribute(.externalStorage) var imageData: Data?
+    var additionalImageData: [Data] = []
     var confidenceRaw: String
     var timesSeen: Int
     var dateAdded: Date
@@ -240,6 +241,7 @@ final class Drug {
     var verificationRaw: String
     var routes: [String] = []
     var mechanism: String = ""
+    var mechanismKeywords: [String] = []
     var contraindications: [String] = []
     var interactions: [String] = []
     var toxicity: String = ""
@@ -257,6 +259,7 @@ final class Drug {
     var prodrugStatusRaw: String = "Unknown"
     var excretionRouteRaw: String = "Unknown"
     var excretionNotes: String = ""
+    var pkMemoryLineArabic: String = ""
     var renalCaution: String = ""
     var hepaticCaution: String = ""
     var pregnancyCaution: String = ""
@@ -270,11 +273,27 @@ final class Drug {
     var arabicExplanation: String = ""
     var arabicMechanism: String = ""
     var arabicCounseling: String = ""
+    var arabicMemoryStory: String = ""
+    var arabicImportantNote: String = ""
     var arabicPersonalNotes: String = ""
+    var counselingHowToTakeArabic: String = ""
+    var counselingFoodArabic: String = ""
+    var patientFeelingsArabic: [String] = []
+    var seekHelpArabic: [String] = []
+    var missedDoseArabic: String = ""
+    var seriousSideEffects: [String] = []
+    var mustKnow: [String] = []
+    var flashcards: [String] = []
+    var oneLineSummaryArabic: String = ""
+    var sourceNeedsReview: Bool = false
+    var sourceMissingFields: [String] = []
+    var sourceQualityNotes: String = ""
+    var trustedSourceWasTruncated: Bool = false
     var sourceURL: String = ""
     var importedSourceName: String = ""
     var sourceUpdatedAt: Date? = nil
     @Attribute(.externalStorage) var thumbnailData: Data?
+    var additionalThumbnailData: [Data] = []
 
     init(
         id: UUID = UUID(),
@@ -345,6 +364,8 @@ final class Drug {
         self.verificationRaw = verificationStatus.rawValue
         self.timesPerDay = nil
         self.thumbnailData = nil
+        self.additionalImageData = []
+        self.additionalThumbnailData = []
     }
 
     var chapter: Chapter {
@@ -388,7 +409,11 @@ final class Drug {
     }
 
     var prodrugStatus: ProdrugStatus {
-        get { ProdrugStatus(rawValue: prodrugStatusRaw) ?? .unknown }
+        get {
+            if prodrugStatusRaw == "Yes" { return .prodrug }
+            if prodrugStatusRaw == "No" { return .active }
+            return ProdrugStatus(rawValue: prodrugStatusRaw) ?? .unknown
+        }
         set { prodrugStatusRaw = newValue.rawValue }
     }
 
@@ -409,6 +434,7 @@ final class Drug {
     }
 
     var firstTradeName: String { tradeNames.first ?? "No trade name yet" }
+    var packageImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
 
     var masteryCount: Int {
         [masteryScientificName, masteryTradeName, masteryClass, masteryUse, masteryWarning, masteryCounseling]

@@ -29,7 +29,7 @@ struct BackupRecordCounts: Codable, Equatable {
 }
 
 struct PharmaShiftBackup: Codable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var exportedAt: Date
@@ -62,6 +62,8 @@ struct DrugBackupDTO: Codable {
     var shelfLocation: String
     var imageData: Data?
     var thumbnailData: Data?
+    var additionalImageData: [Data] = []
+    var additionalThumbnailData: [Data] = []
     var confidenceRaw: String
     var timesSeen: Int
     var dateAdded: Date
@@ -85,6 +87,7 @@ struct DrugBackupDTO: Codable {
     var verificationRaw: String
     var routes: [String]
     var mechanism: String
+    var mechanismKeywords: [String] = []
     var contraindications: [String]
     var interactions: [String]
     var toxicity: String
@@ -102,6 +105,7 @@ struct DrugBackupDTO: Codable {
     var prodrugStatusRaw: String
     var excretionRouteRaw: String
     var excretionNotes: String
+    var pkMemoryLineArabic: String = ""
     var renalCaution: String
     var hepaticCaution: String
     var pregnancyCaution: String
@@ -115,7 +119,22 @@ struct DrugBackupDTO: Codable {
     var arabicExplanation: String
     var arabicMechanism: String
     var arabicCounseling: String
+    var arabicMemoryStory: String = ""
+    var arabicImportantNote: String = ""
     var arabicPersonalNotes: String
+    var counselingHowToTakeArabic: String = ""
+    var counselingFoodArabic: String = ""
+    var patientFeelingsArabic: [String] = []
+    var seekHelpArabic: [String] = []
+    var missedDoseArabic: String = ""
+    var seriousSideEffects: [String] = []
+    var mustKnow: [String] = []
+    var flashcards: [String] = []
+    var oneLineSummaryArabic: String = ""
+    var sourceNeedsReview: Bool = false
+    var sourceMissingFields: [String] = []
+    var sourceQualityNotes: String = ""
+    var trustedSourceWasTruncated: Bool = false
     var sourceURL: String
     var importedSourceName: String
     var sourceUpdatedAt: Date?
@@ -138,6 +157,8 @@ struct DrugBackupDTO: Codable {
         shelfLocation = drug.shelfLocation
         imageData = includesImages ? drug.imageData : nil
         thumbnailData = includesImages ? drug.thumbnailData : nil
+        additionalImageData = includesImages ? drug.additionalImageData : []
+        additionalThumbnailData = includesImages ? drug.additionalThumbnailData : []
         confidenceRaw = drug.confidenceRaw
         timesSeen = drug.timesSeen
         dateAdded = drug.dateAdded
@@ -161,6 +182,7 @@ struct DrugBackupDTO: Codable {
         verificationRaw = drug.verificationRaw
         routes = drug.routes
         mechanism = drug.mechanism
+        mechanismKeywords = drug.mechanismKeywords
         contraindications = drug.contraindications
         interactions = drug.interactions
         toxicity = drug.toxicity
@@ -178,6 +200,7 @@ struct DrugBackupDTO: Codable {
         prodrugStatusRaw = drug.prodrugStatusRaw
         excretionRouteRaw = drug.excretionRouteRaw
         excretionNotes = drug.excretionNotes
+        pkMemoryLineArabic = drug.pkMemoryLineArabic
         renalCaution = drug.renalCaution
         hepaticCaution = drug.hepaticCaution
         pregnancyCaution = drug.pregnancyCaution
@@ -191,7 +214,22 @@ struct DrugBackupDTO: Codable {
         arabicExplanation = drug.arabicExplanation
         arabicMechanism = drug.arabicMechanism
         arabicCounseling = drug.arabicCounseling
+        arabicMemoryStory = drug.arabicMemoryStory
+        arabicImportantNote = drug.arabicImportantNote
         arabicPersonalNotes = drug.arabicPersonalNotes
+        counselingHowToTakeArabic = drug.counselingHowToTakeArabic
+        counselingFoodArabic = drug.counselingFoodArabic
+        patientFeelingsArabic = drug.patientFeelingsArabic
+        seekHelpArabic = drug.seekHelpArabic
+        missedDoseArabic = drug.missedDoseArabic
+        seriousSideEffects = drug.seriousSideEffects
+        mustKnow = drug.mustKnow
+        flashcards = drug.flashcards
+        oneLineSummaryArabic = drug.oneLineSummaryArabic
+        sourceNeedsReview = drug.sourceNeedsReview
+        sourceMissingFields = drug.sourceMissingFields
+        sourceQualityNotes = drug.sourceQualityNotes
+        trustedSourceWasTruncated = drug.trustedSourceWasTruncated
         sourceURL = drug.sourceURL
         importedSourceName = drug.importedSourceName
         sourceUpdatedAt = drug.sourceUpdatedAt
@@ -218,7 +256,12 @@ struct DrugBackupDTO: Codable {
         drug.counselingSentence = counselingSentence
         drug.patientQuestions = patientQuestions
         drug.shelfLocation = shelfLocation
-        if includeImages { drug.imageData = imageData; drug.thumbnailData = thumbnailData }
+        if includeImages {
+            drug.imageData = imageData
+            drug.thumbnailData = thumbnailData
+            drug.additionalImageData = additionalImageData
+            drug.additionalThumbnailData = additionalThumbnailData
+        }
         drug.confidenceRaw = confidenceRaw
         drug.timesSeen = timesSeen
         drug.dateAdded = dateAdded
@@ -242,6 +285,7 @@ struct DrugBackupDTO: Codable {
         drug.verificationRaw = verificationRaw
         drug.routes = routes
         drug.mechanism = mechanism
+        drug.mechanismKeywords = mechanismKeywords
         drug.contraindications = contraindications
         drug.interactions = interactions
         drug.toxicity = toxicity
@@ -259,6 +303,7 @@ struct DrugBackupDTO: Codable {
         drug.prodrugStatusRaw = prodrugStatusRaw
         drug.excretionRouteRaw = excretionRouteRaw
         drug.excretionNotes = excretionNotes
+        drug.pkMemoryLineArabic = pkMemoryLineArabic
         drug.renalCaution = renalCaution
         drug.hepaticCaution = hepaticCaution
         drug.pregnancyCaution = pregnancyCaution
@@ -272,7 +317,22 @@ struct DrugBackupDTO: Codable {
         drug.arabicExplanation = arabicExplanation
         drug.arabicMechanism = arabicMechanism
         drug.arabicCounseling = arabicCounseling
+        drug.arabicMemoryStory = arabicMemoryStory
+        drug.arabicImportantNote = arabicImportantNote
         drug.arabicPersonalNotes = arabicPersonalNotes
+        drug.counselingHowToTakeArabic = counselingHowToTakeArabic
+        drug.counselingFoodArabic = counselingFoodArabic
+        drug.patientFeelingsArabic = patientFeelingsArabic
+        drug.seekHelpArabic = seekHelpArabic
+        drug.missedDoseArabic = missedDoseArabic
+        drug.seriousSideEffects = seriousSideEffects
+        drug.mustKnow = mustKnow
+        drug.flashcards = flashcards
+        drug.oneLineSummaryArabic = oneLineSummaryArabic
+        drug.sourceNeedsReview = sourceNeedsReview
+        drug.sourceMissingFields = sourceMissingFields
+        drug.sourceQualityNotes = sourceQualityNotes
+        drug.trustedSourceWasTruncated = trustedSourceWasTruncated
         drug.sourceURL = sourceURL
         drug.importedSourceName = importedSourceName
         drug.sourceUpdatedAt = sourceUpdatedAt

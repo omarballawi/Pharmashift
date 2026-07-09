@@ -32,7 +32,7 @@ private enum PreviewData {
     AppShell()
         .environment(AppTheme())
         .environment(ReviewScheduler())
-        .modelContainer(for: [Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self], inMemory: true)
+        .modelContainer(for: [Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self], inMemory: true)
 }
 
 #Preview("Active shift") {

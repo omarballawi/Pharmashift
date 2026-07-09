@@ -459,6 +459,42 @@ struct DrugPhotoView: View {
     }
 }
 
+struct DrugPhotoGalleryView: View {
+    let images: [Data]
+    var height: CGFloat = 180
+    var onRemove: ((Int) -> Void)?
+
+    var body: some View {
+        if images.isEmpty {
+            DrugPhotoView(data: nil, height: height)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { index, data in
+                        ZStack(alignment: .topTrailing) {
+                            DrugPhotoView(data: data, height: height)
+                                .frame(width: height * 4 / 3)
+                            if let onRemove {
+                                Button {
+                                    onRemove(index)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, .black.opacity(0.55))
+                                        .padding(8)
+                                }
+                                .accessibilityLabel("Remove photo \(index + 1)")
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+}
+
 struct DrugThumbnailView: View {
     let drug: Drug
     var size: CGFloat = 64

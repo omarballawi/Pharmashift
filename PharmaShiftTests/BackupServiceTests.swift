@@ -9,6 +9,8 @@ final class BackupServiceTests: XCTestCase {
         let context = source.mainContext
         let drug = Drug(scientificName: "Metformin", tradeNames: ["Glucophage"], chapter: .endocrine, imageData: Data([1, 2, 3]))
         drug.thumbnailData = Data([4, 5])
+        drug.additionalImageData = [Data([6, 7, 8]), Data([9, 10, 11])]
+        drug.additionalThumbnailData = [Data([12]), Data([13])]
         drug.arabicExplanation = "يستخدم لعلاج السكري"
         drug.notes = "ملاحظة شخصية"
         drug.halfLifeHours = 6.2
@@ -35,6 +37,8 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertEqual(restoredDrug.id, drug.id)
         XCTAssertEqual(restoredDrug.imageData, Data([1, 2, 3]))
         XCTAssertEqual(restoredDrug.thumbnailData, Data([4, 5]))
+        XCTAssertEqual(restoredDrug.additionalImageData, [Data([6, 7, 8]), Data([9, 10, 11])])
+        XCTAssertEqual(restoredDrug.additionalThumbnailData, [Data([12]), Data([13])])
         XCTAssertEqual(restoredDrug.arabicExplanation, "يستخدم لعلاج السكري")
         XCTAssertEqual(restoredDrug.notes, "ملاحظة شخصية")
         XCTAssertEqual(restoredDrug.halfLifeHours, 6.2)

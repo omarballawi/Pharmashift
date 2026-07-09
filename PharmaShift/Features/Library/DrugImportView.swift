@@ -75,12 +75,12 @@ struct DrugImportView: View {
         _additionalThumbnailData = State(initialValue: drug?.additionalThumbnailData ?? [])
         _identity = State(initialValue: UserConfirmedDrugIdentity(
             scientificName: drug?.scientificName ?? "",
-            tradeNames: mockDefault(drug?.tradeNames ?? [], fallback: ["Mock Trade"], enabled: usesMockImport),
-            strength: mockDefault(drug?.strengths.first ?? "", fallback: "10 mg", enabled: usesMockImport),
-            dosageForm: mockDefault(drug?.dosageForms.first ?? "", fallback: "Tablet", enabled: usesMockImport),
-            route: mockDefault(drug?.routes.first ?? "", fallback: "Oral", enabled: usesMockImport),
+            tradeNames: Self.mockDefault(drug?.tradeNames ?? [], fallback: ["Mock Trade"], enabled: usesMockImport),
+            strength: Self.mockDefault(drug?.strengths.first ?? "", fallback: "10 mg", enabled: usesMockImport),
+            dosageForm: Self.mockDefault(drug?.dosageForms.first ?? "", fallback: "Tablet", enabled: usesMockImport),
+            route: Self.mockDefault(drug?.routes.first ?? "", fallback: "Oral", enabled: usesMockImport),
             system: drug?.chapterRaw ?? Chapter.other.rawValue,
-            drugClass: mockDefault(drug?.drugClass ?? "", fallback: "Mock class", enabled: usesMockImport)
+            drugClass: Self.mockDefault(drug?.drugClass ?? "", fallback: "Mock class", enabled: usesMockImport)
         ))
     }
 
@@ -127,11 +127,11 @@ struct DrugImportView: View {
         }
     }
 
-    private func mockDefault(_ value: String, fallback: String, enabled: Bool) -> String {
+    private static func mockDefault(_ value: String, fallback: String, enabled: Bool) -> String {
         enabled && value.trimmed.isEmpty ? fallback : value
     }
 
-    private func mockDefault(_ values: [String], fallback: [String], enabled: Bool) -> [String] {
+    private static func mockDefault(_ values: [String], fallback: [String], enabled: Bool) -> [String] {
         enabled && values.isEmpty ? fallback : values
     }
 

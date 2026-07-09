@@ -1,7 +1,7 @@
 # Graph Report - pharmashift-main-release-fix  (2026-07-09)
 
 ## Corpus Check
-- 41 files · ~35,256 words
+- 41 files · ~35,258 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `47642ef8`
+- Built from commit: `935ac9cb`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -56,27 +56,27 @@
 - [[_COMMUNITY_SafetyRadar|SafetyRadar]]
 - [[_COMMUNITY_BackupImportPreviewView|BackupImportPreviewView]]
 - [[_COMMUNITY_DrugSearchResult|DrugSearchResult]]
-- [[_COMMUNITY_AppTheme|AppTheme]]
+- [[_COMMUNITY_BackupImportPreviewView|BackupImportPreviewView]]
 - [[_COMMUNITY_Foundation|Foundation]]
 - [[_COMMUNITY_AppTab|AppTab]]
-- [[_COMMUNITY_.containsObviousIdentifier|.containsObviousIdentifier]]
-- [[_COMMUNITY_LearningSettingsView|LearningSettingsView]]
+- [[_COMMUNITY_HalfLifeBand|HalfLifeBand]]
+- [[_COMMUNITY_PKBand|PKBand]]
 - [[_COMMUNITY_ImportSection|ImportSection]]
 - [[_COMMUNITY_CaseIterable|CaseIterable]]
 - [[_COMMUNITY_DurationBand|DurationBand]]
 - [[_COMMUNITY_.apply|.apply]]
-- [[_COMMUNITY_ImportedDurationBand|ImportedDurationBand]]
+- [[_COMMUNITY_ExcretionRoute|ExcretionRoute]]
 - [[_COMMUNITY_DrugImportServiceTests|DrugImportServiceTests]]
-- [[_COMMUNITY_PracticeMode|PracticeMode]]
-- [[_COMMUNITY_PracticeSessionView|PracticeSessionView]]
+- [[_COMMUNITY_OnsetBand|OnsetBand]]
+- [[_COMMUNITY_ImportedDurationBand|ImportedDurationBand]]
 - [[_COMMUNITY_PharmaShiftUITests|PharmaShiftUITests]]
 - [[_COMMUNITY_FocusField|FocusField]]
 - [[_COMMUNITY_SwiftData|SwiftData]]
 - [[_COMMUNITY_Binding|Binding]]
 - [[_COMMUNITY_.matches|.matches]]
-- [[_COMMUNITY_ImportedDosingFrequency|ImportedDosingFrequency]]
+- [[_COMMUNITY_Bool|Bool]]
 - [[_COMMUNITY_DrugMigrationPlan|DrugMigrationPlan]]
-- [[_COMMUNITY_PracticeView|PracticeView]]
+- [[_COMMUNITY_Color|Color]]
 - [[_COMMUNITY_Content|Content]]
 - [[_COMMUNITY_Data|Data]]
 - [[_COMMUNITY_Drug|Drug]]
@@ -166,8 +166,8 @@ Cohesion: 0.27
 Nodes (7): DrugRow, LibraryFilterView, LibraryView, Bool, Drug, Int, String
 
 ### Community 13 - "Foundation"
-Cohesion: 0.22
-Nodes (4): Foundation, PrivacyValidator, Bool, String
+Cohesion: 0.25
+Nodes (6): App, Observation, AppTheme, Color, PharmaShiftApp, Scene
 
 ### Community 14 - "Build and install PharmaShift using only Windows"
 Cohesion: 0.15
@@ -214,8 +214,8 @@ Cohesion: 0.47
 Nodes (3): CGImagePropertyOrientation, OCRService, UIImage
 
 ### Community 26 - "FocusField"
-Cohesion: 0.25
-Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
+Cohesion: 0.22
+Nodes (4): Foundation, PrivacyValidator, Bool, String
 
 ### Community 27 - "AppTheme"
 Cohesion: 0.14
@@ -234,8 +234,8 @@ Cohesion: 0.12
 Nodes (16): Binding, Bool, Data, Drug, DrugImagePayload, DrugImportFormattingService, DrugSearchResult, DrugSourceProvider (+8 more)
 
 ### Community 31 - "DrugEditorSection"
-Cohesion: 0.29
-Nodes (7): DrugEditorSection, basics, counseling, notes, pk, safety, uses
+Cohesion: 0.25
+Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
 
 ### Community 32 - "Design"
 Cohesion: 0.17
@@ -249,9 +249,9 @@ Nodes (16): Encodable, DeepSeekRequest, ResponseFormat, SPLParser, SPLXMLDelegat
 Cohesion: 0.22
 Nodes (6): OCRDrugCandidate, FlowChips, ImportFromPhotoView, ImportMemorizationChallengeView, ImportSourceSearchView, Void
 
-### Community 36 - "Identifiable"
-Cohesion: 0.33
-Nodes (6): Identifiable, ConfidenceLevel, mastered, medium, strong, weak
+### Community 35 - ".importIfNeeded"
+Cohesion: 0.29
+Nodes (7): DrugEditorSection, basics, counseling, notes, pk, safety, uses
 
 ### Community 37 - "Drug"
 Cohesion: 0.20
@@ -263,15 +263,15 @@ Nodes (11): LocalizedError, DrugImportError, aiReturnedEmpty, invalidAIJSON, inv
 
 ### Community 39 - "BackupImportPreviewView"
 Cohesion: 0.33
-Nodes (3): BackupImportPreviewView, Int, Void
+Nodes (6): Identifiable, ConfidenceLevel, mastered, medium, strong, weak
 
 ### Community 40 - "DrugSearchResult"
 Cohesion: 0.07
 Nodes (28): CoreTransferable, Error, FileDocument, FileWrapper, BackupDataView, BackupExportKind, complete, csv (+20 more)
 
-### Community 41 - "AppTheme"
+### Community 41 - "BackupImportPreviewView"
 Cohesion: 0.33
-Nodes (6): HalfLifeBand, long, medium, short, unknown, veryLong
+Nodes (3): BackupImportPreviewView, Int, Void
 
 ### Community 42 - "Foundation"
 Cohesion: 0.33
@@ -281,11 +281,11 @@ Nodes (3): LearningSettingsView, Binding, Bool
 Cohesion: 0.33
 Nodes (6): AppTab, capture, home, library, more, practice
 
-### Community 44 - ".containsObviousIdentifier"
-Cohesion: 0.25
-Nodes (6): App, Observation, AppTheme, Color, PharmaShiftApp, Scene
+### Community 44 - "HalfLifeBand"
+Cohesion: 0.33
+Nodes (6): HalfLifeBand, long, medium, short, unknown, veryLong
 
-### Community 45 - "LearningSettingsView"
+### Community 45 - "PKBand"
 Cohesion: 0.33
 Nodes (6): PKBand, long, medium, short, unknown, veryLong
 
@@ -305,7 +305,7 @@ Nodes (5): DurationBand, long, medium, short, unknown
 Cohesion: 0.26
 Nodes (8): ReviewScheduler, Bool, Calendar, Date, Drug, Int, String, ReviewSchedulerTests
 
-### Community 50 - "ImportedDurationBand"
+### Community 50 - "ExcretionRoute"
 Cohesion: 0.40
 Nodes (5): ExcretionRoute, hepatic, mixed, renal, unknown
 
@@ -313,11 +313,11 @@ Nodes (5): ExcretionRoute, hepatic, mixed, renal, unknown
 Cohesion: 0.27
 Nodes (3): DrugImportServiceTests, Bool, String
 
-### Community 52 - "PracticeMode"
+### Community 52 - "OnsetBand"
 Cohesion: 0.40
 Nodes (5): OnsetBand, fast, moderate, slow, unknown
 
-### Community 53 - "PracticeSessionView"
+### Community 53 - "ImportedDurationBand"
 Cohesion: 0.40
 Nodes (5): ImportedDurationBand, long, medium, short, unknown
 
@@ -345,12 +345,12 @@ Nodes (7): MigrationStage, PersistentModel, CurrentDrugSchema, DrugMigrationPlan
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Chapter` connect `DurationBand` to `ShiftLog`, `Drug`, `Identifiable`, `String`, `ShiftView`, `.containsObviousIdentifier`, `CaseIterable`, `ModelAndPersistenceTests`, `ReportEditorView`, `ReportEditorView`?**
+- **Why does `Chapter` connect `DurationBand` to `ShiftLog`, `Drug`, `String`, `BackupImportPreviewView`, `ShiftView`, `Foundation`, `CaseIterable`, `ModelAndPersistenceTests`, `ReportEditorView`, `ReportEditorView`?**
   _High betweenness centrality (0.062) - this node is a cross-community bridge._
-- **Why does `SwiftData` connect `QuestionType` to `ShiftLog`, `Drug`, `.reportSection`, `String`, `DrugSearchResult`, `ShiftView`, `LibraryView`, `CaseIterable`, `Codable`, `DurationBand`, `ReportEditorView`, `SwiftData`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
-- **Why does `DrugEditorView` connect `ReportEditorView` to `SwiftUI`, `Drug`, `Chapter`, `QuestionType`, `AppTheme`, `CaseIterable`, `DurationBand`, `CaseIterable`, `DurationBand`, `ImportedDurationBand`, `PracticeMode`, `ModelAndPersistenceTests`, `AppTheme`, `DrugEditorSection`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+- **Why does `DrugEditorView` connect `ReportEditorView` to `SwiftUI`, `Drug`, `.importIfNeeded`, `Chapter`, `QuestionType`, `HalfLifeBand`, `CaseIterable`, `DurationBand`, `CaseIterable`, `DurationBand`, `ExcretionRoute`, `OnsetBand`, `ModelAndPersistenceTests`, `AppTheme`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+- **Why does `Drug` connect `Drug` to `ShiftLog`, `Codable`, `.apply`, `DrugImportServiceTests`, `SwiftData`, `.matches`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **What connects `photo`, `confirm`, `source` to the rest of the system?**
   _243 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ShiftLog` be split into smaller, more focused modules?**

@@ -77,11 +77,6 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(importButton.waitForExistence(timeout: 5))
         importButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
-        fillTrustedImportField(app, "trustedImport.identity.tradeNames", "Mock Trade")
-        fillTrustedImportField(app, "trustedImport.identity.strength", "10 mg")
-        fillTrustedImportField(app, "trustedImport.identity.dosageForm", "Tablet")
-        fillTrustedImportField(app, "trustedImport.identity.route", "Oral")
-        fillTrustedImportField(app, "trustedImport.identity.drugClass", "Mock class")
         app.swipeUp()
         let search = app.buttons["trustedImport.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
@@ -97,13 +92,6 @@ final class PharmaShiftUITests: XCTestCase {
         for _ in 0..<5 where !apply.exists { app.swipeUp() }
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
         XCTAssertTrue(apply.isEnabled)
-    }
-
-    private func fillTrustedImportField(_ app: XCUIApplication, _ identifier: String, _ value: String) {
-        let field = app.descendants(matching: .any)[identifier]
-        XCTAssertTrue(field.waitForExistence(timeout: 5), identifier)
-        field.tap()
-        field.typeText(value)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

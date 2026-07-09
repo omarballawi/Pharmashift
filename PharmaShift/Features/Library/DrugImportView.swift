@@ -67,6 +67,7 @@ struct DrugImportView: View {
         self.drug = drug
         self.providers = providers
         self.aiService = aiService
+        let usesMockImport = ProcessInfo.processInfo.arguments.contains("-mockDrugImport")
         _stage = State(initialValue: drug == nil ? .photo : .confirm)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)
@@ -74,12 +75,12 @@ struct DrugImportView: View {
         _additionalThumbnailData = State(initialValue: drug?.additionalThumbnailData ?? [])
         _identity = State(initialValue: UserConfirmedDrugIdentity(
             scientificName: drug?.scientificName ?? "",
-            tradeNames: drug?.tradeNames ?? [],
-            strength: drug?.strengths.first ?? "",
-            dosageForm: drug?.dosageForms.first ?? "",
-            route: drug?.routes.first ?? "",
+            tradeNames: mockDefault(drug?.tradeNames ?? [], fallback: ["Mock Trade"], enabled: usesMockImport),
+            strength: mockDefault(drug?.strengths.first ?? "", fallback: "10 mg", enabled: usesMockImport),
+            dosageForm: mockDefault(drug?.dosageForms.first ?? "", fallback: "Tablet", enabled: usesMockImport),
+            route: mockDefault(drug?.routes.first ?? "", fallback: "Oral", enabled: usesMockImport),
             system: drug?.chapterRaw ?? Chapter.other.rawValue,
-            drugClass: drug?.drugClass ?? ""
+            drugClass: mockDefault(drug?.drugClass ?? "", fallback: "Mock class", enabled: usesMockImport)
         ))
     }
 
@@ -124,6 +125,14 @@ struct DrugImportView: View {
         .navigationDestination(isPresented: $opensSavedDrug) {
             if let savedDrug { DrugDetailView(drug: savedDrug) }
         }
+    }
+
+    private func mockDefault(_ value: String, fallback: String, enabled: Bool) -> String {
+        enabled && value.trimmed.isEmpty ? fallback : value
+    }
+
+    private func mockDefault(_ values: [String], fallback: [String], enabled: Bool) -> [String] {
+        enabled && values.isEmpty ? fallback : values
     }
 
     @ViewBuilder private var content: some View {

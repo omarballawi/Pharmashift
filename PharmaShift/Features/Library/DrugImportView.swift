@@ -67,6 +67,7 @@ struct DrugImportView: View {
         self.drug = drug
         self.providers = providers
         self.aiService = aiService
+        _stage = State(initialValue: drug == nil ? .photo : .confirm)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)
         _additionalImageData = State(initialValue: drug?.additionalImageData ?? [])
@@ -445,15 +446,22 @@ private struct ConfirmDrugIdentityView: View {
                 TextField("Scientific name", text: $identity.scientificName)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("trustedImport.identity.scientificName")
                 TextField("Trade name(s), one per line", text: tradeNamesText, axis: .vertical)
                     .lineLimit(2...5)
+                    .accessibilityIdentifier("trustedImport.identity.tradeNames")
                 TextField("Strength", text: $identity.strength)
+                    .accessibilityIdentifier("trustedImport.identity.strength")
                 TextField("Dosage form", text: $identity.dosageForm)
+                    .accessibilityIdentifier("trustedImport.identity.dosageForm")
                 TextField("Route", text: $identity.route)
+                    .accessibilityIdentifier("trustedImport.identity.route")
                 Picker("System / Chapter", selection: $identity.system) {
                     ForEach(Chapter.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
+                .accessibilityIdentifier("trustedImport.identity.system")
                 TextField("Class", text: $identity.drugClass)
+                    .accessibilityIdentifier("trustedImport.identity.drugClass")
             } header: {
                 Text("Required before import")
             } footer: {
@@ -463,6 +471,7 @@ private struct ConfirmDrugIdentityView: View {
                 Button(action: onContinue) {
                     Label("Search trusted sources", systemImage: "checkmark.seal.fill").frame(maxWidth: .infinity, minHeight: 48)
                 }
+                .accessibilityIdentifier("trustedImport.search")
                 .buttonStyle(.borderedProminent)
                 .disabled(!canContinue)
             }
@@ -483,6 +492,7 @@ private struct ImportSourceSearchView: View {
             Section {
                 LabeledContent("Confirmed query", value: query)
                 Button(action: onSearch) { Label("Search again", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("trustedImport.searchAgain")
             } footer: {
                 Text("Source priority: your confirmed name, RxNorm normalization, DailyMed labels, then openFDA fallback. Iraqi local trade names may not match perfectly.")
             }
@@ -508,6 +518,7 @@ private struct ImportSourceSearchView: View {
                                 if selectedID == result.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
                             }
                         }
+                        .accessibilityIdentifier("trustedImport.result.\(result.id)")
                     }
                 }
             }
@@ -551,6 +562,7 @@ private struct ImportPreviewView: View {
             sectionToggle(.memorization) { previewList("Must know", info.memorization.mustKnow); flashcards(info.memorization.flashcards); arabicText(info.memorization.oneLineSummaryArabic) }
             Section {
                 Button(action: onSave) { Label("Save selected sections", systemImage: "square.and.arrow.down.fill").frame(maxWidth: .infinity, minHeight: 48) }
+                    .accessibilityIdentifier("trustedImport.apply")
                     .buttonStyle(.borderedProminent)
                     .disabled(selection.sections.isEmpty)
                 Button(action: { selection.sections = Set(ImportSection.allCases); onSave() }) { Label("Save all", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: 44) }
@@ -568,6 +580,7 @@ private struct ImportPreviewView: View {
                 get: { selection.sections.contains(section) },
                 set: { enabled in if enabled { selection.sections.insert(section) } else { selection.sections.remove(section) } }
             ))
+            .accessibilityIdentifier("trustedImport.section.\(section.rawValue)")
             content()
         }
     }

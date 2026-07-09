@@ -25,7 +25,7 @@ struct DrugEditorView: View {
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
-    @State private var showsImport = false
+    @State private var opensImport = false
 
     init(
         drug: Drug,
@@ -59,8 +59,8 @@ struct DrugEditorView: View {
             }
             .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $showsImport) {
-            NavigationStack { DrugImportView(drug: drug, providers: providers, aiService: aiService) }
+        .navigationDestination(isPresented: $opensImport) {
+            DrugImportView(drug: drug, providers: providers, aiService: aiService)
         }
         .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -123,7 +123,7 @@ struct DrugEditorView: View {
                 }
             }
             Section("Identity / الهوية") {
-                Button { showsImport = true } label: {
+                Button { opensImport = true } label: {
                     Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
                 }
                 .accessibilityIdentifier("drugEditor.import")

@@ -76,18 +76,34 @@ final class PharmaShiftUITests: XCTestCase {
         let importButton = app.buttons["drugEditor.import"]
         XCTAssertTrue(importButton.waitForExistence(timeout: 5))
         importButton.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["import.searchScreen"].waitForExistence(timeout: 5))
-        app.buttons["import.search"].tap()
-        let formulation = app.buttons["import.result.mock-label"]
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
+        fillTrustedImportField(app, "trustedImport.identity.tradeNames", "Mock Trade")
+        fillTrustedImportField(app, "trustedImport.identity.strength", "10 mg")
+        fillTrustedImportField(app, "trustedImport.identity.dosageForm", "Tablet")
+        fillTrustedImportField(app, "trustedImport.identity.route", "Oral")
+        fillTrustedImportField(app, "trustedImport.identity.drugClass", "Mock class")
+        app.swipeUp()
+        let search = app.buttons["trustedImport.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertTrue(search.isEnabled)
+        search.tap()
+        let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
         formulation.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["import.preview"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.switches["import.field.Trade names"].value as? String, "1")
-        XCTAssertEqual(app.switches["import.field.Scientific name"].value as? String, "0")
-        app.swipeUp()
-        let apply = app.descendants(matching: .any)["import.apply"]
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["trustedImport.section.Identity"].value as? String, "0")
+        XCTAssertEqual(app.switches["trustedImport.section.Uses & mechanism"].value as? String, "1")
+        let apply = app.descendants(matching: .any)["trustedImport.apply"]
+        for _ in 0..<5 where !apply.exists { app.swipeUp() }
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
         XCTAssertTrue(apply.isEnabled)
+    }
+
+    private func fillTrustedImportField(_ app: XCUIApplication, _ identifier: String, _ value: String) {
+        let field = app.descendants(matching: .any)[identifier]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), identifier)
+        field.tap()
+        field.typeText(value)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

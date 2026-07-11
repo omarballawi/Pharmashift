@@ -1146,7 +1146,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
         } else if status != errSecSuccess {
             throw DrugImportError.invalidResponse
         }
-        guard apiKey() == apiKey else { throw DrugImportError.invalidResponse }
+        guard self.apiKey() == apiKey else { throw DrugImportError.invalidResponse }
     }
 
     func maskedKeyDescription() -> String? {

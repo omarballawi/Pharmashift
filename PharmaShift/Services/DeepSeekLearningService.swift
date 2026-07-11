@@ -57,7 +57,7 @@ actor DeepSeekPracticeService {
             .prefix(8)
         guard !candidates.isEmpty else { throw DrugImportError.invalidQuery }
         let snapshots = candidates.map { drug in
-            "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.tradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.importedFlashcardPairs.prefix(2).map { "\($0.question): \($0.answer)" }.joined(separator: " | "))"
+            "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.tradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.flashcards.prefix(2).joined(separator: " | "))"
         }.joined(separator: "\n")
         let prompt = """
         Return JSON only. Create exactly five short, ADHD-friendly pharmacy learning questions using only these local drug facts. Focus on weak/due drugs. Each question must reference sourceDrugID, have a short prompt, exact answer, optional 3-4 choices with the answer included, a one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent clinical facts, patient advice, doses, or cases.
@@ -69,7 +69,7 @@ actor DeepSeekPracticeService {
         let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id.uuidString, $0) })
         let questions = try payload.questions.map { item -> PracticeQuestion in
             guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { throw DrugImportError.invalidAIJSON }
-            let choices = Array(Set((item.choices ?? []).filter { !$0.trimmed.isEmpty })).sorted()
+            let choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
             let interaction: PracticeInteraction = choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) ? .multipleChoice : .recall
             return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: item.prompt.trimmed, correctAnswer: item.answer.trimmed, choices: interaction == .multipleChoice ? choices : [], explanation: item.explanation?.trimmed, questionType: QuestionType(rawValue: item.questionType) ?? .use, interaction: interaction)
         }

@@ -1,4 +1,4 @@
-name: Build unsigned PharmaShift IPA
+name: Build unsigned Renlyst IPA
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - PharmaShift.ipa
+      - Renlyst.ipa
 
 permissions:
   contents: read
@@ -51,7 +51,7 @@ jobs:
       - name: Build unsigned iPhone application
         run: |
           set -euo pipefail
-          rm -rf build Payload PharmaShift.ipa
+          rm -rf build Payload Renlyst.ipa
 
           xcodebuild \
             -project PharmaShift.xcodeproj \
@@ -66,20 +66,20 @@ jobs:
             DEVELOPMENT_TEAM='' \
             clean build
 
-          APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/PharmaShift.app'
+          APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/Renlyst.app'
           test -d "$APP_PATH"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.pharmashift.app'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.5'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '5'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.renlyst.app'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.6.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '6'
           mkdir Payload
-          ditto "$APP_PATH" 'Payload/PharmaShift.app'
-          /usr/bin/zip -qry PharmaShift.ipa Payload
-          test -s PharmaShift.ipa
+          ditto "$APP_PATH" 'Payload/Renlyst.app'
+          /usr/bin/zip -qry Renlyst.ipa Payload
+          test -s Renlyst.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v7
         with:
-          name: PharmaShift-unsigned-IPA
-          path: PharmaShift.ipa
+          name: Renlyst-unsigned-IPA
+          path: Renlyst.ipa
           if-no-files-found: error
           retention-days: 7

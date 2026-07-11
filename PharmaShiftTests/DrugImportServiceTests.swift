@@ -78,9 +78,24 @@ final class DrugImportServiceTests: XCTestCase {
         let info = try DrugImportValidator.parse(jsonString: json, confirmedIdentity: confirmedIdentity(), packet: packet)
         XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
         XCTAssertEqual(info.identity.tradeNames, ["Coversyl"])
+        XCTAssertEqual(info.identity.class, "Wrong")
         XCTAssertEqual(info.pharmacokinetics.halfLifeBand, .unknown)
         XCTAssertEqual(info.sourceQuality.sourceName, "DailyMed")
         XCTAssertTrue(info.sourceQuality.needsReview)
+    }
+
+    func testIdentityNeedsANameButNotClassOrProductDetails() {
+        XCTAssertTrue(UserConfirmedDrugIdentity(scientificName: "", tradeNames: ["Gasec"], strength: "", dosageForm: "", route: "", system: "", drugClass: "").isComplete)
+        XCTAssertFalse(UserConfirmedDrugIdentity(scientificName: "", tradeNames: [], strength: "20 mg", dosageForm: "Tablet", route: "Oral", system: "GI", drugClass: "").isComplete)
+    }
+
+    func testSearchRankerPrioritizesIngredientAndForm() {
+        let identity = UserConfirmedDrugIdentity(scientificName: "Omeprazole", tradeNames: ["Gasec"], strength: "20 mg", dosageForm: "Capsule", route: "Oral", system: "GI", drugClass: "")
+        let results = [
+            DrugSearchResult(id: "tablet", displayName: "Omeprazole tablet", activeIngredient: "Omeprazole", dosageForm: "Tablet", sourceName: "DailyMed"),
+            DrugSearchResult(id: "capsule", displayName: "Omeprazole capsule", activeIngredient: "Omeprazole", dosageForm: "Capsule", sourceName: "DailyMed")
+        ]
+        XCTAssertEqual(DrugSearchRanker.ranked(results, identity: identity).first?.id, "capsule")
     }
 
     func testValidatorRejectsMarkdownWrappedJSON() {

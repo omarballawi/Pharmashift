@@ -153,7 +153,7 @@ struct CaptureView: View {
         .sheet(isPresented: $showsTrustedImport) {
             NavigationStack { DrugImportView() }
         }
-        .alert("PharmaShift", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert("Renlyst", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
         .navigationDestination(isPresented: $opensSavedDrug) {

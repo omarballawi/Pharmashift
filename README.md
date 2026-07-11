@@ -1,6 +1,6 @@
-# PharmaShift
+# Renlyst
 
-PharmaShift is an offline-first iPhone training companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, AI, cloud sync, or dispensing logic. Saved Drug Cards remain fully offline; the only network feature is an explicit, user-started import from official DailyMed labels.
+Renlyst is an offline-first iPhone training companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, cloud sync, or dispensing logic. Saved Drug Cards remain fully offline; network features are explicit, user-started trusted-source imports and optional DeepSeek learning assistance.
 
 Open `PharmaShift.xcodeproj` in Xcode, select the `PharmaShift` scheme and an iOS 17+ iPhone simulator, then Build & Run. Unit and UI tests are included in the shared scheme.
 

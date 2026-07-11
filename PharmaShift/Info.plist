@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
-	<key>CFBundleDisplayName</key><string>PharmaShift</string>
+	<key>CFBundleDisplayName</key><string>Renlyst</string>
 	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -12,8 +12,8 @@
 	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key><true/>
-	<key>NSCameraUsageDescription</key><string>PharmaShift uses the camera only to attach a drug package photo to your private offline training card.</string>
-	<key>NSPhotoLibraryUsageDescription</key><string>PharmaShift uses selected photos only for private offline drug training cards.</string>
+	<key>NSCameraUsageDescription</key><string>Renlyst uses the camera only to attach a drug package photo to your private offline training card.</string>
+	<key>NSPhotoLibraryUsageDescription</key><string>Renlyst uses selected photos only for private offline drug training cards.</string>
 	<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 	<key>UILaunchScreen</key><dict/>
 	<key>UISupportedInterfaceOrientations</key>

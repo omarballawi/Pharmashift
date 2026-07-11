@@ -55,8 +55,7 @@ struct UserConfirmedDrugIdentity: Codable, Equatable, Sendable {
     var drugClass: String
 
     var isComplete: Bool {
-        !scientificName.trimmed.isEmpty && !tradeNames.joined().trimmed.isEmpty && !strength.trimmed.isEmpty
-            && !dosageForm.trimmed.isEmpty && !route.trimmed.isEmpty && !system.trimmed.isEmpty && !drugClass.trimmed.isEmpty
+        !scientificName.trimmed.isEmpty || !tradeNames.joined().trimmed.isEmpty
     }
 }
 
@@ -216,6 +215,7 @@ enum DrugImportError: LocalizedError, Equatable {
     case missingDeepSeekKey
     case invalidAIJSON
     case aiReturnedEmpty
+    case unresolvedLocalBrand
 
     var errorDescription: String? {
         switch self {
@@ -225,6 +225,7 @@ enum DrugImportError: LocalizedError, Equatable {
         case .missingDeepSeekKey: "Add your DeepSeek API key in Settings before using AI formatting."
         case .invalidAIJSON: "DeepSeek did not return valid JSON. Retry formatting from the same trusted source packet."
         case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry formatting from the same trusted source packet."
+        case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         }
     }
 }
@@ -248,6 +249,35 @@ enum DrugSourceProviderFactory {
             return MockDeepSeekDrugImportService()
         }
         return DeepSeekDrugImportService()
+    }
+}
+
+enum DrugSearchRanker {
+    static func ranked(_ values: [DrugSearchResult], identity: UserConfirmedDrugIdentity) -> [DrugSearchResult] {
+        let ingredient = identity.scientificName.trimmed.lowercased()
+        let trade = identity.tradeNames.joined(separator: " ").trimmed.lowercased()
+        let form = identity.dosageForm.trimmed.lowercased()
+        let route = identity.route.trimmed.lowercased()
+        var unique: [String: DrugSearchResult] = [:]
+        for value in values {
+            let key = [value.activeIngredient ?? value.displayName, value.dosageForm ?? "", value.sourceName]
+                .joined(separator: "|").lowercased()
+            if unique[key] == nil { unique[key] = value }
+        }
+        return unique.values.sorted { score($0, ingredient: ingredient, trade: trade, form: form, route: route) > score($1, ingredient: ingredient, trade: trade, form: form, route: route) }
+    }
+
+    private static func score(_ result: DrugSearchResult, ingredient: String, trade: String, form: String, route: String) -> Int {
+        let activeIngredient = result.activeIngredient ?? ""
+        let name = "\(result.displayName) \(activeIngredient)".lowercased()
+        var value = 0
+        if !ingredient.isEmpty && name == ingredient { value += 100 }
+        else if !ingredient.isEmpty && name.contains(ingredient) { value += 80 }
+        if !trade.isEmpty && name.contains(trade) { value += 60 }
+        if !form.isEmpty && (result.dosageForm ?? "").lowercased().contains(form) { value += 15 }
+        if !route.isEmpty && name.contains(route) { value += 5 }
+        if result.sourceName == "DailyMed" { value += 3 }
+        return value
     }
 }
 
@@ -784,7 +814,7 @@ enum PromptBuilder {
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
         System/chapter: \(identity.system)
-        Class: \(identity.drugClass)
+        Class: derive from the active ingredient and trusted source when confident; otherwise leave it empty and mark source quality for review.
 
         Trusted source packet:
         Source name: \(packet.sourceName)
@@ -854,7 +884,7 @@ enum DrugImportValidator {
             scientificName: confirmedIdentity.scientificName,
             tradeNames: confirmedIdentity.tradeNames,
             system: confirmedIdentity.system,
-            class: confirmedIdentity.drugClass,
+            class: info.identity.class.trimmed,
             dosageForm: confirmedIdentity.dosageForm,
             strength: confirmedIdentity.strength,
             route: confirmedIdentity.route
@@ -867,6 +897,7 @@ enum DrugImportValidator {
             ("adverse reactions", packet.adverseReactionsText), ("pharmacokinetics", packet.pharmacokineticsText)
         ]
         for check in checks where check.1.trimmed.isEmpty && !missing.contains(check.0) { missing.append(check.0) }
+        if info.identity.class.isEmpty && !missing.contains("drug class") { missing.append("drug class") }
         if packet.isTruncated { info.sourceQuality.needsReview = true; info.sourceQuality.notes = [info.sourceQuality.notes, "Trusted source packet was trimmed before AI formatting."].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
         info.sourceQuality.missingImportantFields = missing
         if !missing.isEmpty { info.sourceQuality.needsReview = true }
@@ -1079,7 +1110,7 @@ actor MockDeepSeekDrugImportService: DrugImportFormattingService {
 
 final class DeepSeekKeyStore: @unchecked Sendable {
     static let shared = DeepSeekKeyStore()
-    private let service = "com.pharmashift.deepseek"
+    private let service = "com.renlyst.deepseek"
     private let account = "api-key"
 
     func apiKey() -> String? {
@@ -1097,6 +1128,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     }
 
     func save(apiKey: String) throws {
+        guard !apiKey.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
         let data = Data(apiKey.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -1108,11 +1140,28 @@ final class DeepSeekKeyStore: @unchecked Sendable {
         if status == errSecItemNotFound {
             var add = query
             add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(add as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw DrugImportError.invalidResponse }
         } else if status != errSecSuccess {
             throw DrugImportError.invalidResponse
         }
+        guard apiKey() == apiKey else { throw DrugImportError.invalidResponse }
+    }
+
+    func maskedKeyDescription() -> String? {
+        guard let key = apiKey(), !key.trimmed.isEmpty else { return nil }
+        return "Saved key ••••\(key.suffix(4))"
+    }
+
+    func testConnection(session: URLSession = .shared) async throws -> String {
+        guard let key = apiKey(), !key.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/models")!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
+        return "DeepSeek connection is ready"
     }
 
     func delete() {

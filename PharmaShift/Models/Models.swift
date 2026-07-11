@@ -424,7 +424,7 @@ final class Drug {
 
     var isImported: Bool { !importedSourceName.trimmed.isEmpty }
     var isIncomplete: Bool {
-        isUnknown || scientificName.trimmed.isEmpty || tradeNames.isEmpty || drugClass.trimmed.isEmpty || dosageForms.isEmpty
+        isUnknown || scientificName.trimmed.isEmpty || tradeNames.isEmpty || dosageForms.isEmpty
     }
 
     var displayName: String {
@@ -441,15 +441,16 @@ final class Drug {
             .filter { $0 }.count
     }
 
-    var isMastered: Bool { masteryCount == 6 }
+    var requiredMasteryCount: Int { drugClass.trimmed.isEmpty ? 5 : 6 }
+    var isMastered: Bool { masteryCount >= requiredMasteryCount }
 
     func recalculateConfidence() {
-        confidenceLevel = switch masteryCount {
-        case 6: .mastered
-        case 4...5: .strong
-        case 2...3: .medium
-        default: .weak
-        }
+        let count = masteryCount
+        let required = requiredMasteryCount
+        if count >= required { confidenceLevel = .mastered }
+        else if count >= 4 { confidenceLevel = .strong }
+        else if count >= 2 { confidenceLevel = .medium }
+        else { confidenceLevel = .weak }
     }
 
     func setMastery(for questionType: QuestionType, value: Bool) {

@@ -21,10 +21,10 @@ private enum BackupExportKind: String, Identifiable {
     var filename: String {
         let day = Date.now.formatted(.iso8601.year().month().day())
         return switch self {
-        case .lightweight: "PharmaShift-Lightweight-\(day).json"
-        case .complete: "PharmaShift-Complete-\(day).json"
-        case .csv: "PharmaShift-Drug-Library-\(day).csv"
-        case .report: "PharmaShift-Training-Report-\(day).txt"
+        case .lightweight: "Renlyst-Lightweight-\(day).json"
+        case .complete: "Renlyst-Complete-\(day).json"
+        case .csv: "Renlyst-Drug-Library-\(day).csv"
+        case .report: "Renlyst-Training-Report-\(day).txt"
         }
     }
     var contentType: UTType {
@@ -51,7 +51,7 @@ struct BackupDataView: View {
     var body: some View {
         List {
             Section {
-                Label("Backups are created locally and never uploaded by PharmaShift.", systemImage: "lock.shield.fill")
+                Label("Backups are created locally and never uploaded by Renlyst.", systemImage: "lock.shield.fill")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Section("Backup") {
@@ -188,7 +188,7 @@ private struct BackupImportPreviewView: View {
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         .disabled(isRestoring)
         .overlay { if isRestoring { ProgressView("Restoring…") } }
-        .confirmationDialog("Replace all current PharmaShift data?", isPresented: $asksToReplace, titleVisibility: .visible) {
+        .confirmationDialog("Replace all current Renlyst data?", isPresented: $asksToReplace, titleVisibility: .visible) {
             Button("Replace all data", role: .destructive) { restore(.replace) }
             Button("Cancel", role: .cancel) {}
         } message: { Text("This cannot be undone unless you have another backup.") }

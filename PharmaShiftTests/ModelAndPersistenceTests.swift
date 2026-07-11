@@ -5,6 +5,19 @@ import XCTest
 
 @MainActor
 final class ModelAndPersistenceTests: XCTestCase {
+    func testClasslessDrugCanBecomeMasteredWithoutAClassQuestion() {
+        let drug = Drug(scientificName: "Omeprazole", tradeNames: ["Gasec"], dosageForms: ["Capsule"])
+        drug.masteryScientificName = true
+        drug.masteryTradeName = true
+        drug.masteryUse = true
+        drug.masteryWarning = true
+        drug.masteryCounseling = true
+        drug.recalculateConfidence()
+        XCTAssertTrue(drug.isMastered)
+        XCTAssertEqual(drug.confidenceLevel, .mastered)
+        XCTAssertFalse(drug.isIncomplete)
+    }
+
     func testMasteryRequiresAllSixChecks() {
         let drug = Drug(scientificName: "Test")
         drug.masteryScientificName = true

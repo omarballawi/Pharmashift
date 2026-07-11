@@ -172,7 +172,7 @@ private struct ReportEditorView: View {
             reportSection("Notes and recommendations", \.notesAndRecommendations)
             reportSection("Mastered drugs by chapter", \.masteredDrugs)
             Section {
-                ShareLink(item: ReportFile(text: ReportBuilder.text(for: report)), preview: SharePreview("PharmaShift Training Report")) {
+                ShareLink(item: ReportFile(text: ReportBuilder.text(for: report)), preview: SharePreview("Renlyst Training Report")) {
                     Label("Export UTF-8 text file", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }

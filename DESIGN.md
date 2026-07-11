@@ -52,7 +52,9 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 - Drug Card: one continuous scroll with optional jump chips.
 - Pharmacology meter/status card and seven-axis safety radar with text equivalents.
 - Five-question practice session with progress, feedback, summary, and wrong-answer review.
+- AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
 - Import comparison rows with explicit field toggles.
+- Local-brand resolution confirmation row: AI suggests an ingredient only after trusted-source lookup fails; the learner must confirm before continuing.
 - Backup metadata preview with merge as default and destructive replace confirmation.
 - Shared empty state, metric row, mastery badge, drug photo, and thumbnail.
 
@@ -73,5 +75,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 - Text equivalents remain visible under every visual pharmacology shorthand.
 
 ## Last updated
+
+2026-07-12 — verified DeepSeek settings status, optional import classification, local-brand confirmation, and offline AI Practice Pack.
 
 2026-07-07 — continuous Drug Card, native crop flow, PK/safety visuals, backup/import flows, five-question practice, Focus Mode, and bilingual consistency pass.

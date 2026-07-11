@@ -55,7 +55,7 @@ struct HomeView: View {
             .padding(.bottom, 28)
         }
         .background(theme.background)
-        .navigationTitle("PharmaShift")
+        .navigationTitle("Renlyst")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showsShift) { ShiftView() }
         .accessibilityIdentifier("home.dashboard")

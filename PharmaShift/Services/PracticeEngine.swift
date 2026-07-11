@@ -70,6 +70,7 @@ enum PracticeGenerator {
             eligible = eligible.filter { $0.nextReviewDate < tomorrow }
         }
         if mode == .imageQuiz { eligible = eligible.filter { $0.imageData != nil } }
+        if mode == .classExamples { eligible = eligible.filter { !$0.drugClass.trimmed.isEmpty } }
         guard !eligible.isEmpty else { return [] }
         eligible.sort {
             if $0.masteryCount != $1.masteryCount { return $0.masteryCount < $1.masteryCount }
@@ -86,7 +87,7 @@ enum PracticeGenerator {
         if mode == .weakDrug {
             if !drug.masteryScientificName { resolvedMode = .tradeToScientific }
             else if !drug.masteryTradeName { resolvedMode = .scientificToTrade }
-            else if !drug.masteryClass { resolvedMode = .classExamples }
+            else if !drug.masteryClass && !drug.drugClass.trimmed.isEmpty { resolvedMode = .classExamples }
             else if !drug.masteryUse { resolvedMode = .drugUse }
             else if !drug.masteryWarning { resolvedMode = .drugWarning }
             else { resolvedMode = .counseling }

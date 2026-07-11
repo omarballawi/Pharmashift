@@ -58,6 +58,8 @@ struct DrugImportView: View {
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
     @State private var retryCount = 0
+    @State private var resolvedIdentity: ResolvedDrugIdentity?
+    private let identityResolver: any DrugIdentityResolving = DeepSeekIdentityResolver()
 
     init(
         drug: Drug? = nil,
@@ -117,7 +119,7 @@ struct DrugImportView: View {
             }
         }
         .disabled(isLoading)
-        .alert("PharmaShift", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert("Renlyst", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
         .navigationDestination(isPresented: $opensSavedDrug) {
@@ -148,7 +150,9 @@ struct DrugImportView: View {
             results: results,
             selectedID: selectedResult?.id,
             onSearch: searchTrustedSources,
-            onChoose: loadSource
+            onChoose: loadSource,
+            resolvedIdentity: resolvedIdentity,
+            onAcceptResolvedIdentity: acceptResolvedIdentity
         )
         case .preview:
             if let importedInfo {
@@ -299,20 +303,39 @@ struct DrugImportView: View {
         results = []
         Task {
             var collected: [DrugSearchResult] = []
-            let queryCandidates = [identity.scientificName, identity.tradeNames.first ?? ""].filter { !$0.trimmed.isEmpty }
+            let queryCandidates = [identity.scientificName] + identity.tradeNames
+            let usableQueries = queryCandidates.filter { !$0.trimmed.isEmpty }
             for provider in providers {
-                for query in queryCandidates where collected.filter({ $0.sourceName == provider.sourceName }).isEmpty {
+                for query in usableQueries where collected.filter({ $0.sourceName == provider.sourceName }).isEmpty {
                     if let found = try? await provider.searchDrug(query: query), !found.isEmpty {
                         collected.append(contentsOf: found)
                     }
                 }
             }
+            if collected.isEmpty {
+                do {
+                    let resolution = try await identityResolver.resolve(identity: identity, ocrText: detectedText)
+                    await MainActor.run { resolvedIdentity = resolution; isLoading = false }
+                    return
+                } catch {
+                    await MainActor.run { message = error.localizedDescription; isLoading = false }
+                    return
+                }
+            }
             await MainActor.run {
-                results = collected
+                results = DrugSearchRanker.ranked(collected, identity: identity)
                 isLoading = false
                 if collected.isEmpty { message = "No trusted source match found. Try another scientific or trade name." }
             }
         }
+    }
+
+    private func acceptResolvedIdentity(_ resolution: ResolvedDrugIdentity) {
+        identity.scientificName = resolution.scientificName
+        if identity.dosageForm.trimmed.isEmpty { identity.dosageForm = resolution.dosageForm }
+        if identity.route.trimmed.isEmpty { identity.route = resolution.route }
+        resolvedIdentity = nil
+        searchTrustedSources()
     }
 
     private func loadSource(_ result: DrugSearchResult) {
@@ -447,17 +470,16 @@ private struct ConfirmDrugIdentityView: View {
                     .autocorrectionDisabled()
                 TextField("Trade name(s), one per line", text: tradeNamesText, axis: .vertical)
                     .lineLimit(2...5)
-                TextField("Strength", text: $identity.strength)
-                TextField("Dosage form", text: $identity.dosageForm)
-                TextField("Route", text: $identity.route)
+                TextField("Strength (optional)", text: $identity.strength)
+                TextField("Dosage form (optional)", text: $identity.dosageForm)
+                TextField("Route (optional)", text: $identity.route)
                 Picker("System / Chapter", selection: $identity.system) {
                     ForEach(Chapter.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
-                TextField("Class", text: $identity.drugClass)
             } header: {
-                Text("Required before import")
+                Text("Name required before import")
             } footer: {
-                Text("These fields override the AI output because they are your memorization checkpoint.")
+                Text("Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
             }
             Section {
                 Button(action: onContinue) {
@@ -477,6 +499,8 @@ private struct ImportSourceSearchView: View {
     let selectedID: String?
     let onSearch: () -> Void
     let onChoose: (DrugSearchResult) -> Void
+    let resolvedIdentity: ResolvedDrugIdentity?
+    let onAcceptResolvedIdentity: (ResolvedDrugIdentity) -> Void
 
     var body: some View {
         List {
@@ -487,8 +511,18 @@ private struct ImportSourceSearchView: View {
                 Text("Source priority: your confirmed name, RxNorm normalization, DailyMed labels, then openFDA fallback. Iraqi local trade names may not match perfectly.")
             }
             Section(header: Text("Trusted source matches")) {
+                if let resolvedIdentity {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Local trade-name match", systemImage: "sparkle.magnifyingglass")
+                            .font(.headline)
+                        Text("DeepSeek suggests \(resolvedIdentity.scientificName) (\(resolvedIdentity.confidence) confidence). Confirm this ingredient before trusted-source search.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Button("Use \(resolvedIdentity.scientificName)") { onAcceptResolvedIdentity(resolvedIdentity) }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
                 if results.isEmpty {
-                    Text("No results yet.").foregroundStyle(.secondary)
+                    Text(resolvedIdentity == nil ? "No results yet." : "Confirm the suggestion to continue.").foregroundStyle(.secondary)
                 } else {
                     ForEach(results) { result in
                         Button { onChoose(result) } label: {
@@ -686,7 +720,7 @@ private struct ImportMemorizationChallengeView: View {
     @State private var graded = false
 
     private var scientificOK: Bool { scientific.trimmed.localizedCaseInsensitiveCompare(drug.scientificName.trimmed) == .orderedSame }
-    private var classOK: Bool { drugClass.trimmed.localizedCaseInsensitiveCompare(drug.drugClass.trimmed) == .orderedSame }
+    private var classOK: Bool { drug.drugClass.trimmed.isEmpty || drugClass.trimmed.localizedCaseInsensitiveCompare(drug.drugClass.trimmed) == .orderedSame }
     private var warningOK: Bool {
         guard let expected = drug.warnings.first?.trimmed, !expected.isEmpty else { return false }
         return warning.localizedCaseInsensitiveContains(expected) || expected.localizedCaseInsensitiveContains(warning.trimmed)
@@ -703,13 +737,13 @@ private struct ImportMemorizationChallengeView: View {
             }
             Section("Answer from memory") {
                 TextField("What is the scientific name?", text: $scientific)
-                TextField("What is the class?", text: $drugClass)
+                if !drug.drugClass.trimmed.isEmpty { TextField("What is the class?", text: $drugClass) }
                 TextField("What is the main warning?", text: $warning, axis: .vertical).lineLimit(2...4)
             }
             if graded {
                 Section("Result") {
                     resultRow("Scientific name", scientificOK)
-                    resultRow("Class", classOK)
+                    if !drug.drugClass.trimmed.isEmpty { resultRow("Class", classOK) }
                     resultRow("Main warning", warningOK)
                     Text(drug.isConfusing ? "Marked weak/confusing for extra practice." : "Nice. Mastery increased.")
                         .font(.caption)
@@ -734,7 +768,7 @@ private struct ImportMemorizationChallengeView: View {
 
     private func grade() {
         drug.masteryScientificName = scientificOK
-        drug.masteryClass = classOK
+        if !drug.drugClass.trimmed.isEmpty { drug.masteryClass = classOK }
         drug.masteryWarning = warningOK
         drug.isConfusing = !(scientificOK && classOK && warningOK)
         drug.recalculateConfidence()

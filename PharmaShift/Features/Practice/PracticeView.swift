@@ -10,6 +10,9 @@ struct PracticeView: View {
     @State private var selectedMode: PracticeMode?
     @State private var selectedChapter: Chapter?
     @State private var choosesSystem = false
+    @State private var aiPack: AIPracticePack? = AIPracticePackStore.load()
+    @State private var isRefreshingAIPack = false
+    @State private var aiPackMessage: String?
 
     private var available: [Drug] { drugs.filter { !$0.isUnknown } }
     private var due: [Drug] { available.filter { scheduler.isDue($0) } }
@@ -18,6 +21,7 @@ struct PracticeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 practiceSummary
+                aiPracticePack
                 if available.isEmpty {
                     EmptyStateView(icon: "brain.head.profile", title: "Nothing to practice yet", message: "Capture a known drug or import the optional starter pack.")
                 } else {
@@ -63,6 +67,53 @@ struct PracticeView: View {
         .onChange(of: navigation.requestedPracticeMode) { _, _ in openRequestedReview() }
     }
 
+    private var aiPracticePack: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Label("AI Practice Pack", systemImage: "sparkles")
+                    .font(.headline)
+                Spacer()
+                if let aiPack { Text(aiPack.generatedAt, style: .relative).font(.caption).foregroundStyle(.secondary) }
+            }
+            Text(aiPack == nil ? "Create one short, focused five-question pack from your weak and due drug cards." : "Your saved pack stays ready offline until you refresh it.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            if let aiPack {
+                NavigationLink {
+                    PracticeSessionView(questions: aiPack.questions, title: "AI Practice Pack")
+                } label: {
+                    Label("Start saved pack", systemImage: "play.fill").frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Button {
+                refreshAIPack()
+            } label: {
+                Label(isRefreshingAIPack ? "Creating questions" : "Refresh five questions", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isRefreshingAIPack || available.isEmpty)
+            if let aiPackMessage { Text(aiPackMessage).font(.caption).foregroundStyle(.secondary) }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityIdentifier("practice.aiPack")
+    }
+
+    private func refreshAIPack() {
+        isRefreshingAIPack = true
+        aiPackMessage = nil
+        Task {
+            do {
+                let pack = try await DeepSeekPracticeService().makePack(from: available)
+                AIPracticePackStore.save(pack)
+                await MainActor.run { aiPack = pack; aiPackMessage = "Five questions saved for offline practice."; isRefreshingAIPack = false }
+            } catch {
+                await MainActor.run { aiPackMessage = error.localizedDescription; isRefreshingAIPack = false }
+            }
+        }
+    }
+
     private var practiceSummary: some View {
         HStack(spacing: 12) {
             summaryItem("Due", value: due.count, icon: "calendar.badge.clock")
@@ -106,6 +157,8 @@ struct PracticeSessionView: View {
     let initialDrug: Drug?
     let mode: PracticeMode
     let chapter: Chapter?
+    let providedQuestions: [PracticeQuestion]?
+    let customTitle: String?
     @State private var questions: [PracticeQuestion] = []
     @State private var index = 0
     @State private var selectedChoice: String?
@@ -114,8 +167,8 @@ struct PracticeSessionView: View {
     @State private var answers: [PracticeAnswer] = []
     @State private var result: PracticeSessionResult?
 
-    init(initialDrug: Drug? = nil, mode: PracticeMode = .tradeToScientific, chapter: Chapter? = nil) {
-        self.initialDrug = initialDrug; self.mode = mode; self.chapter = chapter
+    init(initialDrug: Drug? = nil, mode: PracticeMode = .tradeToScientific, chapter: Chapter? = nil, questions: [PracticeQuestion]? = nil, title: String? = nil) {
+        self.initialDrug = initialDrug; self.mode = mode; self.chapter = chapter; self.providedQuestions = questions; self.customTitle = title
     }
 
     private var question: PracticeQuestion? { questions.indices.contains(index) ? questions[index] : nil }
@@ -136,7 +189,7 @@ struct PracticeSessionView: View {
             }
             .padding()
         }
-        .navigationTitle(mode.rawValue)
+        .navigationTitle(customTitle ?? mode.rawValue)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         .onAppear { prepare() }
@@ -264,7 +317,7 @@ struct PracticeSessionView: View {
     private func advance() {
         guard hasAnswered else { return }
         if index + 1 >= PracticeGenerator.questionCount {
-            let value = PracticeSessionResult(modeRaw: mode.rawValue, answers: answers)
+            let value = PracticeSessionResult(modeRaw: customTitle ?? mode.rawValue, answers: answers)
             result = value
             try? LearningProgressService.record(result: value, context: context)
             if !reduceMotion { UINotificationFeedbackGenerator().notificationOccurred(.success) }
@@ -275,11 +328,11 @@ struct PracticeSessionView: View {
 
     private func prepare() {
         guard questions.isEmpty else { return }
-        questions = PracticeGenerator.generate(mode: mode, drugs: initialDrug.map { [$0] } ?? allDrugs, chapter: chapter)
+        questions = providedQuestions ?? PracticeGenerator.generate(mode: mode, drugs: initialDrug.map { [$0] } ?? allDrugs, chapter: chapter)
     }
 
     private func restart() {
         index = 0; selectedChoice = nil; answerRevealed = false; hasAnswered = false; answers = []; result = nil
-        questions = PracticeGenerator.generate(mode: mode, drugs: initialDrug.map { [$0] } ?? allDrugs, chapter: chapter)
+        questions = providedQuestions ?? PracticeGenerator.generate(mode: mode, drugs: initialDrug.map { [$0] } ?? allDrugs, chapter: chapter)
     }
 }

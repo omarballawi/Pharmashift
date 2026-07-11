@@ -110,7 +110,8 @@ private struct LearningSettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
-    @State private var keyStatus = DeepSeekKeyStore.shared.apiKey()?.trimmed.isEmpty == false ? "DeepSeek key saved" : "No DeepSeek key saved"
+    @State private var keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "No DeepSeek key saved"
+    @State private var checkingConnection = false
 
     var body: some View {
         Form {
@@ -123,16 +124,22 @@ private struct LearningSettingsView: View {
                     Spacer()
                     Button(role: .destructive) { clearDeepSeekKey() } label: { Label("Clear", systemImage: "trash") }
                 }
+                Button {
+                    checkConnection()
+                } label: {
+                    Label(checkingConnection ? "Checking connection" : "Check connection", systemImage: "network")
+                }
+                .disabled(checkingConnection)
                 Text(keyStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("DeepSeek receives only compact trusted source text and your confirmed identity fields. Drug photos stay on device.")
+                Text("DeepSeek receives compact trusted source text, local brand-name text when you ask it to resolve a match, and compact practice facts. Drug photos stay on device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Section("In-app reminders") {
                 Toggle("Show weak-drug reminders", isOn: reminderBinding)
-                Text("This reminder appears only inside PharmaShift and never requests notification permission.")
+                Text("This reminder appears only inside Renlyst and never requests notification permission.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let profile = profiles.first {
@@ -150,9 +157,9 @@ private struct LearningSettingsView: View {
         do {
             try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey.trimmed)
             deepSeekKey = ""
-            keyStatus = "DeepSeek key saved"
+            keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "Key was not saved"
         } catch {
-            keyStatus = "Could not save key"
+            keyStatus = "Could not save key: \(error.localizedDescription)"
         }
     }
 
@@ -160,6 +167,18 @@ private struct LearningSettingsView: View {
         DeepSeekKeyStore.shared.delete()
         deepSeekKey = ""
         keyStatus = "No DeepSeek key saved"
+    }
+
+    private func checkConnection() {
+        checkingConnection = true
+        Task {
+            do {
+                let status = try await DeepSeekKeyStore.shared.testConnection()
+                await MainActor.run { keyStatus = status; checkingConnection = false }
+            } catch {
+                await MainActor.run { keyStatus = "Connection check failed: \(error.localizedDescription)"; checkingConnection = false }
+            }
+        }
     }
 
     private var reminderBinding: Binding<Bool> {
@@ -183,8 +202,8 @@ private struct AboutView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Private, offline training companion", systemImage: "lock.shield.fill")
                         .font(.headline)
-                    Text("PharmaShift is for personal pharmacy learning. Confirm clinical decisions and dispensing with your supervising pharmacist.")
-                    Text("PharmaShift للتعلّم الشخصي أثناء التدريب. أكّد القرارات السريرية وصرف الأدوية مع الصيدلي المشرف.")
+                    Text("Renlyst is for personal pharmacy learning. Confirm clinical decisions and dispensing with your supervising pharmacist.")
+                    Text("Renlyst للتعلّم الشخصي أثناء التدريب. أكّد القرارات السريرية وصرف الأدوية مع الصيدلي المشرف.")
                         .environment(\.layoutDirection, .rightToLeft)
                 }
                 .font(.subheadline)

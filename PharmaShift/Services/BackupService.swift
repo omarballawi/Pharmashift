@@ -472,7 +472,7 @@ enum BackupError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .malformed: "This file is not a valid PharmaShift backup."
+        case .malformed: "This file is not a valid Renlyst backup."
         case .newerVersion(let version): "This backup uses schema version \(version), which is newer than this app supports."
         case .invalidCounts: "The backup record counts do not match its contents."
         case .duplicateIdentifiers: "The backup contains duplicate record identifiers."
@@ -610,7 +610,7 @@ enum BackupService {
         let reports = try context.fetch(FetchDescriptor<TrainingReport>()).sorted { $0.periodStart < $1.periodStart }
         let text = reports.map { report in
             """
-            PharmaShift Training Report
+            Renlyst Training Report
             Period: \(report.periodStart.formatted(date: .abbreviated, time: .omitted)) – \(report.periodEnd.formatted(date: .abbreviated, time: .omitted))
 
             Training summary

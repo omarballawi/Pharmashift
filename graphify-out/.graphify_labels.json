@@ -38,14 +38,10 @@
   "36": "Components.swift",
   "37": "Drug",
   "38": "SafetyRadar",
-  "39": "DrugEditorSection",
   "40": "DrugSearchResult",
   "41": "AppTheme",
-  "42": "Foundation",
-  "43": "AppTab",
   "44": ".containsObviousIdentifier",
   "45": "LearningSettingsView",
-  "46": "ImportSection",
   "47": "MigrationFixtureTests.swift",
-  "53": "PracticeView"
+  "50": "VerificationStatus"
 }

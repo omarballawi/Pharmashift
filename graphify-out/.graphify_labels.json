@@ -38,8 +38,10 @@
   "36": "Components.swift",
   "37": "Drug",
   "38": "SafetyRadar",
+  "39": "ImportedExcretionRoute",
   "40": "DrugSearchResult",
   "41": "AppTheme",
+  "42": ".importIfNeeded",
   "44": ".containsObviousIdentifier",
   "47": "MigrationFixtureTests.swift"
 }

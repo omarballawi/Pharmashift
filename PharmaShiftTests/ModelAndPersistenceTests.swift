@@ -19,7 +19,7 @@ final class ModelAndPersistenceTests: XCTestCase {
     }
 
     func testMasteryRequiresAllSixChecks() {
-        let drug = Drug(scientificName: "Test")
+        let drug = Drug(scientificName: "Test", drugClass: "Test class")
         drug.masteryScientificName = true
         drug.masteryTradeName = true
         drug.masteryClass = true

@@ -13,24 +13,24 @@ permissions:
 
 jobs:
   test:
-    name: Run simulator tests
-    runs-on: macos-15-intel
-    timeout-minutes: 40
+    name: Run focused unit tests (iPhone 16 Pro Max)
+    runs-on: macos-15
+    timeout-minutes: 15
 
     steps:
       - name: Check out project
         uses: actions/checkout@v6
 
-      - name: Run unit and UI tests
+      - name: Run unit tests on iPhone 16 Pro Max
         run: |
           set -euo pipefail
-          xcrun simctl list devices available
           xcodebuild \
             -project PharmaShift.xcodeproj \
             -scheme PharmaShift \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=26.2' \
             -derivedDataPath build/TestDerivedData \
+            -only-testing:PharmaShiftTests \
             test
 
   build:

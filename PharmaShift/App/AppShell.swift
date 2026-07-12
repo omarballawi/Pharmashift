@@ -112,6 +112,7 @@ private struct LearningSettingsView: View {
     @State private var deepSeekKey = ""
     @State private var keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "No DeepSeek key saved"
     @State private var checkingConnection = false
+    @State private var showsKeyStatus = false
 
     var body: some View {
         Form {
@@ -119,8 +120,14 @@ private struct LearningSettingsView: View {
                 SecureField("DeepSeek API key", text: $deepSeekKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .textContentType(.password)
+                PasteButton(payloadType: String.self) { strings in
+                    deepSeekKey = strings.first?.normalizedAPIKey ?? ""
+                }
+                .buttonStyle(.bordered)
                 HStack {
                     Button { saveDeepSeekKey() } label: { Label("Save key", systemImage: "key.fill") }
+                        .disabled(deepSeekKey.normalizedAPIKey.isEmpty)
                     Spacer()
                     Button(role: .destructive) { clearDeepSeekKey() } label: { Label("Clear", systemImage: "trash") }
                 }
@@ -151,15 +158,23 @@ private struct LearningSettingsView: View {
             }
         }
         .navigationTitle("Practice Preferences")
+        .onAppear { refreshKeyStatus() }
+        .alert("DeepSeek key", isPresented: $showsKeyStatus) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(keyStatus)
+        }
     }
 
     private func saveDeepSeekKey() {
         do {
-            try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey.trimmed)
+            try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
             deepSeekKey = ""
             keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "Key was not saved"
+            showsKeyStatus = true
         } catch {
             keyStatus = "Could not save key: \(error.localizedDescription)"
+            showsKeyStatus = true
         }
     }
 
@@ -167,6 +182,7 @@ private struct LearningSettingsView: View {
         DeepSeekKeyStore.shared.delete()
         deepSeekKey = ""
         keyStatus = "No DeepSeek key saved"
+        showsKeyStatus = true
     }
 
     private func checkConnection() {
@@ -174,11 +190,15 @@ private struct LearningSettingsView: View {
         Task {
             do {
                 let status = try await DeepSeekKeyStore.shared.testConnection()
-                await MainActor.run { keyStatus = status; checkingConnection = false }
+                await MainActor.run { keyStatus = status; checkingConnection = false; showsKeyStatus = true }
             } catch {
-                await MainActor.run { keyStatus = "Connection check failed: \(error.localizedDescription)"; checkingConnection = false }
+                await MainActor.run { keyStatus = "Connection check failed: \(error.localizedDescription)"; checkingConnection = false; showsKeyStatus = true }
             }
         }
+    }
+
+    private func refreshKeyStatus() {
+        keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "No DeepSeek key saved"
     }
 
     private var reminderBinding: Binding<Bool> {

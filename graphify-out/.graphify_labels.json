@@ -42,6 +42,18 @@
   "40": "DrugSearchResult",
   "41": "AppTheme",
   "42": ".importIfNeeded",
+  "43": "ImportStage",
   "44": ".containsObviousIdentifier",
-  "47": "MigrationFixtureTests.swift"
+  "45": "DosingFrequency",
+  "46": "ImportedDosingFrequency",
+  "47": "MigrationFixtureTests.swift",
+  "48": "CropViewportState",
+  "49": "LearningSettingsView",
+  "50": ".matches",
+  "51": ".generate",
+  "52": "ReportFile.swift",
+  "53": "ImageFlowDestination",
+  "54": "OnsetBand",
+  "55": "SaveAction",
+  "56": "ImageAcquisitionSource"
 }

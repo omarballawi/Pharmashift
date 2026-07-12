@@ -644,6 +644,9 @@ final class DailyActivity {
 
 extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+    var normalizedAPIKey: String {
+        unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) }.map { String($0) }.joined()
+    }
 
     var splitLines: [String] {
         components(separatedBy: .newlines).map(\.trimmed).filter { !$0.isEmpty }

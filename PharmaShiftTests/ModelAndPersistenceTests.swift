@@ -5,6 +5,10 @@ import XCTest
 
 @MainActor
 final class ModelAndPersistenceTests: XCTestCase {
+    func testAPIKeyNormalizationRemovesPastedWhitespace() {
+        XCTAssertEqual("  sk-test\n\t123  ".normalizedAPIKey, "sk-test123")
+    }
+
     func testClasslessDrugCanBecomeMasteredWithoutAClassQuestion() {
         let drug = Drug(scientificName: "Omeprazole", tradeNames: ["Gasec"], dosageForms: ["Capsule"])
         drug.masteryScientificName = true

@@ -1113,7 +1113,26 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     private let service = "com.renlyst.deepseek"
     private let account = "api-key"
 
+    enum KeyStoreError: LocalizedError, Equatable {
+        case keychain(OSStatus)
+        case readBackFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .keychain(let status):
+                let message = SecCopyErrorMessageString(status, nil) as String? ?? "unknown Keychain error"
+                return "Keychain error \(status): \(message)"
+            case .readBackFailed:
+                return "Keychain saved the key but could not read it back."
+            }
+        }
+    }
+
     func apiKey() -> String? {
+        try? storedAPIKey()
+    }
+
+    private func storedAPIKey() throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1122,31 +1141,34 @@ final class DeepSeekKeyStore: @unchecked Sendable {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeyStoreError.keychain(status) }
+        guard let data = item as? Data else { throw KeyStoreError.readBackFailed }
         return String(data: data, encoding: .utf8)
     }
 
     func save(apiKey: String) throws {
-        guard !apiKey.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        let apiKey = apiKey.normalizedAPIKey
+        guard !apiKey.isEmpty else { throw DrugImportError.missingDeepSeekKey }
         let data = Data(apiKey.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let update: [String: Any] = [kSecValueData as String: data]
-        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
-        if status == errSecItemNotFound {
-            var add = query
-            add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            let addStatus = SecItemAdd(add as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw DrugImportError.invalidResponse }
-        } else if status != errSecSuccess {
-            throw DrugImportError.invalidResponse
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(add as CFDictionary, nil)
+        if addStatus == errSecDuplicateItem {
+            let update = [kSecValueData as String: data]
+            let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+            guard updateStatus == errSecSuccess else { throw KeyStoreError.keychain(updateStatus) }
+        } else if addStatus != errSecSuccess {
+            throw KeyStoreError.keychain(addStatus)
         }
-        guard self.apiKey() == apiKey else { throw DrugImportError.invalidResponse }
+        guard try storedAPIKey() == apiKey else { throw KeyStoreError.readBackFailed }
     }
 
     func maskedKeyDescription() -> String? {
@@ -1155,7 +1177,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     }
 
     func testConnection(session: URLSession = .shared) async throws -> String {
-        guard let key = apiKey(), !key.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        guard let key = try storedAPIKey(), !key.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
         var request = URLRequest(url: URL(string: "https://api.deepseek.com/models")!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         let (_, response) = try await session.data(for: request)
@@ -1170,7 +1192,12 @@ final class DeepSeekKeyStore: @unchecked Sendable {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            #if DEBUG
+            print("DeepSeek key delete failed: \(status)")
+            #endif
+        }
     }
 }
 

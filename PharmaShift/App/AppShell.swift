@@ -110,7 +110,7 @@ private struct LearningSettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
-    @State private var keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "No DeepSeek key saved"
+    @State private var keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
     @State private var checkingConnection = false
     @State private var showsKeyStatus = false
 
@@ -138,6 +138,9 @@ private struct LearningSettingsView: View {
                 }
                 .disabled(checkingConnection)
                 Text(keyStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LabeledContent("App build", value: appBuild)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("DeepSeek receives compact trusted source text, local brand-name text when you ask it to resolve a match, and compact practice facts. Drug photos stay on device.")
@@ -170,7 +173,7 @@ private struct LearningSettingsView: View {
         do {
             try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
             deepSeekKey = ""
-            keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "Key was not saved"
+            keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
             showsKeyStatus = true
         } catch {
             keyStatus = "Could not save key: \(error.localizedDescription)"
@@ -198,7 +201,13 @@ private struct LearningSettingsView: View {
     }
 
     private func refreshKeyStatus() {
-        keyStatus = DeepSeekKeyStore.shared.maskedKeyDescription() ?? "No DeepSeek key saved"
+        keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+    }
+
+    private var appBuild: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build))"
     }
 
     private var reminderBinding: Binding<Bool> {

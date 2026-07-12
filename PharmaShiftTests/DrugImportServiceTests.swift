@@ -60,6 +60,35 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertFalse(text.localizedCaseInsensitiveContains("base64"))
     }
 
+    func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {
+        let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.")
+        let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
+        XCTAssertTrue(text.contains("\"max_tokens\":2200"))
+        XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
+        XCTAssertTrue(text.contains("does not use RxNorm, DailyMed, or openFDA"))
+        XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
+    }
+
+    func testAIDraftAlwaysNeedsReviewAndUsesConfirmedIdentity() throws {
+        let info = try DrugImportValidator.parseAIDraft(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet")
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
+        XCTAssertEqual(info.sourceQuality.sourceName, "DeepSeek AI draft")
+        XCTAssertEqual(info.sourceQuality.sourceURL, "")
+        XCTAssertTrue(info.sourceQuality.needsReview)
+        XCTAssertTrue(info.sourceQuality.notes.contains("Verify every clinical fact"))
+    }
+
+    func testKeyStoreFallsBackToProtectedDeviceStorage() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DeepSeekKeyStore(service: "test.\(UUID().uuidString)", fallbackDirectory: directory, allowsKeychain: false)
+        XCTAssertEqual(try store.save(apiKey: " sk-test\n123 "), .protectedFile)
+        XCTAssertEqual(store.apiKey(), "sk-test123")
+        XCTAssertTrue(store.savedKeyStatusDescription().contains("protected device storage"))
+        store.delete()
+        XCTAssertNil(store.apiKey())
+    }
+
     func testValidatorOverridesIdentityAndFallsBackInvalidEnumsToUnknown() throws {
         let json = """
         {

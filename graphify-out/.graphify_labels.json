@@ -55,5 +55,12 @@
   "53": "ImageFlowDestination",
   "54": "OnsetBand",
   "55": "SaveAction",
-  "56": "ImageAcquisitionSource"
+  "56": "ImageAcquisitionSource",
+  "57": "XCTest",
+  "58": "CropViewportState",
+  "59": "DrugEditorSection",
+  "60": "URL",
+  "62": "HalfLifeBand",
+  "63": "ImportSelection",
+  "73": "UIImage"
 }

@@ -216,6 +216,7 @@ enum DrugImportError: LocalizedError, Equatable {
     case invalidAIJSON
     case aiReturnedEmpty
     case unresolvedLocalBrand
+    case deepSeekHTTPStatus(Int)
 
     var errorDescription: String? {
         switch self {
@@ -226,6 +227,7 @@ enum DrugImportError: LocalizedError, Equatable {
         case .invalidAIJSON: "DeepSeek did not return valid JSON. Retry formatting from the same trusted source packet."
         case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry formatting from the same trusted source packet."
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
+        case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
         }
     }
 }
@@ -738,6 +740,51 @@ actor DeepSeekDrugImportService: DrugImportFormattingService {
     }
 }
 
+protocol FastDrugGatheringService: Sendable {
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo
+}
+
+actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
+    private let session: URLSession
+    private let keyStore: DeepSeekKeyStore
+
+    init(session: URLSession = .shared, keyStore: DeepSeekKeyStore = .shared) {
+        self.session = session
+        self.keyStore = keyStore
+    }
+
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
+        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        let request = try Self.makeRequest(apiKey: apiKey, identity: identity, packageText: packageText)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.deepSeekHTTPStatus(http.statusCode) }
+        let payload = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
+        guard let content = payload.choices.first?.message.content, !content.trimmed.isEmpty else { throw DrugImportError.aiReturnedEmpty }
+        return try DrugImportValidator.parseAIDraft(jsonString: content, confirmedIdentity: identity, packageText: packageText)
+    }
+
+    static func makeRequest(apiKey: String, identity: UserConfirmedDrugIdentity, packageText: String) throws -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(DeepSeekRequest(
+            model: DeepSeekDrugImportService.model,
+            messages: [
+                .init(role: "system", content: FastGatherPromptBuilder.systemPrompt),
+                .init(role: "user", content: FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText))
+            ],
+            thinking: .init(type: "disabled"),
+            responseFormat: .init(type: "json_object"),
+            temperature: 0,
+            maxTokens: 2_200,
+            stream: false
+        ))
+        return request
+    }
+}
+
 private struct DeepSeekRequest: Encodable {
     struct Message: Encodable { var role: String; var content: String }
     struct Thinking: Encodable { var type: String }
@@ -857,6 +904,11 @@ enum PromptBuilder {
         Fill my app sections using Arabic explanations with English medical terms.
 
         Output JSON only using this exact structure:
+        \(cardJSONSchema)
+        """
+    }
+
+    static let cardJSONSchema = """
         {
           "identity": {"scientificName": "", "tradeNames": [], "system": "", "class": "", "dosageForm": "", "strength": "", "route": ""},
           "usesMechanism": {"mainUses": [], "simpleMechanismArabic": "", "mechanismKeywords": []},
@@ -870,25 +922,39 @@ enum PromptBuilder {
         }
         """
     }
+private enum FastGatherPromptBuilder {
+    static let systemPrompt = """
+    You are creating an AI-generated pharmacy learning draft. It is not a trusted source and is never patient-specific advice.
+    Use the confirmed fields and package text first. You may use general model knowledge only to fill clearly established drug-card facts. Do not invent exact values; use "unknown" when unsure. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+    """
+
+    static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
+        """
+        Create a complete, compact pharmacy learning card draft. This path deliberately does not use RxNorm, DailyMed, or openFDA.
+
+        Confirmed fields:
+        Scientific name: \(identity.scientificName)
+        Trade name(s): \(identity.tradeNames.joined(separator: ", "))
+        Strength: \(identity.strength)
+        Dosage form: \(identity.dosageForm)
+        Route: \(identity.route)
+        System/chapter: \(identity.system)
+
+        OCR or pasted package details (may be incomplete):
+        \(packageText.prefix(2_000))
+
+        Infer class only when confident; otherwise leave it empty. Give half-life, onset, duration, dosing frequency, safety, and counseling only when reasonably known; otherwise say "unknown" or "check product leaflet/local pharmacist". The result must be a review-required draft.
+
+        Output JSON only using this exact structure:
+        \(PromptBuilder.cardJSONSchema)
+        """
+    }
 }
 
 enum DrugImportValidator {
     static func parse(jsonString: String, confirmedIdentity: UserConfirmedDrugIdentity, packet: TrustedDrugSourcePacket) throws -> ImportedDrugInfo {
-        let trimmed = jsonString.trimmed
-        guard trimmed.first == "{", trimmed.last == "}" else { throw DrugImportError.invalidAIJSON }
-        guard let data = trimmed.data(using: .utf8) else { throw DrugImportError.invalidAIJSON }
-        var info: ImportedDrugInfo
-        do { info = try JSONDecoder().decode(ImportedDrugInfo.self, from: data) }
-        catch { throw DrugImportError.invalidAIJSON }
-        info.identity = ImportedIdentity(
-            scientificName: confirmedIdentity.scientificName,
-            tradeNames: confirmedIdentity.tradeNames,
-            system: confirmedIdentity.system,
-            class: info.identity.class.trimmed,
-            dosageForm: confirmedIdentity.dosageForm,
-            strength: confirmedIdentity.strength,
-            route: confirmedIdentity.route
-        )
+        var info = try decodedInfo(jsonString)
+        info.identity = applyingConfirmedIdentity(to: info.identity, confirmedIdentity: confirmedIdentity)
         info.sourceQuality.sourceName = packet.sourceName
         info.sourceQuality.sourceURL = packet.sourceURL
         var missing = info.sourceQuality.missingImportantFields
@@ -902,6 +968,33 @@ enum DrugImportValidator {
         info.sourceQuality.missingImportantFields = missing
         if !missing.isEmpty { info.sourceQuality.needsReview = true }
         return info
+    }
+
+    static func parseAIDraft(jsonString: String, confirmedIdentity: UserConfirmedDrugIdentity, packageText: String) throws -> ImportedDrugInfo {
+        var info = try decodedInfo(jsonString)
+        info.identity = applyingConfirmedIdentity(to: info.identity, confirmedIdentity: confirmedIdentity)
+        var missing = info.sourceQuality.missingImportantFields
+        if packageText.trimmed.isEmpty { missing.append("package text") }
+        if info.identity.class.isEmpty { missing.append("drug class") }
+        info.sourceQuality = SourceQuality(
+            sourceName: "DeepSeek AI draft",
+            sourceURL: "",
+            needsReview: true,
+            missingImportantFields: Array(Set(missing)).sorted(),
+            notes: "AI-generated from your confirmed fields and package text. Verify every clinical fact against the product leaflet or pharmacist before use."
+        )
+        return info
+    }
+
+    private static func decodedInfo(_ jsonString: String) throws -> ImportedDrugInfo {
+        let trimmed = jsonString.trimmed
+        guard trimmed.first == "{", trimmed.last == "}" else { throw DrugImportError.invalidAIJSON }
+        guard let data = trimmed.data(using: .utf8), let info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
+        return info
+    }
+
+    private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
+        ImportedIdentity(scientificName: identity.scientificName, tradeNames: identity.tradeNames, system: identity.system, class: imported.class.trimmed, dosageForm: identity.dosageForm, strength: identity.strength, route: identity.route)
     }
 }
 
@@ -1110,8 +1203,17 @@ actor MockDeepSeekDrugImportService: DrugImportFormattingService {
 
 final class DeepSeekKeyStore: @unchecked Sendable {
     static let shared = DeepSeekKeyStore()
-    private let service = "com.renlyst.deepseek"
-    private let account = "api-key"
+    private let service: String
+    private let account: String
+    private let fallbackDirectory: URL
+    private let allowsKeychain: Bool
+
+    enum StorageLocation: String, Equatable, Sendable {
+        case keychain
+        case protectedFile
+
+        var label: String { self == .keychain ? "iOS Keychain" : "protected device storage" }
+    }
 
     enum KeyStoreError: LocalizedError, Equatable {
         case keychain(OSStatus)
@@ -1128,8 +1230,36 @@ final class DeepSeekKeyStore: @unchecked Sendable {
         }
     }
 
-    func apiKey() -> String? {
-        try? storedAPIKey()
+    init(service: String = "com.renlyst.deepseek", account: String = "api-key", fallbackDirectory: URL? = nil, allowsKeychain: Bool = true) {
+        self.service = service
+        self.account = account
+        self.fallbackDirectory = fallbackDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        self.allowsKeychain = allowsKeychain
+    }
+
+    func apiKey() -> String? { try? storedKey()?.value }
+
+    func savedKeyStatusDescription() -> String {
+        do {
+            guard let stored = try storedKey(), !stored.value.trimmed.isEmpty else { return "No DeepSeek key saved" }
+            return "Saved key ••••\(stored.value.suffix(4)) via \(stored.location.label)"
+        } catch {
+            return "Saved key is unavailable: \(error.localizedDescription)"
+        }
+    }
+
+    private func storedKey() throws -> (value: String, location: StorageLocation)? {
+        var keychainError: Error?
+        if allowsKeychain {
+            do {
+                if let key = try storedAPIKey() { return (key, .keychain) }
+            } catch {
+                keychainError = error
+            }
+        }
+        if let key = try storedFallbackKey() { return (key, .protectedFile) }
+        if let keychainError { throw keychainError }
+        return nil
     }
 
     private func storedAPIKey() throws -> String? {
@@ -1148,9 +1278,25 @@ final class DeepSeekKeyStore: @unchecked Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    func save(apiKey: String) throws {
+    @discardableResult
+    func save(apiKey: String) throws -> StorageLocation {
         let apiKey = apiKey.normalizedAPIKey
         guard !apiKey.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        if allowsKeychain {
+            do {
+                try saveToKeychain(apiKey)
+                deleteFallback()
+                return .keychain
+            } catch {
+                // Re-signed/sideloaded applications can lack a Keychain access group.
+            }
+        }
+        try saveToFallback(apiKey)
+        guard try storedFallbackKey() == apiKey else { throw KeyStoreError.readBackFailed }
+        return .protectedFile
+    }
+
+    private func saveToKeychain(_ apiKey: String) throws {
         let data = Data(apiKey.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -1172,21 +1318,23 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     }
 
     func maskedKeyDescription() -> String? {
-        guard let key = apiKey(), !key.trimmed.isEmpty else { return nil }
-        return "Saved key ••••\(key.suffix(4))"
+        guard let stored = try? storedKey(), !stored.value.trimmed.isEmpty else { return nil }
+        return "Saved key ••••\(stored.value.suffix(4))"
     }
 
     func testConnection(session: URLSession = .shared) async throws -> String {
-        guard let key = try storedAPIKey(), !key.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        guard let stored = try storedKey(), !stored.value.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
         var request = URLRequest(url: URL(string: "https://api.deepseek.com/models")!)
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(stored.value)", forHTTPHeaderField: "Authorization")
         let (_, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
-        return "DeepSeek connection is ready"
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.deepSeekHTTPStatus(http.statusCode) }
+        return "DeepSeek connection is ready (\(stored.location.label))"
     }
 
     func delete() {
+        deleteFallback()
+        guard allowsKeychain else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1199,6 +1347,26 @@ final class DeepSeekKeyStore: @unchecked Sendable {
             #endif
         }
     }
+
+    private var fallbackURL: URL { fallbackDirectory.appendingPathComponent("deepseek-api-key.bin", isDirectory: false) }
+
+    private func storedFallbackKey() throws -> String? {
+        let url = fallbackURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        guard let key = String(data: try Data(contentsOf: url), encoding: .utf8) else { throw KeyStoreError.readBackFailed }
+        return key
+    }
+
+    private func saveToFallback(_ apiKey: String) throws {
+        try FileManager.default.createDirectory(at: fallbackDirectory, withIntermediateDirectories: true)
+        var url = fallbackURL
+        try Data(apiKey.utf8).write(to: url, options: [.atomic, .completeFileProtection])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try url.setResourceValues(values)
+    }
+
+    private func deleteFallback() { try? FileManager.default.removeItem(at: fallbackURL) }
 }
 
 private extension String {

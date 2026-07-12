@@ -27,6 +27,11 @@ private enum ImportStage: Int, CaseIterable {
     }
 }
 
+private enum ImportMode {
+    case trusted
+    case aiDraft
+}
+
 struct DrugImportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -59,7 +64,9 @@ struct DrugImportView: View {
     @State private var opensSavedDrug = false
     @State private var retryCount = 0
     @State private var resolvedIdentity: ResolvedDrugIdentity?
+    @State private var importMode: ImportMode = .trusted
     private let identityResolver: any DrugIdentityResolving = DeepSeekIdentityResolver()
+    private let fastGatherService: any FastDrugGatheringService = DeepSeekFastDrugGatherService()
 
     init(
         drug: Drug? = nil,
@@ -152,7 +159,9 @@ struct DrugImportView: View {
             onSearch: searchTrustedSources,
             onChoose: loadSource,
             resolvedIdentity: resolvedIdentity,
-            onAcceptResolvedIdentity: acceptResolvedIdentity
+            onAcceptResolvedIdentity: acceptResolvedIdentity,
+            packageText: $detectedText,
+            onFastGather: fastGather
         )
         case .preview:
             if let importedInfo {
@@ -339,6 +348,7 @@ struct DrugImportView: View {
     }
 
     private func loadSource(_ result: DrugSearchResult) {
+        importMode = .trusted
         selectedResult = result
         selectedProviderName = result.sourceName
         guard let provider = providers.first(where: { $0.sourceName == result.sourceName }) else { return }
@@ -372,13 +382,41 @@ struct DrugImportView: View {
     }
 
     private func retryAI() {
-        guard let packet = trustedPacket else { return }
         isLoading = true
         retryCount = 0
         Task {
             do {
-                let info = try await formatWithRetry(packet: packet)
+                let info: ImportedDrugInfo
+                switch importMode {
+                case .trusted:
+                    guard let packet = trustedPacket else { throw DrugImportError.invalidResponse }
+                    info = try await formatWithRetry(packet: packet)
+                case .aiDraft:
+                    info = try await fastGatherService.gather(identity: identity, packageText: detectedText)
+                }
                 await MainActor.run { importedInfo = info; isLoading = false }
+            } catch {
+                await MainActor.run { message = error.localizedDescription; isLoading = false }
+            }
+        }
+    }
+
+    private func fastGather() {
+        guard identity.isComplete else { message = "Confirm the drug name before creating an AI draft."; return }
+        guard !detectedText.trimmed.isEmpty else { message = "Paste package details or keep the OCR text so Fast AI Gather has context."; return }
+        isLoading = true
+        retryCount = 0
+        importMode = .aiDraft
+        Task {
+            do {
+                let info = try await fastGatherService.gather(identity: identity, packageText: detectedText)
+                await MainActor.run {
+                    trustedPacket = nil
+                    importedInfo = info
+                    selection = DrugImportApplier.defaultSelection(info: info, drug: drug)
+                    stage = .preview
+                    isLoading = false
+                }
             } catch {
                 await MainActor.run { message = error.localizedDescription; isLoading = false }
             }
@@ -392,7 +430,7 @@ struct DrugImportView: View {
         DrugImportApplier.apply(importedInfo, selection: selection, to: target, imageData: imageData, thumbnailData: thumbnailData)
         target.additionalImageData = additionalImageData
         target.additionalThumbnailData = additionalThumbnailData
-        target.trustedSourceWasTruncated = trustedPacket?.isTruncated == true
+        target.trustedSourceWasTruncated = importMode == .trusted && trustedPacket?.isTruncated == true
         do {
             try context.save()
             savedDrug = target
@@ -501,6 +539,8 @@ private struct ImportSourceSearchView: View {
     let onChoose: (DrugSearchResult) -> Void
     let resolvedIdentity: ResolvedDrugIdentity?
     let onAcceptResolvedIdentity: (ResolvedDrugIdentity) -> Void
+    @Binding var packageText: String
+    let onFastGather: () -> Void
 
     var body: some View {
         List {
@@ -509,6 +549,25 @@ private struct ImportSourceSearchView: View {
                 Button(action: onSearch) { Label("Search again", systemImage: "magnifyingglass") }
             } footer: {
                 Text("Source priority: your confirmed name, RxNorm normalization, DailyMed labels, then openFDA fallback. Iraqi local trade names may not match perfectly.")
+            }
+            Section {
+                Text("Paste the package or leaflet details below. Renlyst will use these details plus the confirmed fields to create a full AI draft without contacting the trusted-source providers.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $packageText)
+                    .frame(minHeight: 130)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button(action: onFastGather) {
+                    Label("Create AI draft from package details", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("fastGatherButton")
+            } header: {
+                Text("Fast AI Gather — review required")
+            } footer: {
+                Text("Every result is marked AI-generated and needs verification against the product leaflet or a pharmacist before use.")
             }
             Section(header: Text("Trusted source matches")) {
                 if let resolvedIdentity {
@@ -562,6 +621,11 @@ private struct ImportPreviewView: View {
     var body: some View {
         List {
             Section("Source quality") {
+                if info.sourceQuality.sourceName == "DeepSeek AI draft" {
+                    Label("AI-generated draft — verify before use", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
                 HStack {
                     Label(info.sourceQuality.sourceName, systemImage: info.sourceQuality.needsReview ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
                         .foregroundStyle(info.sourceQuality.needsReview ? .orange : .green)

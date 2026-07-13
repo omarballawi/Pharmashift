@@ -40,6 +40,7 @@ struct DrugImportView: View {
     let drug: Drug?
     let providers: [any DrugSourceProvider]
     let aiService: any DrugImportFormattingService
+    let startsInAIMode: Bool
 
     @State private var stage: ImportStage = .photo
     @State private var photoItems: [PhotosPickerItem] = []
@@ -71,11 +72,15 @@ struct DrugImportView: View {
     init(
         drug: Drug? = nil,
         providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
-        aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault()
+        aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault(),
+        startsInAIMode: Bool = false
     ) {
         self.drug = drug
         self.providers = providers
         self.aiService = aiService
+        self.startsInAIMode = startsInAIMode
+        _stage = State(initialValue: startsInAIMode ? .confirm : .photo)
+        _importMode = State(initialValue: startsInAIMode ? .aiDraft : .trusted)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)
         _additionalImageData = State(initialValue: drug?.additionalImageData ?? [])
@@ -97,7 +102,7 @@ struct DrugImportView: View {
             Divider()
             content
         }
-        .navigationTitle("Trusted Import")
+        .navigationTitle(startsInAIMode ? "Generate with AI" : "Trusted Import")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -118,7 +123,7 @@ struct DrugImportView: View {
             if isLoading {
                 VStack(spacing: 10) {
                     ProgressView()
-                    Text("Working from trusted source text...")
+                    Text(startsInAIMode ? "Building your complete learning card..." : "Working from trusted source text...")
                         .font(.subheadline.weight(.semibold))
                 }
                 .padding()
@@ -148,9 +153,19 @@ struct DrugImportView: View {
                 stage = .confirm
             }
         )
-        case .confirm: ConfirmDrugIdentityView(identity: $identity, canContinue: identity.isComplete) {
-            stage = .source
-            searchTrustedSources()
+        case .confirm: ConfirmDrugIdentityView(
+            identity: $identity,
+            canContinue: identity.isComplete,
+            actionTitle: startsInAIMode ? "Generate complete card" : "Search trusted sources",
+            actionIcon: startsInAIMode ? "sparkles.rectangle.stack.fill" : "checkmark.seal.fill",
+            isAIMode: startsInAIMode
+        ) {
+            if startsInAIMode {
+                fastGather()
+            } else {
+                stage = .source
+                searchTrustedSources()
+            }
         }
         case .source: ImportSourceSearchView(
             query: identity.scientificName,
@@ -180,7 +195,7 @@ struct DrugImportView: View {
     private var stageHeader: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(ImportStage.allCases, id: \.self) { item in
+                ForEach(visibleStages, id: \.self) { item in
                     Label(item.title, systemImage: item.icon)
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)
@@ -193,6 +208,10 @@ struct DrugImportView: View {
             .padding(.vertical, 10)
         }
         .background(.bar)
+    }
+
+    private var visibleStages: [ImportStage] {
+        startsInAIMode ? [.confirm, .preview, .challenge] : ImportStage.allCases
     }
 
     private var cameraPresentation: Binding<Bool> {
@@ -403,7 +422,6 @@ struct DrugImportView: View {
 
     private func fastGather() {
         guard identity.isComplete else { message = "Confirm the drug name before creating an AI draft."; return }
-        guard !detectedText.trimmed.isEmpty else { message = "Paste package details or keep the OCR text so Fast AI Gather has context."; return }
         isLoading = true
         retryCount = 0
         importMode = .aiDraft
@@ -494,6 +512,9 @@ private struct ImportFromPhotoView: View {
 private struct ConfirmDrugIdentityView: View {
     @Binding var identity: UserConfirmedDrugIdentity
     let canContinue: Bool
+    let actionTitle: String
+    let actionIcon: String
+    let isAIMode: Bool
     let onContinue: () -> Void
 
     private var tradeNamesText: Binding<String> {
@@ -515,13 +536,15 @@ private struct ConfirmDrugIdentityView: View {
                     ForEach(Chapter.allCases) { Text($0.rawValue).tag($0.rawValue) }
                 }
             } header: {
-                Text("Name required before import")
+                Text(isAIMode ? "Tell AI which drug to build" : "Name required before import")
             } footer: {
-                Text("Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
+                Text(isAIMode
+                     ? "Enter a scientific or trade name. No source is required; AI will build the complete card and you choose what to save."
+                     : "Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
             }
             Section {
                 Button(action: onContinue) {
-                    Label("Search trusted sources", systemImage: "checkmark.seal.fill").frame(maxWidth: .infinity, minHeight: 48)
+                    Label(actionTitle, systemImage: actionIcon).frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canContinue)
@@ -621,10 +644,10 @@ private struct ImportPreviewView: View {
     var body: some View {
         List {
             Section("Source quality") {
-                if info.sourceQuality.sourceName == "DeepSeek AI draft" {
-                    Label("AI-generated draft — verify before use", systemImage: "exclamationmark.triangle.fill")
+                if info.sourceQuality.sourceName == "Generated with AI" {
+                    Label("Generated with AI", systemImage: "sparkles")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.tint)
                 }
                 HStack {
                     Label(info.sourceQuality.sourceName, systemImage: info.sourceQuality.needsReview ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
@@ -646,7 +669,12 @@ private struct ImportPreviewView: View {
             sectionToggle(.counseling) { counselingPreview }
             sectionToggle(.arabicExplanation) { arabicText(info.arabicExplanation.shortExplanation); arabicText(info.arabicExplanation.memoryStory); arabicText(info.arabicExplanation.importantNote) }
             sectionToggle(.adverseEffects) { previewList("Common", info.adverseEffects.common); previewList("Serious", info.adverseEffects.serious) }
-            sectionToggle(.memorization) { previewList("Must know", info.memorization.mustKnow); flashcards(info.memorization.flashcards); arabicText(info.memorization.oneLineSummaryArabic) }
+            sectionToggle(.memorization) {
+                previewList("Must know", info.memorization.mustKnow)
+                flashcards(info.memorization.flashcards)
+                reviewQuestions
+                arabicText(info.memorization.oneLineSummaryArabic)
+            }
             Section {
                 Button(action: onSave) { Label("Save selected sections", systemImage: "square.and.arrow.down.fill").frame(maxWidth: .infinity, minHeight: 48) }
                     .buttonStyle(.borderedProminent)
@@ -760,6 +788,27 @@ private struct ImportPreviewView: View {
         }
     }
 
+    private var reviewQuestions: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Drug Review Pack").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            ForEach(info.memorization.reviewQuestions ?? [], id: \.prompt) { question in
+                Toggle(isOn: Binding(
+                    get: { selection.reviewQuestionPrompts?.contains(question.prompt) ?? true },
+                    set: { enabled in
+                        var prompts = selection.reviewQuestionPrompts ?? Set((info.memorization.reviewQuestions ?? []).map(\.prompt))
+                        if enabled { prompts.insert(question.prompt) } else { prompts.remove(question.prompt) }
+                        selection.reviewQuestionPrompts = prompts
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(question.prompt).font(.caption.weight(.semibold))
+                        Text(question.choices.joined(separator: " • ")).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+            }
+        }
+    }
+
     private func arabicText(_ value: String) -> some View {
         Group {
             if !value.trimmed.isEmpty {
@@ -778,65 +827,32 @@ private struct ImportPreviewView: View {
 private struct ImportMemorizationChallengeView: View {
     let drug: Drug
     let onDone: () -> Void
-    @State private var scientific = ""
-    @State private var drugClass = ""
-    @State private var warning = ""
-    @State private var graded = false
-
-    private var scientificOK: Bool { scientific.trimmed.localizedCaseInsensitiveCompare(drug.scientificName.trimmed) == .orderedSame }
-    private var classOK: Bool { drug.drugClass.trimmed.isEmpty || drugClass.trimmed.localizedCaseInsensitiveCompare(drug.drugClass.trimmed) == .orderedSame }
-    private var warningOK: Bool {
-        guard let expected = drug.warnings.first?.trimmed, !expected.isEmpty else { return false }
-        return warning.localizedCaseInsensitiveContains(expected) || expected.localizedCaseInsensitiveContains(warning.trimmed)
-    }
 
     var body: some View {
         Form {
             Section {
-                Label("Quick memory challenge", systemImage: "brain.head.profile")
+                Label("Your card is ready", systemImage: "checkmark.seal.fill")
                     .font(.headline)
-                Text("Three tiny checks before this card joins your shelf memory.")
+                Text("Lock in the new card with its AI-generated review pack. Questions use quick choices except drug-name spelling.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            Section("Answer from memory") {
-                TextField("What is the scientific name?", text: $scientific)
-                if !drug.drugClass.trimmed.isEmpty { TextField("What is the class?", text: $drugClass) }
-                TextField("What is the main warning?", text: $warning, axis: .vertical).lineLimit(2...4)
-            }
-            if graded {
-                Section("Result") {
-                    resultRow("Scientific name", scientificOK)
-                    if !drug.drugClass.trimmed.isEmpty { resultRow("Class", classOK) }
-                    resultRow("Main warning", warningOK)
-                    Text(drug.isConfusing ? "Marked weak/confusing for extra practice." : "Nice. Mastery increased.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Section("Review pack") {
+                LabeledContent("Questions", value: "\(drug.generatedReviewQuestions.count)")
+                LabeledContent("Must-know facts", value: "\(drug.mustKnow.count)")
+                NavigationLink { PracticeSessionView(initialDrug: drug) } label: {
+                    Label("Start quick review", systemImage: "play.fill")
                 }
             }
             Section {
-                Button(graded ? "Open Drug Card" : "Check answers") {
-                    if graded { onDone() } else { grade() }
+                Button("Open Drug Card") {
+                    onDone()
                 }
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity, minHeight: 48)
             }
         }
         .accessibilityIdentifier("trustedImport.challenge")
-    }
-
-    private func resultRow(_ title: String, _ correct: Bool) -> some View {
-        Label(title, systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
-            .foregroundStyle(correct ? .green : .orange)
-    }
-
-    private func grade() {
-        drug.masteryScientificName = scientificOK
-        if !drug.drugClass.trimmed.isEmpty { drug.masteryClass = classOK }
-        drug.masteryWarning = warningOK
-        drug.isConfusing = !(scientificOK && classOK && warningOK)
-        drug.recalculateConfidence()
-        graded = true
     }
 }
 

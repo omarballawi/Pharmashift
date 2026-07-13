@@ -12,11 +12,11 @@ final class PracticeEngineTests: XCTestCase {
         }
     }
 
-    func testMultipleChoiceFallsBackToRecallWithoutBelievableDistractors() {
+    func testNamePracticeUsesTextEntryWithoutBelievableDistractors() {
         let drug = sampleDrugs()[0]
         let questions = PracticeGenerator.generate(mode: .tradeToScientific, drugs: [drug])
         XCTAssertEqual(questions.count, 5)
-        XCTAssertTrue(questions.allSatisfy { $0.interaction == .recall && $0.choices.isEmpty })
+        XCTAssertTrue(questions.allSatisfy { $0.interaction == .textEntry && $0.choices.isEmpty })
     }
 
     func testSystemPracticeUsesOnlyRequestedChapter() {

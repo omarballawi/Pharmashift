@@ -60,7 +60,7 @@ actor DeepSeekPracticeService {
             "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.tradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.flashcards.prefix(2).joined(separator: " | "))"
         }.joined(separator: "\n")
         let prompt = """
-        Return JSON only. Create exactly five short, ADHD-friendly pharmacy learning questions using only these local drug facts. Focus on weak/due drugs. Each question must reference sourceDrugID, have a short prompt, exact answer, optional 3-4 choices with the answer included, a one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent clinical facts, patient advice, doses, or cases.
+        Return JSON only. Create exactly five short, ADHD-friendly pharmacy learning questions using only these local drug facts. Focus on weak/due drugs. Scientific name and Trade name questions require typed spelling and must have no choices. Every other question must be either four-option MCQ or True/False. Each question must reference sourceDrugID, have a short prompt, exact answer, choices when required, a one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent clinical facts, patient advice, doses, or cases.
         {"questions":[{"sourceDrugID":"UUID","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
         Library:\n\(snapshots)
         """
@@ -69,9 +69,23 @@ actor DeepSeekPracticeService {
         let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id.uuidString, $0) })
         let questions = try payload.questions.map { item -> PracticeQuestion in
             guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { throw DrugImportError.invalidAIJSON }
-            let choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
-            let interaction: PracticeInteraction = choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) ? .multipleChoice : .recall
-            return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: item.prompt.trimmed, correctAnswer: item.answer.trimmed, choices: interaction == .multipleChoice ? choices : [], explanation: item.explanation?.trimmed, questionType: QuestionType(rawValue: item.questionType) ?? .use, interaction: interaction)
+            let questionType = QuestionType(rawValue: item.questionType) ?? .use
+            var choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
+            let interaction: PracticeInteraction
+            var prompt = item.prompt.trimmed
+            var answer = item.answer.trimmed
+            if questionType == .scientificName || questionType == .tradeName {
+                choices = []
+                interaction = .textEntry
+            } else if choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) {
+                interaction = Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) ? .trueFalse : .multipleChoice
+            } else {
+                prompt = "True or false: \(answer)"
+                answer = "True"
+                choices = ["True", "False"]
+                interaction = .trueFalse
+            }
+            return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: prompt, correctAnswer: answer, choices: choices, explanation: item.explanation?.trimmed, questionType: questionType, interaction: interaction)
         }
         guard questions.count == 5 else { throw DrugImportError.invalidAIJSON }
         let fingerprint = candidates.map { "\($0.id.uuidString):\($0.dateAdded.timeIntervalSince1970)" }.joined(separator: "|")

@@ -150,6 +150,8 @@ enum ReviewRating: String, Codable, CaseIterable, Identifiable {
 
 enum PracticeInteraction: String, Codable {
     case multipleChoice
+    case trueFalse
+    case textEntry
     case recall
 }
 
@@ -170,6 +172,63 @@ struct PracticeQuestion: Identifiable, Codable, Equatable {
         self.id = id; self.drugID = drugID; self.drugName = drugName; self.prompt = prompt
         self.correctAnswer = correctAnswer; self.choices = choices; self.explanation = explanation
         self.questionType = questionType; self.interaction = interaction; self.imageData = imageData; self.caseID = caseID
+    }
+}
+
+struct GeneratedReviewQuestion: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var prompt: String
+    var choices: [String]
+    var correctAnswer: String
+    var explanation: String
+    var questionTypeRaw: String
+    var interactionRaw: String
+    var relatedField: String
+    var difficulty: String
+
+    init(
+        id: UUID = UUID(),
+        prompt: String,
+        choices: [String],
+        correctAnswer: String,
+        explanation: String,
+        questionType: QuestionType,
+        interaction: PracticeInteraction = .multipleChoice,
+        relatedField: String = "",
+        difficulty: String = "medium"
+    ) {
+        self.id = id
+        self.prompt = prompt
+        self.choices = choices
+        self.correctAnswer = correctAnswer
+        self.explanation = explanation
+        self.questionTypeRaw = questionType.rawValue
+        self.interactionRaw = interaction.rawValue
+        self.relatedField = relatedField
+        self.difficulty = difficulty
+    }
+
+    var questionType: QuestionType { QuestionType(rawValue: questionTypeRaw) ?? .use }
+    var interaction: PracticeInteraction { PracticeInteraction(rawValue: interactionRaw) ?? .multipleChoice }
+}
+
+struct MemoryItemState: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID = UUID()
+    var fieldRaw: String
+    var difficulty: Double = 5
+    var stabilityDays: Double = 0.5
+    var retrievability: Double = 1
+    var dueDate: Date = .now
+    var lastReviewed: Date?
+    var repetitions: Int = 0
+    var lapses: Int = 0
+
+    var field: QuestionType { QuestionType(rawValue: fieldRaw) ?? .use }
+    var strengthLabel: String {
+        if repetitions == 0 { return "New" }
+        if retrievability < 0.55 { return "Weak" }
+        if stabilityDays < 7 { return "Medium" }
+        return "Strong"
     }
 }
 
@@ -284,6 +343,8 @@ final class Drug {
     var seriousSideEffects: [String] = []
     var mustKnow: [String] = []
     var flashcards: [String] = []
+    var reviewQuestionsJSON: String = ""
+    var memoryItemsJSON: String = ""
     var oneLineSummaryArabic: String = ""
     var sourceNeedsReview: Bool = false
     var sourceMissingFields: [String] = []
@@ -435,6 +496,35 @@ final class Drug {
 
     var firstTradeName: String { tradeNames.first ?? "No trade name yet" }
     var packageImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
+    var generatedReviewQuestions: [GeneratedReviewQuestion] {
+        get {
+            guard let data = reviewQuestionsJSON.data(using: .utf8) else { return [] }
+            return (try? JSONDecoder().decode([GeneratedReviewQuestion].self, from: data)) ?? []
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue), let value = String(data: data, encoding: .utf8) else {
+                reviewQuestionsJSON = ""
+                return
+            }
+            reviewQuestionsJSON = value
+        }
+    }
+
+    var memoryItems: [MemoryItemState] {
+        get {
+            if let data = memoryItemsJSON.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([MemoryItemState].self, from: data),
+               !decoded.isEmpty { return decoded }
+            return QuestionType.allCases.filter { $0 != .casePractice }.map { MemoryItemState(fieldRaw: $0.rawValue) }
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue), let value = String(data: data, encoding: .utf8) else {
+                memoryItemsJSON = ""
+                return
+            }
+            memoryItemsJSON = value
+        }
+    }
 
     var masteryCount: Int {
         [masteryScientificName, masteryTradeName, masteryClass, masteryUse, masteryWarning, masteryCounseling]

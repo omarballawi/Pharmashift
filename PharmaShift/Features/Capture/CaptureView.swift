@@ -31,6 +31,7 @@ struct CaptureView: View {
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
     @State private var showsTrustedImport = false
+    @State private var showsAIGenerator = false
     @FocusState private var focus: FocusField?
 
     private var canSave: Bool {
@@ -41,16 +42,29 @@ struct CaptureView: View {
     var body: some View {
         Form {
             Section {
+                Button { showsAIGenerator = true } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Label("Generate complete card with AI", systemImage: "sparkles.rectangle.stack.fill")
+                            .font(.headline)
+                        Text("Enter a name, review every section, then save the facts and questions you want.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(theme.tint)
+                .accessibilityIdentifier("capture.generateAI")
+
                 Button { showsTrustedImport = true } label: {
                     Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(theme.tint)
+                .buttonStyle(.bordered)
                 Text("Use this when you want OCR, trusted-source search, DeepSeek formatting, preview, and a memory challenge.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
+            } header: { Text("Choose how to add") }
 
             Section {
                 DrugPhotoGalleryView(images: currentImages, height: 150) { removePhoto(at: $0) }
@@ -152,6 +166,9 @@ struct CaptureView: View {
         }
         .sheet(isPresented: $showsTrustedImport) {
             NavigationStack { DrugImportView() }
+        }
+        .sheet(isPresented: $showsAIGenerator) {
+            NavigationStack { DrugImportView(startsInAIMode: true) }
         }
         .alert("Renlyst", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }

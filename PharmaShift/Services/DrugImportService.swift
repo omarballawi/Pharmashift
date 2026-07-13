@@ -122,6 +122,9 @@ struct ImportedPK: Codable, Equatable, Sendable {
     var prodrugStatus: ImportedProdrugStatus
     var excretionRoute: ImportedExcretionRoute
     var pkMemoryLineArabic: String
+    var timesPerDay: Int? = nil
+    var metabolism: String? = nil
+    var excretionNotes: String? = nil
 }
 
 struct ImportedSafety: Codable, Equatable, Sendable {
@@ -173,6 +176,17 @@ struct ImportedMemorization: Codable, Equatable, Sendable {
     var mustKnow: [String]
     var flashcards: [Flashcard]
     var oneLineSummaryArabic: String
+    var reviewQuestions: [GeneratedReviewQuestionDTO]? = nil
+}
+
+struct GeneratedReviewQuestionDTO: Codable, Equatable, Sendable {
+    var prompt: String
+    var choices: [String]
+    var correctAnswer: String
+    var explanation: String
+    var questionType: String
+    var relatedField: String
+    var difficulty: String
 }
 
 struct Flashcard: Codable, Equatable, Sendable, Identifiable {
@@ -205,6 +219,7 @@ enum ImportSection: String, Codable, CaseIterable, Identifiable, Sendable {
 
 struct ImportSelection: Equatable, Sendable {
     var sections: Set<ImportSection>
+    var reviewQuestionPrompts: Set<String>? = nil
     func contains(_ section: ImportSection) -> Bool { sections.contains(section) }
 }
 
@@ -224,8 +239,8 @@ enum DrugImportError: LocalizedError, Equatable {
         case .invalidResponse: "The trusted source returned an unexpected response. Please try again."
         case .parsingFailed: "The trusted source label could not be read."
         case .missingDeepSeekKey: "Add your DeepSeek API key in Settings before using AI formatting."
-        case .invalidAIJSON: "DeepSeek did not return valid JSON. Retry formatting from the same trusted source packet."
-        case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry formatting from the same trusted source packet."
+        case .invalidAIJSON: "DeepSeek did not return a complete valid card. Retry generation."
+        case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry generation."
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
         }
@@ -778,7 +793,7 @@ actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
             thinking: .init(type: "disabled"),
             responseFormat: .init(type: "json_object"),
             temperature: 0,
-            maxTokens: 2_200,
+            maxTokens: 4_500,
             stream: false
         ))
         return request
@@ -912,20 +927,22 @@ enum PromptBuilder {
         {
           "identity": {"scientificName": "", "tradeNames": [], "system": "", "class": "", "dosageForm": "", "strength": "", "route": ""},
           "usesMechanism": {"mainUses": [], "simpleMechanismArabic": "", "mechanismKeywords": []},
-          "pharmacokinetics": {"halfLifeDisplay": "", "halfLifeBand": "unknown", "onsetDisplay": "", "onsetBand": "unknown", "durationDisplay": "", "durationBand": "unknown", "dosingFrequency": "unknown", "prodrugStatus": "unknown", "excretionRoute": "unknown", "pkMemoryLineArabic": ""},
+          "pharmacokinetics": {"halfLifeDisplay": "", "halfLifeBand": "unknown", "onsetDisplay": "", "onsetBand": "unknown", "durationDisplay": "", "durationBand": "unknown", "dosingFrequency": "unknown", "timesPerDay": null, "prodrugStatus": "unknown", "metabolism": "", "excretionRoute": "unknown", "excretionNotes": "", "pkMemoryLineArabic": ""},
           "safety": {"contraindications": {"severity": "unknown", "items": []}, "toxicity": {"severity": "unknown", "items": []}, "warnings": {"severity": "unknown", "items": []}, "interactions": {"severity": "unknown", "items": []}, "renalCaution": {"severity": "unknown", "note": ""}, "hepaticCaution": {"severity": "unknown", "note": ""}, "pregnancyCaution": {"severity": "unknown", "simpleNoteArabic": ""}},
           "counseling": {"howToTakeArabic": "", "foodInstructionArabic": "", "simplePatientSentenceArabic": "", "whatPatientMayFeelArabic": [], "whenToSeekHelpArabic": [], "missedDoseArabic": ""},
           "arabicExplanation": {"shortExplanation": "", "memoryStory": "", "importantNote": ""},
           "adverseEffects": {"common": [], "serious": []},
-          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": ""},
+          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": "", "reviewQuestions": [{"prompt": "", "choices": ["", "", "", ""], "correctAnswer": "", "explanation": "", "questionType": "Use", "relatedField": "indications", "difficulty": "medium"}]},
           "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": true, "missingImportantFields": [], "notes": ""}
         }
         """
     }
 private enum FastGatherPromptBuilder {
     static let systemPrompt = """
-    You are creating an AI-generated pharmacy learning draft. It is not a trusted source and is never patient-specific advice.
-    Use the confirmed fields and package text first. You may use general model knowledge only to fill clearly established drug-card facts. Do not invent exact values; use "unknown" when unsure. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+    You create complete, practical pharmacy learning cards from a confirmed medicine identity.
+    Use your medical knowledge to fill every relevant field: identity, class, uses, mechanism, pharmacokinetics, dosing frequency, prodrug status, metabolism/excretion, adverse effects, safety, and counseling. Use "unknown" only when a fact genuinely cannot be established for the confirmed medicine or varies by formulation. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+
+    Also create 8 high-quality review questions. Except for Scientific name and Trade name spelling questions, every question must be either four-option multiple choice or True/False. Each MCQ must have one unambiguously correct answer, three plausible distractors, and a short explanation. Do not reveal the answer in the prompt.
     """
 
     static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
@@ -940,10 +957,10 @@ private enum FastGatherPromptBuilder {
         Route: \(identity.route)
         System/chapter: \(identity.system)
 
-        OCR or pasted package details (may be incomplete):
+        Optional OCR or pasted package details:
         \(packageText.prefix(2_000))
 
-        Infer class only when confident; otherwise leave it empty. Give half-life, onset, duration, dosing frequency, safety, and counseling only when reasonably known; otherwise say "unknown" or "check product leaflet/local pharmacist". The result must be a review-required draft.
+        Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and eight review questions spanning identity, class, use, mechanism, PK, safety, and counseling.
 
         Output JSON only using this exact structure:
         \(PromptBuilder.cardJSONSchema)
@@ -973,15 +990,12 @@ enum DrugImportValidator {
     static func parseAIDraft(jsonString: String, confirmedIdentity: UserConfirmedDrugIdentity, packageText: String) throws -> ImportedDrugInfo {
         var info = try decodedInfo(jsonString)
         info.identity = applyingConfirmedIdentity(to: info.identity, confirmedIdentity: confirmedIdentity)
-        var missing = info.sourceQuality.missingImportantFields
-        if packageText.trimmed.isEmpty { missing.append("package text") }
-        if info.identity.class.isEmpty { missing.append("drug class") }
         info.sourceQuality = SourceQuality(
-            sourceName: "DeepSeek AI draft",
+            sourceName: "Generated with AI",
             sourceURL: "",
-            needsReview: true,
-            missingImportantFields: Array(Set(missing)).sorted(),
-            notes: "AI-generated from your confirmed fields and package text. Verify every clinical fact against the product leaflet or pharmacist before use."
+            needsReview: false,
+            missingImportantFields: info.sourceQuality.missingImportantFields,
+            notes: "Generated from the confirmed drug identity. Every section remains editable before saving."
         )
         return info
     }
@@ -1039,8 +1053,11 @@ enum DrugImportApplier {
             drug.durationText = info.pharmacokinetics.durationDisplay
             drug.durationBand = info.pharmacokinetics.durationBand.drugBand
             drug.dosingFrequency = info.pharmacokinetics.dosingFrequency.drugFrequency
+            drug.timesPerDay = info.pharmacokinetics.timesPerDay
             drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus
             drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute
+            drug.excretionNotes = [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionNotes]
+                .compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n")
             drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic
         }
         if selection.contains(.safety) {
@@ -1082,6 +1099,41 @@ enum DrugImportApplier {
         if selection.contains(.memorization) {
             drug.mustKnow = info.memorization.mustKnow
             drug.flashcards = info.memorization.flashcards.map { "\($0.question)\t\($0.answer)" }
+            let reviewItems = (info.memorization.reviewQuestions ?? []).filter { item in
+                selection.reviewQuestionPrompts?.contains(item.prompt) ?? true
+            }
+            drug.generatedReviewQuestions = reviewItems.compactMap { item in
+                let prompt = item.prompt.trimmed
+                let answer = item.correctAnswer.trimmed
+                guard !prompt.isEmpty, !answer.isEmpty else { return nil }
+                var choices = item.choices.map(\.trimmed).filter { !$0.isEmpty }
+                if !choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) { choices.insert(answer, at: 0) }
+                choices = choices.reduce(into: [String]()) { values, value in
+                    if !values.contains(where: { $0.localizedCaseInsensitiveCompare(value) == .orderedSame }) { values.append(value) }
+                }
+                let questionType = QuestionType(rawValue: item.questionType) ?? .use
+                let interaction: PracticeInteraction
+                if questionType == .scientificName || questionType == .tradeName {
+                    interaction = .textEntry
+                    choices = []
+                } else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) {
+                    interaction = .trueFalse
+                } else {
+                    guard choices.count >= 3 else { return nil }
+                    interaction = .multipleChoice
+                    choices = Array(choices.prefix(4))
+                }
+                return GeneratedReviewQuestion(
+                    prompt: prompt,
+                    choices: choices,
+                    correctAnswer: answer,
+                    explanation: item.explanation.trimmed,
+                    questionType: questionType,
+                    interaction: interaction,
+                    relatedField: item.relatedField.trimmed,
+                    difficulty: item.difficulty.trimmed.isEmpty ? "medium" : item.difficulty.trimmed
+                )
+            }
             drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic
             drug.patientQuestions = info.memorization.flashcards.map(\.question)
         }

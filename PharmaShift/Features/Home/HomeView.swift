@@ -9,10 +9,10 @@ struct SystemDashboardMetrics {
     var masteredCount: Int { drugs.filter(\.isMastered).count }
     var weakCount: Int { drugs.filter { $0.confidenceLevel == .weak || $0.isConfusing }.count }
     var masteryProgress: Double {
-        guard !drugs.isEmpty else { return 0 }
-        return Double(drugs.reduce(0) { $0 + $1.masteryCount }) / Double(drugs.count * 6)
+        let required = drugs.reduce(0) { $0 + $1.requiredMasteryCount }
+        guard required > 0 else { return 0 }
+        return min(1, Double(drugs.reduce(0) { $0 + $1.masteryCount }) / Double(required))
     }
-    var lastAdded: Drug? { drugs.max { $0.dateAdded < $1.dateAdded } }
 }
 
 struct HomeView: View {
@@ -21,38 +21,53 @@ struct HomeView: View {
     @Environment(ReviewScheduler.self) private var scheduler
     @Query(sort: \Drug.dateAdded, order: .reverse) private var drugs: [Drug]
     @Query(sort: \ShiftLog.startedAt, order: .reverse) private var shifts: [ShiftLog]
+    @Query(sort: \EncounterNote.date, order: .reverse) private var encounterNotes: [EncounterNote]
     @Query private var profiles: [LearningProfile]
     @Query(sort: \DailyActivity.day, order: .reverse) private var activities: [DailyActivity]
     @State private var showsShift = false
 
-    private let trainingChapters: [Chapter] = [
+    private let primaryChapters: [Chapter] = [
         .cardiovascular, .respiratory, .endocrine, .musculoskeletal, .eye, .earNoseOropharynx
     ]
-    private let shelfChapters: [Chapter] = [
-        .otc, .antibiotics, .gastrointestinal, .dermatology, .vitaminsSupplements, .other
-    ]
 
+    private var knownDrugs: [Drug] { drugs.filter { !$0.isUnknown } }
     private var activeShift: ShiftLog? { shifts.first { !$0.isCompleted } }
-    private var totalDue: Int { drugs.filter { !$0.isUnknown && scheduler.isDue($0) }.count }
-    private var totalWeak: Int { drugs.filter { $0.confidenceLevel == .weak || $0.isConfusing }.count }
+    private var totalDue: Int { knownDrugs.filter { scheduler.isDue($0) }.count }
+    private var weakDrugs: [Drug] {
+        knownDrugs.filter { $0.confidenceLevel == .weak || $0.isConfusing || !$0.isMastered }
+            .sorted { $0.masteryCount < $1.masteryCount }
+    }
     private var focus: FocusRecommendation { FocusModeEngine.recommendation(drugs: drugs, activeShift: activeShift) }
+    private var profile: LearningProfile? { profiles.first }
+    private var todayComplete: Bool {
+        activities.first.map { Calendar.current.isDateInToday($0.day) && $0.missionCompleted } ?? false
+    }
+    private var crystalProgress: Double {
+        let required = knownDrugs.reduce(0) { $0 + $1.requiredMasteryCount }
+        guard required > 0 else { return 0 }
+        return min(1, Double(knownDrugs.reduce(0) { $0 + $1.masteryCount }) / Double(required))
+    }
+    private var currentChapter: Chapter {
+        weakDrugs.first?.chapter ?? knownDrugs.first?.chapter ?? .cardiovascular
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                hero
-                dailyMission
-                if (profiles.first?.weakDrugRemindersEnabled ?? true) && totalWeak > 0 {
-                    Label("\(totalWeak) weak drug\(totalWeak == 1 ? "" : "s") ready for a future Focus step", systemImage: "bell.badge")
-                        .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
+                greeting
+                if knownDrugs.isEmpty { onboardingIllustration }
+                missionCard
+                learningSignals
+                currentPathCard
+                shelfQuestCard
+                sectionTitle("System paths", subtitle: "Your learning map", icon: "point.topleft.down.to.point.bottomright.curvepath")
+                ForEach(primaryChapters) { chapter in
+                    SystemPathRow(metrics: metrics(for: chapter))
                 }
-                sectionHeader("Training Book", arabic: "كتاب التدريب", icon: "book.closed.fill")
-                chapterGrid(trainingChapters)
-                sectionHeader("Pharmacy Shelf", arabic: "أقسام الصيدلية", icon: "shippingbox.fill")
-                chapterGrid(shelfChapters)
+                shiftReflection
             }
-            .padding(.horizontal)
-            .padding(.bottom, 28)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 30)
         }
         .background(theme.background)
         .navigationTitle("Renlyst")
@@ -61,201 +76,305 @@ struct HomeView: View {
         .accessibilityIdentifier("home.dashboard")
     }
 
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var onboardingIllustration: some View {
+        ZStack(alignment: .bottomLeading) {
+            Image("CrystalLearning")
+                .resizable().scaledToFill().frame(height: 210).clipped()
+            LinearGradient(colors: [.clear, theme.crystalInk.opacity(0.94)], startPoint: .center, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Build knowledge that comes back").font(.title3.bold())
+                Text("Capture one drug, learn three facts, then use them.").font(.caption).foregroundStyle(.white.opacity(0.78))
+            }
+            .foregroundStyle(.white).padding(16)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("A crystal knowledge network representing your learning journey")
+    }
+
+    private var greeting: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(greetingText)
+                    .font(.largeTitle.bold())
+                Text("One focused loop. Then you are done.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 5) {
+                Label("\(profile?.currentStreak ?? 0) day", systemImage: "flame.fill")
+                    .foregroundStyle(.orange)
+                Label("\(Int(crystalProgress * 100))%", systemImage: "diamond.fill")
+                    .foregroundStyle(theme.crystalCyan)
+            }
+            .font(.caption.weight(.bold))
+            .monospacedDigit()
+        }
+        .padding(.top, 8)
+    }
+
+    private var missionCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Ready for one good step?")
-                        .font(.title2.bold())
-                    Text("جاهز لخطوة صغيرة اليوم؟")
-                        .font(.headline)
-                        .opacity(0.9)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(todayComplete ? "MISSION COMPLETE" : "TODAY’S MISSION")
+                        .font(.caption.weight(.heavy))
+                        .tracking(1.1)
+                        .foregroundStyle(.white.opacity(0.72))
+                    Text(todayComplete ? "Crystal restored" : "6 minutes")
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    Text(todayComplete ? "Come back tomorrow for the next loop." : "A smart mix built from what needs attention now.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.78))
                 }
                 Spacer()
-                Image(systemName: "cross.case.fill")
-                    .font(.system(size: 34))
+                ZStack {
+                    Circle().fill(.white.opacity(0.10)).frame(width: 62, height: 62)
+                    Image(systemName: todayComplete ? "checkmark.seal.fill" : "sparkles")
+                        .font(.system(size: 28, weight: .semibold))
+                }
             }
-            HStack(spacing: 10) {
-                heroMetric(value: "\(drugs.count)", title: "Drugs")
-                Divider().overlay(.white.opacity(0.35)).frame(height: 34)
-                heroMetric(value: "\(totalDue)", title: "Due")
-                Divider().overlay(.white.opacity(0.35)).frame(height: 34)
-                heroMetric(value: "\(totalWeak)", title: "Weak")
+
+            HStack(spacing: 0) {
+                missionMetric("Due", value: totalDue)
+                Divider().overlay(.white.opacity(0.18)).frame(height: 34)
+                missionMetric("Weak", value: weakDrugs.count)
+                Divider().overlay(.white.opacity(0.18)).frame(height: 34)
+                missionMetric("Activities", value: knownDrugs.isEmpty ? 0 : 7)
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Focus Mode").font(.caption.weight(.bold)).textCase(.uppercase).opacity(0.85)
-                Text(focus.title).font(.title3.bold())
-                Text(focus.subtitle).font(.subheadline).opacity(0.9)
-            }
-            Button { performFocusAction() } label: {
-                Label(focus.title, systemImage: focus.icon).font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+
+            Button {
+                if knownDrugs.isEmpty { navigation.openCapture() }
+                else { navigation.startReview(mode: .smartSession) }
+            } label: {
+                HStack {
+                    Text(knownDrugs.isEmpty ? "Capture your first drug" : "Continue")
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .padding(.horizontal, 4)
             }
             .buttonStyle(.borderedProminent)
             .tint(.white)
-            .foregroundStyle(theme.tint)
+            .foregroundStyle(theme.crystalInk)
             .accessibilityIdentifier("home.focus.\(focus.action.rawValue)")
         }
         .foregroundStyle(.white)
         .padding(20)
-        .background(
-            LinearGradient(colors: [theme.tint, Color(red: 0.02, green: 0.31, blue: 0.48)], startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 26, style: .continuous)
-        )
+        .background(theme.crystalGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: theme.crystalViolet.opacity(0.18), radius: 22, y: 12)
     }
 
-    private var dailyMission: some View {
-        let completed = activities.first.map { Calendar.current.isDateInToday($0.day) && $0.missionCompleted } ?? false
-        return HStack(spacing: 12) {
-            Image(systemName: completed ? "checkmark.circle.fill" : "circle.dashed").font(.title2).foregroundStyle(completed ? .green : theme.tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(completed ? "Daily mission complete" : "Daily mission").font(.headline)
-                Text(completed ? "Five thoughtful questions—done." : "Complete one five-question practice session.").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private func performFocusAction() {
-        switch focus.action {
-        case .addDrug: navigation.openCapture()
-        case .reviewDue: navigation.startReview(mode: .dueReview)
-        case .practiceWeak: navigation.startReview(mode: .weakDrug)
-        case .finishShift: showsShift = true
-        }
-    }
-
-    private func heroMetric(value: String, title: String) -> some View {
+    private func missionMetric(_ title: String, value: Int) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.title2.bold()).monospacedDigit()
-            Text(title).font(.caption)
+            Text("\(value)").font(.title3.bold()).monospacedDigit()
+            Text(title).font(.caption2).foregroundStyle(.white.opacity(0.68))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
     }
 
-    private var shiftCard: some View {
-        NavigationLink {
-            ShiftView()
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: activeShift == nil ? "play.circle.fill" : "clock.badge.checkmark.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(theme.tint)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(activeShift == nil ? "Start daily shift" : "Continue daily shift")
-                        .font(.headline)
-                    Text(activeShift == nil ? "ابدأ وردية التدريب" : "أكمل وردية التدريب")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.forward").foregroundStyle(.tertiary)
+    @ViewBuilder private var learningSignals: some View {
+        if let weak = weakDrugs.first {
+            Button { navigation.startReview(mode: .weakDrug) } label: {
+                SignalRow(
+                    icon: "bolt.heart.fill",
+                    eyebrow: "WEAK TODAY",
+                    title: weak.displayName,
+                    detail: weakField(for: weak),
+                    tint: .orange
+                )
             }
-            .padding(16)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        if let note = encounterNotes.first {
+            SignalRow(
+                icon: "arrow.counterclockwise.circle.fill",
+                eyebrow: "RESURFACED",
+                title: note.topic.trimmed.isEmpty ? note.relatedDrugNameSnapshot : note.topic,
+                detail: note.whatILearned.trimmed.isEmpty ? note.pharmacistNote : note.whatILearned,
+                tint: theme.tint
+            )
+        }
+    }
+
+    private var currentPathCard: some View {
+        let chapterDrugs = knownDrugs.filter { $0.chapter == currentChapter }
+        let progress = metrics(for: currentChapter).masteryProgress
+        return VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Label("Current path", systemImage: currentChapter.icon).font(.headline)
+                Spacer()
+                Text("\(Int(progress * 100))%")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(theme.tint)
+            }
+            Text(currentChapter.rawValue)
+                .font(.title2.bold())
+            Text(nextClass(in: chapterDrugs))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            ProgressView(value: progress)
+                .tint(theme.tint)
+            HStack(spacing: 8) {
+                ForEach(["Recognize", "Understand", "Safety", "Counsel", "Apply"], id: \.self) { stage in
+                    Text(stage)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture { navigation.openLibrary(chapter: currentChapter) }
+    }
+
+    private var shelfQuestCard: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "shippingbox.and.arrow.backward.fill")
+                .font(.title2)
+                .foregroundStyle(theme.tint)
+                .frame(width: 48, height: 48)
+                .background(theme.softTint, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Shelf Quest").font(.headline)
+                Text("Find one \(nextClass(in: knownDrugs.filter { $0.chapter == currentChapter }).lowercased()) package today.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { navigation.openCapture(chapter: currentChapter) } label: {
+                Image(systemName: "camera.fill").frame(width: 44, height: 44)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Start Shelf Quest capture")
+        }
+        .padding(16)
+        .background(theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var shiftReflection: some View {
+        Button { showsShift = true } label: {
+            HStack {
+                Label(activeShift == nil ? "Start daily pharmacy note" : "Finish today’s pharmacy note", systemImage: "note.text.badge.plus")
+                Spacer()
+                Image(systemName: "chevron.forward")
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
+        .foregroundStyle(theme.tint)
     }
 
-    private func sectionHeader(_ title: String, arabic: String, icon: String) -> some View {
-        HStack {
-            Label(title, systemImage: icon).font(.title3.bold())
+    private func sectionTitle(_ title: String, subtitle: String, icon: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Label(title, systemImage: icon).font(.title2.bold())
             Spacer()
-            Text(arabic).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            Text(subtitle).font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    private func chapterGrid(_ chapters: [Chapter]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], spacing: 14) {
-            ForEach(chapters) { chapter in
-                SystemDashboardCard(metrics: metrics(for: chapter))
-            }
-        }
+        .padding(.top, 4)
     }
 
     private func metrics(for chapter: Chapter) -> SystemDashboardMetrics {
-        let chapterDrugs = drugs.filter { $0.chapter == chapter }
+        let chapterDrugs = knownDrugs.filter { $0.chapter == chapter }
         return SystemDashboardMetrics(
             chapter: chapter,
             drugs: chapterDrugs,
-            dueCount: chapterDrugs.filter { !$0.isUnknown && scheduler.isDue($0) }.count
+            dueCount: chapterDrugs.filter { scheduler.isDue($0) }.count
         )
+    }
+
+    private func nextClass(in values: [Drug]) -> String {
+        values.first(where: { !$0.isMastered && !$0.drugClass.trimmed.isEmpty })?.drugClass
+            ?? values.first(where: { !$0.drugClass.trimmed.isEmpty })?.drugClass
+            ?? "Foundations"
+    }
+
+    private func weakField(for drug: Drug) -> String {
+        if !drug.masteryScientificName { return "Scientific name" }
+        if !drug.masteryTradeName { return "Trade name" }
+        if !drug.masteryClass { return "Class" }
+        if !drug.masteryUse { return "Main use" }
+        if !drug.masteryWarning { return "Safety warning" }
+        return "Counseling"
+    }
+
+    private var greetingText: String {
+        switch Calendar.current.component(.hour, from: .now) {
+        case 5..<12: "Good morning"
+        case 12..<18: "Good afternoon"
+        default: "Good evening"
+        }
     }
 }
 
-private struct SystemDashboardCard: View {
+private struct SignalRow: View {
+    let icon: String
+    let eyebrow: String
+    let title: String
+    let detail: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(eyebrow).font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(.secondary)
+                Text(title).font(.headline).foregroundStyle(.primary)
+                if !detail.trimmed.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct SystemPathRow: View {
     @Environment(AppTheme.self) private var theme
     @Environment(AppNavigation.self) private var navigation
     let metrics: SystemDashboardMetrics
 
-    private var colors: [Color] { theme.colors(for: metrics.chapter) }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
+        Button { navigation.openLibrary(chapter: metrics.chapter) } label: {
+            HStack(spacing: 14) {
                 Image(systemName: metrics.chapter.icon)
-                    .font(.title2.bold())
-                    .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metrics.chapter.rawValue).font(.headline)
-                    Text(metrics.chapter.arabicName).font(.caption.weight(.semibold)).opacity(0.9)
-                }
-                Spacer()
-                Text("\(Int(metrics.masteryProgress * 100))%")
-                    .font(.title3.bold()).monospacedDigit()
-            }
-
-            ProgressView(value: metrics.masteryProgress)
-                .tint(.white)
-
-            HStack(spacing: 8) {
-                stat("Drugs", metrics.drugs.count)
-                stat("Mastered", metrics.masteredCount)
-                stat("Due", metrics.dueCount)
-                stat("Weak", metrics.weakCount)
-            }
-
-            Text("Last added: \(metrics.lastAdded?.displayName ?? "No drugs yet")")
-                .font(.caption)
-                .lineLimit(1)
-                .opacity(0.9)
-
-            HStack(spacing: 10) {
-                Button {
-                    navigation.openCapture(chapter: metrics.chapter)
-                } label: {
-                    Label("Add", systemImage: "plus")
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                }
-                Button {
-                    navigation.startReview(chapter: metrics.chapter)
-                } label: {
-                    Label("Review", systemImage: "brain.head.profile")
-                        .frame(maxWidth: .infinity, minHeight: 38)
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(theme.colors(for: metrics.chapter).last ?? theme.tint, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(metrics.chapter.rawValue).font(.headline)
+                        Spacer()
+                        Text("\(Int(metrics.masteryProgress * 100))%")
+                            .font(.caption.bold().monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: metrics.masteryProgress)
+                        .tint(theme.colors(for: metrics.chapter).last ?? theme.tint)
+                    Text("\(metrics.drugs.count) drugs · \(metrics.dueCount) due · \(metrics.weakCount) weak")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(.borderedProminent)
-            .tint(.white)
-            .foregroundStyle(colors.last ?? .black)
+            .padding(15)
+            .background(theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .foregroundStyle(.white)
-        .padding(17)
-        .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 24))
-        .onTapGesture { navigation.openLibrary(chapter: metrics.chapter) }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("home.system.\(metrics.chapter.rawValue)")
-    }
-
-    private func stat(_ title: String, _ value: Int) -> some View {
-        VStack(spacing: 2) {
-            Text("\(value)").font(.headline).monospacedDigit()
-            Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 7)
-        .background(.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
     }
 }

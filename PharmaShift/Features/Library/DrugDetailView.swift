@@ -21,6 +21,25 @@ private enum DrugDetailSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+private enum DrugCardPage: String, CaseIterable, Identifiable {
+    case overview = "Overview"
+    case learn = "Learn"
+    case safety = "Safety"
+    case counsel = "Counsel"
+    case links = "Notes & Links"
+
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .overview: "sparkles"
+        case .learn: "book.pages.fill"
+        case .safety: "shield.fill"
+        case .counsel: "quote.bubble.fill"
+        case .links: "point.3.connected.trianglepath.dotted"
+        }
+    }
+}
+
 struct DrugDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -29,22 +48,14 @@ struct DrugDetailView: View {
     let drug: Drug
     @State private var sheet: DrugDetailSheet?
     @State private var expandedFields: Set<String> = []
+    @State private var selectedPage: DrugCardPage = .overview
 
     var body: some View {
-        ScrollViewReader { proxy in
+        VStack(spacing: 0) {
+            pagePicker
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    hero
-                    jumpChips(proxy)
-                    identityCard.id(DrugCardAnchor.identity).accessibilityIdentifier("drugCard.identity")
-                    usesCard.id(DrugCardAnchor.uses)
-                    pharmacologyCard.id(DrugCardAnchor.pharmacology).accessibilityIdentifier("drugCard.pharmacology")
-                    safetyCard.id(DrugCardAnchor.safety).accessibilityIdentifier("drugCard.safety")
-                    counselingCard.id(DrugCardAnchor.counseling)
-                    arabicCard.id(DrugCardAnchor.arabic)
-                    notesCard.id(DrugCardAnchor.notes)
-                    masteryCard.id(DrugCardAnchor.mastery)
-                    actions.id(DrugCardAnchor.review)
+                    pageContent
                 }
                 .padding()
             }
@@ -60,6 +71,87 @@ struct DrugDetailView: View {
                 case .review: PracticeSessionView(initialDrug: drug)
                 }
             }
+        }
+    }
+
+    private var pagePicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                ForEach(DrugCardPage.allCases) { page in
+                    Button {
+                        withAnimation(reduceMotion ? nil : .snappy) { selectedPage = page }
+                    } label: {
+                        Label(page.rawValue, systemImage: page.icon)
+                            .font(.caption.weight(.semibold)).padding(.horizontal, 11).frame(minHeight: 38)
+                            .background(selectedPage == page ? theme.tint : Color.secondary.opacity(0.10), in: Capsule())
+                            .foregroundStyle(selectedPage == page ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal).padding(.vertical, 8)
+        }
+        .background(.bar)
+        .accessibilityLabel("Drug Card pages")
+    }
+
+    @ViewBuilder private var pageContent: some View {
+        switch selectedPage {
+        case .overview:
+            hero
+            mustKnowCard
+            identityCard.accessibilityIdentifier("drugCard.identity")
+            masteryCard
+            actions
+        case .learn:
+            usesCard
+            pharmacologyCard.accessibilityIdentifier("drugCard.pharmacology")
+        case .safety:
+            safetyCard.accessibilityIdentifier("drugCard.safety")
+        case .counsel:
+            counselingCard
+            arabicCard
+            actions
+        case .links:
+            notesCard
+            connectedKnowledgeCard
+            provenanceDetails
+        }
+    }
+
+    private var mustKnowCard: some View {
+        card("3 things to remember", icon: "lightbulb.max.fill") {
+            let facts = Array(drug.mustKnow.filter { !$0.trimmed.isEmpty }.prefix(3))
+            if facts.isEmpty {
+                Text("Add three must-know facts to make every review focused.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(index + 1)").font(.caption.bold()).foregroundStyle(.white)
+                            .frame(width: 25, height: 25).background(theme.tint, in: Circle())
+                        Text(fact).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
+    private var connectedKnowledgeCard: some View {
+        card("Connected knowledge", icon: "point.3.connected.trianglepath.dotted") {
+            value("System", drug.chapterRaw)
+            value("Class", drug.drugClass)
+            expandableValue("Uses", drug.indications.joined(separator: " • "))
+            expandableValue("Warnings", drug.warnings.joined(separator: " • "))
+            Text("Related drugs and backlinks will appear here as your library grows.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var provenanceDetails: some View {
+        card("Card history", icon: "clock.arrow.circlepath") {
+            value("Created", drug.dateAdded.formatted(date: .abbreviated, time: .omitted))
+            if let reviewed = drug.lastReviewed { value("Last reviewed", reviewed.formatted(date: .abbreviated, time: .shortened)) }
+            value("Generated by", drug.importedSourceName.trimmed.isEmpty ? "Manual card" : drug.importedSourceName)
         }
     }
 
@@ -176,7 +268,7 @@ struct DrugDetailView: View {
 
     private var safetyCard: some View {
         card("Safety", icon: "shield.fill") {
-            SafetyRadar(values: safetyRadarValues)
+            knowledgeCompletenessMap
             if !drug.safetyFlags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -195,6 +287,30 @@ struct DrugDetailView: View {
             safetyValue("Renal caution", text: drug.renalCaution, severity: drug.renalSeverityRaw)
             safetyValue("Hepatic caution", text: drug.hepaticCaution, severity: drug.hepaticSeverityRaw)
             safetyValue("Pregnancy caution", text: drug.pregnancyCaution, severity: drug.pregnancySeverityRaw)
+        }
+    }
+
+    private var knowledgeCompletenessMap: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Knowledge completeness").font(.subheadline.bold())
+            completenessRow("Identity", complete: !drug.scientificName.trimmed.isEmpty && !drug.drugClass.trimmed.isEmpty)
+            completenessRow("Uses", complete: !drug.indications.isEmpty)
+            completenessRow("PK", complete: !drug.halfLifeText.trimmed.isEmpty || drug.halfLifeHours != nil)
+            completenessRow("Safety", complete: !drug.warnings.isEmpty || !drug.contraindications.isEmpty)
+            completenessRow("Counseling", complete: !drug.counselingSentence.trimmed.isEmpty)
+            completenessRow("Interactions", complete: !drug.interactions.isEmpty)
+            completenessRow("Image recognition", complete: !drug.packageImages.isEmpty)
+        }
+        .padding(13).background(theme.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func completenessRow(_ label: String, complete: Bool) -> some View {
+        HStack {
+            Image(systemName: complete ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(complete ? theme.tint : .secondary)
+            Text(label).font(.caption.weight(.semibold))
+            Spacer()
+            Text(complete ? "Ready" : "Add info").font(.caption2).foregroundStyle(.secondary)
         }
     }
 
@@ -229,6 +345,18 @@ struct DrugDetailView: View {
         card("Drug Mastery", icon: "sparkles") {
             HStack { Text("Six mastery checks").font(.subheadline); Spacer(); Text("\(drug.masteryCount)/6").font(.headline.monospacedDigit()) }
             ProgressView(value: Double(drug.masteryCount), total: 6).tint(drug.isMastered ? .green : theme.tint)
+            VStack(spacing: 8) {
+                ForEach(drug.memoryItems) { item in
+                    HStack {
+                        Text(item.field.rawValue).font(.caption.weight(.semibold))
+                        Spacer()
+                        Text(item.strengthLabel).font(.caption2.bold())
+                            .foregroundStyle(memoryColor(item.strengthLabel))
+                            .padding(.horizontal, 7).padding(.vertical, 4)
+                            .background(memoryColor(item.strengthLabel).opacity(0.12), in: Capsule())
+                    }
+                }
+            }
             expandableValue("Must know", drug.mustKnow.joined(separator: "\n"))
             if !flashcardPairs.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -356,6 +484,9 @@ struct DrugDetailView: View {
     }
 
     private func severity(_ rawValue: String) -> SafetySeverity { SafetySeverity(rawValue: rawValue) ?? .unknown }
+    private func memoryColor(_ label: String) -> Color {
+        switch label { case "Strong": .green; case "Medium": .orange; case "Weak": .red; default: .secondary }
+    }
     private func severityColor(_ rawValue: String) -> Color {
         switch severity(rawValue) { case .low: .green; case .medium: .orange; case .high: .red; case .unknown: .secondary }
     }

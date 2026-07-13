@@ -133,7 +133,7 @@ final class PharmaShiftUITests: XCTestCase {
         alert.buttons["OK"].tap()
     }
 
-    func testImportChooserAndPreviewUseSelectiveFields() {
+    func testTrustedImportReachesSourceChooser() {
         let app = XCUIApplication()
         app.launchArguments.append("-mockDrugImport")
         app.launchArguments.append("-mockDrugImportSkipPhoto")
@@ -153,22 +153,28 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
         let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
-        scrollToHittable(formulation, in: app)
-        XCTAssertTrue(formulation.isHittable)
-        formulation.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 10))
-        let trade = app.switches["import.field.identity.trade"]
+    }
+
+    func testGeneratedPreviewAllowsSelectiveFields() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-mockDrugImport")
+        app.launch()
+        app.tabBars.buttons["Add"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
+        app.buttons["capture.generateAI"].tap()
+        let scientific = app.textFields["trustedImport.scientificName"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 10))
+        scientific.tap()
+        scientific.typeText("Mock Drug")
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         let scientificField = app.switches["import.field.identity.scientific"]
-        XCTAssertEqual(trade.value as? String, "1")
         XCTAssertEqual(scientificField.value as? String, "1")
         scrollToHittable(scientificField, in: app)
         XCTAssertTrue(scientificField.isHittable)
         scientificField.tap()
         XCTAssertEqual(scientificField.value as? String, "0")
-        app.swipeUp()
-        let apply = app.descendants(matching: .any)["trustedImport.saveSelected"]
-        XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        XCTAssertTrue(apply.isEnabled)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

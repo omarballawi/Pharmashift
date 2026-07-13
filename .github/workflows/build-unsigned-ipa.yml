@@ -54,7 +54,8 @@ jobs:
           - testPhotoLibraryButtonPresentsLibraryInsteadOfCamera
           - testBackupAndDataFlowIsReachable
           - testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch
-          - testImportChooserAndPreviewUseSelectiveFields
+          - testTrustedImportReachesSourceChooser
+          - testGeneratedPreviewAllowsSelectiveFields
           - testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress
 
     steps:

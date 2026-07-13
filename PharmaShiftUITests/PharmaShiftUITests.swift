@@ -14,7 +14,7 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.buttons["capture.saveOpen"].isEnabled)
     }
 
-    func testContinuousDrugCardScrollsThroughPharmacologyAndSafety() {
+    func testFivePageDrugCardNavigatesThroughLearnAndSafety() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["Add"].tap()
@@ -28,10 +28,27 @@ final class PharmaShiftUITests: XCTestCase {
         save.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.identity"].waitForExistence(timeout: 5))
-        for _ in 0..<4 where !app.descendants(matching: .any)["drugCard.pharmacology"].exists { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].exists)
-        for _ in 0..<4 where !app.descendants(matching: .any)["drugCard.safety"].exists { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].exists)
+        app.buttons["Learn"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].waitForExistence(timeout: 5))
+        app.buttons["Safety"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Source"].exists)
+    }
+
+    func testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-mockDrugImport")
+        app.launch()
+        app.tabBars.buttons["Add"].tap()
+        let generate = app.buttons["capture.generateAI"]
+        XCTAssertTrue(generate.waitForExistence(timeout: 5))
+        generate.tap()
+        let scientific = app.textFields["Scientific name"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
+        scientific.tap(); scientific.typeText("Metformin")
+        app.buttons["Generate complete card"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Generated with AI"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
     }
 

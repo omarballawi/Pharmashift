@@ -15,13 +15,13 @@ jobs:
   test:
     name: Run focused tests (iPhone 16 Pro Max)
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Check out project
         uses: actions/checkout@v6
 
-      - name: Run unit tests and DeepSeek save UI regression
+      - name: Run unit and full UI test suites
         run: |
           set -euo pipefail
           xcodebuild \
@@ -31,7 +31,7 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max' \
             -derivedDataPath build/TestDerivedData \
             -only-testing:PharmaShiftTests \
-            -only-testing:PharmaShiftUITests/PharmaShiftUITests/testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch \
+            -only-testing:PharmaShiftUITests \
             test
 
   build:

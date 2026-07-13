@@ -67,17 +67,19 @@ struct DrugImportView: View {
     @State private var resolvedIdentity: ResolvedDrugIdentity?
     @State private var importMode: ImportMode = .trusted
     private let identityResolver: any DrugIdentityResolving = DeepSeekIdentityResolver()
-    private let fastGatherService: any FastDrugGatheringService = DeepSeekFastDrugGatherService()
+    private let fastGatherService: any FastDrugGatheringService
 
     init(
         drug: Drug? = nil,
         providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
         aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault(),
+        fastGatherService: any FastDrugGatheringService = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockFastDrugGatherService() : DeepSeekFastDrugGatherService(),
         startsInAIMode: Bool = false
     ) {
         self.drug = drug
         self.providers = providers
         self.aiService = aiService
+        self.fastGatherService = fastGatherService
         self.startsInAIMode = startsInAIMode
         _stage = State(initialValue: startsInAIMode ? .confirm : .photo)
         _importMode = State(initialValue: startsInAIMode ? .aiDraft : .trusted)

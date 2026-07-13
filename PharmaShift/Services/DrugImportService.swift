@@ -761,6 +761,14 @@ protocol FastDrugGatheringService: Sendable {
     func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo
 }
 
+actor MockFastDrugGatherService: FastDrugGatheringService {
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
+        var info = try await MockDeepSeekDrugImportService().format(packet: .empty, identity: identity)
+        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: false, missingImportantFields: [], notes: "Mock standalone AI card")
+        return info
+    }
+}
+
 actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
     private let session: URLSession
     private let keyStore: DeepSeekKeyStore

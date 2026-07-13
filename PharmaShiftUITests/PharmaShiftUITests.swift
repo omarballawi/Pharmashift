@@ -173,7 +173,7 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertEqual(scientificField.value as? String, "1")
         scrollToHittable(scientificField, in: app)
         XCTAssertTrue(scientificField.isHittable)
-        scientificField.tap()
+        scientificField.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         expectation(for: NSPredicate(format: "value == '0'"), evaluatedWith: scientificField)
         waitForExpectations(timeout: 5)
     }

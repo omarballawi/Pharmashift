@@ -220,7 +220,9 @@ enum ImportSection: String, Codable, CaseIterable, Identifiable, Sendable {
 struct ImportSelection: Equatable, Sendable {
     var sections: Set<ImportSection>
     var reviewQuestionPrompts: Set<String>? = nil
+    var excludedFieldKeys: Set<String> = []
     func contains(_ section: ImportSection) -> Bool { sections.contains(section) }
+    func includes(_ fieldKey: String) -> Bool { !excludedFieldKeys.contains(fieldKey) }
 }
 
 enum DrugImportError: LocalizedError, Equatable {
@@ -1030,79 +1032,61 @@ enum DrugImportApplier {
 
     static func apply(_ info: ImportedDrugInfo, selection: ImportSelection, to drug: Drug, imageData: Data? = nil, thumbnailData: Data? = nil) {
         if selection.contains(.identity) {
-            drug.scientificName = info.identity.scientificName
-            drug.tradeNames = info.identity.tradeNames
-            drug.chapterRaw = info.identity.system
-            drug.drugClass = info.identity.class
-            drug.dosageForms = [info.identity.dosageForm].filter { !$0.trimmed.isEmpty }
-            drug.strengths = [info.identity.strength].filter { !$0.trimmed.isEmpty }
-            drug.routes = [info.identity.route].filter { !$0.trimmed.isEmpty }
+            if selection.includes("identity.scientific") { drug.scientificName = info.identity.scientificName }
+            if selection.includes("identity.trade") { drug.tradeNames = info.identity.tradeNames }
+            if selection.includes("identity.system") { drug.chapterRaw = info.identity.system }
+            if selection.includes("identity.class") { drug.drugClass = info.identity.class }
+            if selection.includes("identity.form") { drug.dosageForms = [info.identity.dosageForm].filter { !$0.trimmed.isEmpty } }
+            if selection.includes("identity.strength") { drug.strengths = [info.identity.strength].filter { !$0.trimmed.isEmpty } }
+            if selection.includes("identity.route") { drug.routes = [info.identity.route].filter { !$0.trimmed.isEmpty } }
             drug.isUnknown = false
         }
         if selection.contains(.usesMechanism) {
-            drug.indications = info.usesMechanism.mainUses
-            drug.mechanism = info.usesMechanism.simpleMechanismArabic
-            drug.arabicMechanism = info.usesMechanism.simpleMechanismArabic
-            drug.mechanismKeywords = info.usesMechanism.mechanismKeywords
+            if selection.includes("uses.indications") { drug.indications = info.usesMechanism.mainUses }
+            if selection.includes("uses.mechanism") { drug.mechanism = info.usesMechanism.simpleMechanismArabic; drug.arabicMechanism = info.usesMechanism.simpleMechanismArabic; drug.mechanismKeywords = info.usesMechanism.mechanismKeywords }
         }
         if selection.contains(.pharmacokinetics) {
-            drug.halfLifeText = info.pharmacokinetics.halfLifeDisplay
-            drug.halfLifeBand = info.pharmacokinetics.halfLifeBand.drugBand
-            drug.onsetText = info.pharmacokinetics.onsetDisplay
-            drug.onsetBand = info.pharmacokinetics.onsetBand.drugBand
-            drug.durationText = info.pharmacokinetics.durationDisplay
-            drug.durationBand = info.pharmacokinetics.durationBand.drugBand
-            drug.dosingFrequency = info.pharmacokinetics.dosingFrequency.drugFrequency
-            drug.timesPerDay = info.pharmacokinetics.timesPerDay
-            drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus
-            drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute
-            drug.excretionNotes = [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionNotes]
-                .compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n")
-            drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic
+            if selection.includes("pk.halfLife") { drug.halfLifeText = info.pharmacokinetics.halfLifeDisplay; drug.halfLifeBand = info.pharmacokinetics.halfLifeBand.drugBand }
+            if selection.includes("pk.onset") { drug.onsetText = info.pharmacokinetics.onsetDisplay; drug.onsetBand = info.pharmacokinetics.onsetBand.drugBand }
+            if selection.includes("pk.duration") { drug.durationText = info.pharmacokinetics.durationDisplay; drug.durationBand = info.pharmacokinetics.durationBand.drugBand }
+            if selection.includes("pk.dosing") { drug.dosingFrequency = info.pharmacokinetics.dosingFrequency.drugFrequency; drug.timesPerDay = info.pharmacokinetics.timesPerDay }
+            if selection.includes("pk.prodrug") { drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus }
+            if selection.includes("pk.excretion") { drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute; drug.excretionNotes = [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionNotes].compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n") }
+            if selection.includes("pk.memory") { drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic }
         }
         if selection.contains(.safety) {
-            drug.contraindications = info.safety.contraindications.items
-            drug.contraindicationSeverityRaw = info.safety.contraindications.severity.drugSeverity.rawValue
-            drug.toxicity = info.safety.toxicity.items.joined(separator: "\n")
-            drug.toxicitySeverityRaw = info.safety.toxicity.severity.drugSeverity.rawValue
-            drug.warnings = info.safety.warnings.items
-            drug.warningSeverityRaw = info.safety.warnings.severity.drugSeverity.rawValue
-            drug.interactions = info.safety.interactions.items
-            drug.interactionSeverityRaw = info.safety.interactions.severity.drugSeverity.rawValue
-            drug.renalCaution = info.safety.renalCaution.note
-            drug.renalSeverityRaw = info.safety.renalCaution.severity.drugSeverity.rawValue
-            drug.hepaticCaution = info.safety.hepaticCaution.note
-            drug.hepaticSeverityRaw = info.safety.hepaticCaution.severity.drugSeverity.rawValue
-            drug.pregnancyCaution = info.safety.pregnancyCaution.simpleNoteArabic
-            drug.pregnancySeverityRaw = info.safety.pregnancyCaution.severity.drugSeverity.rawValue
+            if selection.includes("safety.contraindications") { drug.contraindications = info.safety.contraindications.items; drug.contraindicationSeverityRaw = info.safety.contraindications.severity.drugSeverity.rawValue }
+            if selection.includes("safety.toxicity") { drug.toxicity = info.safety.toxicity.items.joined(separator: "\n"); drug.toxicitySeverityRaw = info.safety.toxicity.severity.drugSeverity.rawValue }
+            if selection.includes("safety.warnings") { drug.warnings = info.safety.warnings.items; drug.warningSeverityRaw = info.safety.warnings.severity.drugSeverity.rawValue }
+            if selection.includes("safety.interactions") { drug.interactions = info.safety.interactions.items; drug.interactionSeverityRaw = info.safety.interactions.severity.drugSeverity.rawValue }
+            if selection.includes("safety.renal") { drug.renalCaution = info.safety.renalCaution.note; drug.renalSeverityRaw = info.safety.renalCaution.severity.drugSeverity.rawValue }
+            if selection.includes("safety.hepatic") { drug.hepaticCaution = info.safety.hepaticCaution.note; drug.hepaticSeverityRaw = info.safety.hepaticCaution.severity.drugSeverity.rawValue }
+            if selection.includes("safety.pregnancy") { drug.pregnancyCaution = info.safety.pregnancyCaution.simpleNoteArabic; drug.pregnancySeverityRaw = info.safety.pregnancyCaution.severity.drugSeverity.rawValue }
         }
         if selection.contains(.counseling) {
-            drug.howToTake = info.counseling.howToTakeArabic
-            drug.foodInstruction = info.counseling.foodInstructionArabic
-            drug.counselingSentence = info.counseling.simplePatientSentenceArabic
-            drug.arabicCounseling = info.counseling.simplePatientSentenceArabic
-            drug.counselingHowToTakeArabic = info.counseling.howToTakeArabic
-            drug.counselingFoodArabic = info.counseling.foodInstructionArabic
-            drug.patientFeelingsArabic = info.counseling.whatPatientMayFeelArabic
-            drug.seekHelpArabic = info.counseling.whenToSeekHelpArabic
-            drug.missedDoseArabic = info.counseling.missedDoseArabic
+            if selection.includes("counseling.howTo") { drug.howToTake = info.counseling.howToTakeArabic; drug.counselingHowToTakeArabic = info.counseling.howToTakeArabic }
+            if selection.includes("counseling.food") { drug.foodInstruction = info.counseling.foodInstructionArabic; drug.counselingFoodArabic = info.counseling.foodInstructionArabic }
+            if selection.includes("counseling.sentence") { drug.counselingSentence = info.counseling.simplePatientSentenceArabic; drug.arabicCounseling = info.counseling.simplePatientSentenceArabic }
+            if selection.includes("counseling.feelings") { drug.patientFeelingsArabic = info.counseling.whatPatientMayFeelArabic }
+            if selection.includes("counseling.seekHelp") { drug.seekHelpArabic = info.counseling.whenToSeekHelpArabic }
+            if selection.includes("counseling.missedDose") { drug.missedDoseArabic = info.counseling.missedDoseArabic }
         }
         if selection.contains(.arabicExplanation) {
-            drug.arabicExplanation = info.arabicExplanation.shortExplanation
-            drug.arabicMemoryStory = info.arabicExplanation.memoryStory
-            drug.arabicImportantNote = info.arabicExplanation.importantNote
+            if selection.includes("arabic.explanation") { drug.arabicExplanation = info.arabicExplanation.shortExplanation }
+            if selection.includes("arabic.story") { drug.arabicMemoryStory = info.arabicExplanation.memoryStory }
+            if selection.includes("arabic.note") { drug.arabicImportantNote = info.arabicExplanation.importantNote }
         }
         if selection.contains(.adverseEffects) {
-            drug.commonSideEffects = info.adverseEffects.common
-            drug.seriousSideEffects = info.adverseEffects.serious
+            if selection.includes("effects.common") { drug.commonSideEffects = info.adverseEffects.common }
+            if selection.includes("effects.serious") { drug.seriousSideEffects = info.adverseEffects.serious }
         }
         if selection.contains(.memorization) {
-            drug.mustKnow = info.memorization.mustKnow
-            drug.flashcards = info.memorization.flashcards.map { "\($0.question)\t\($0.answer)" }
+            if selection.includes("memory.mustKnow") { drug.mustKnow = info.memorization.mustKnow }
+            if selection.includes("memory.flashcards") { drug.flashcards = info.memorization.flashcards.map { "\($0.question)\t\($0.answer)" } }
             let reviewItems = (info.memorization.reviewQuestions ?? []).filter { item in
                 selection.reviewQuestionPrompts?.contains(item.prompt) ?? true
             }
-            drug.generatedReviewQuestions = reviewItems.compactMap { item in
+            if selection.includes("memory.reviewQuestions") { drug.generatedReviewQuestions = reviewItems.compactMap { item in
                 let prompt = item.prompt.trimmed
                 let answer = item.correctAnswer.trimmed
                 guard !prompt.isEmpty, !answer.isEmpty else { return nil }
@@ -1133,9 +1117,9 @@ enum DrugImportApplier {
                     relatedField: item.relatedField.trimmed,
                     difficulty: item.difficulty.trimmed.isEmpty ? "medium" : item.difficulty.trimmed
                 )
-            }
-            drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic
-            drug.patientQuestions = info.memorization.flashcards.map(\.question)
+            } }
+            if selection.includes("memory.summary") { drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic }
+            if selection.includes("memory.flashcards") { drug.patientQuestions = info.memorization.flashcards.map(\.question) }
         }
         if selection.contains(.sourceQuality) || !selection.sections.isEmpty {
             drug.importedSourceName = info.sourceQuality.sourceName

@@ -154,7 +154,7 @@ private struct LearningSettingsView: View {
                 LabeledContent("App build", value: appBuild)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("DeepSeek receives compact trusted source text, local brand-name text when you ask it to resolve a match, and compact practice facts. Drug photos stay on device.")
+                Text("For standalone generation, DeepSeek receives the drug identity and optional package text you entered. Trusted import sends compact source text, and AI practice sends compact saved facts. Drug photos stay on device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

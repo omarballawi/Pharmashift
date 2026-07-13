@@ -212,6 +212,17 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertTrue(drug.mechanism.isEmpty)
     }
 
+    func testImportApplierRespectsFieldLevelExclusions() throws {
+        let drug = Drug(scientificName: "Keep me", tradeNames: ["Old trade"])
+        let info = try DrugImportValidator.parse(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packet: mockPacket())
+        let selection = ImportSelection(sections: [.identity, .safety], excludedFieldKeys: ["identity.trade", "safety.warnings"])
+        DrugImportApplier.apply(info, selection: selection, to: drug)
+        XCTAssertEqual(drug.scientificName, "Perindopril arginine")
+        XCTAssertEqual(drug.tradeNames, ["Old trade"])
+        XCTAssertTrue(drug.warnings.isEmpty)
+        XCTAssertFalse(drug.contraindications.isEmpty)
+    }
+
     private func confirmedIdentity() -> UserConfirmedDrugIdentity {
         UserConfirmedDrugIdentity(scientificName: "Perindopril arginine", tradeNames: ["Coversyl"], strength: "5 mg", dosageForm: "Tablet", route: "Oral", system: "Cardiovascular", drugClass: "ACE inhibitor")
     }

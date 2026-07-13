@@ -663,23 +663,39 @@ private struct ImportPreviewView: View {
                 }
             }
             sectionToggle(.identity) { identityPreview }
-            sectionToggle(.usesMechanism) { previewList("Main uses", info.usesMechanism.mainUses); arabicText(info.usesMechanism.simpleMechanismArabic); chips(info.usesMechanism.mechanismKeywords) }
+            sectionToggle(.usesMechanism) {
+                fieldToggle("uses.indications", "Main uses", info.usesMechanism.mainUses.joined(separator: " • "))
+                fieldToggle("uses.mechanism", "Mechanism", info.usesMechanism.simpleMechanismArabic)
+                chips(info.usesMechanism.mechanismKeywords)
+            }
             sectionToggle(.pharmacokinetics) { pkPreview }
             sectionToggle(.safety) { safetyPreview }
             sectionToggle(.counseling) { counselingPreview }
-            sectionToggle(.arabicExplanation) { arabicText(info.arabicExplanation.shortExplanation); arabicText(info.arabicExplanation.memoryStory); arabicText(info.arabicExplanation.importantNote) }
-            sectionToggle(.adverseEffects) { previewList("Common", info.adverseEffects.common); previewList("Serious", info.adverseEffects.serious) }
+            sectionToggle(.arabicExplanation) {
+                fieldToggle("arabic.explanation", "Explanation", info.arabicExplanation.shortExplanation)
+                fieldToggle("arabic.story", "Memory story", info.arabicExplanation.memoryStory)
+                fieldToggle("arabic.note", "Important note", info.arabicExplanation.importantNote)
+            }
+            sectionToggle(.adverseEffects) {
+                fieldToggle("effects.common", "Common", info.adverseEffects.common.joined(separator: " • "))
+                fieldToggle("effects.serious", "Serious", info.adverseEffects.serious.joined(separator: " • "))
+            }
             sectionToggle(.memorization) {
-                previewList("Must know", info.memorization.mustKnow)
-                flashcards(info.memorization.flashcards)
+                fieldToggle("memory.mustKnow", "Must know", info.memorization.mustKnow.joined(separator: " • "))
+                fieldToggle("memory.flashcards", "Flashcards", info.memorization.flashcards.map { "\($0.question): \($0.answer)" }.joined(separator: " • "))
                 reviewQuestions
-                arabicText(info.memorization.oneLineSummaryArabic)
+                fieldToggle("memory.summary", "Summary", info.memorization.oneLineSummaryArabic)
             }
             Section {
                 Button(action: onSave) { Label("Save selected sections", systemImage: "square.and.arrow.down.fill").frame(maxWidth: .infinity, minHeight: 48) }
                     .buttonStyle(.borderedProminent)
                     .disabled(selection.sections.isEmpty)
-                Button(action: { selection.sections = Set(ImportSection.allCases); onSave() }) { Label("Save all", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: 44) }
+                Button(action: {
+                    selection.sections = Set(ImportSection.allCases)
+                    selection.excludedFieldKeys = []
+                    selection.reviewQuestionPrompts = nil
+                    onSave()
+                }) { Label("Save all", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: 44) }
                 Button(action: onEdit) { Label("Edit before saving", systemImage: "pencil") }
                 Button(action: onRetry) { Label("Retry AI formatting", systemImage: "arrow.clockwise") }
                 Button(role: .destructive, action: onReject) { Label("Reject import", systemImage: "xmark.circle") }
@@ -700,22 +716,25 @@ private struct ImportPreviewView: View {
 
     private var identityPreview: some View {
         VStack(alignment: .leading, spacing: 6) {
-            LabeledContent("Scientific", value: info.identity.scientificName)
-            LabeledContent("Trade", value: info.identity.tradeNames.joined(separator: ", "))
-            LabeledContent("Class", value: info.identity.class)
-            LabeledContent("Strength", value: info.identity.strength)
-            LabeledContent("Form", value: info.identity.dosageForm)
-            LabeledContent("Route", value: info.identity.route)
+            fieldToggle("identity.scientific", "Scientific", info.identity.scientificName)
+            fieldToggle("identity.trade", "Trade", info.identity.tradeNames.joined(separator: ", "))
+            fieldToggle("identity.system", "System", info.identity.system)
+            fieldToggle("identity.class", "Class", info.identity.class)
+            fieldToggle("identity.strength", "Strength", info.identity.strength)
+            fieldToggle("identity.form", "Form", info.identity.dosageForm)
+            fieldToggle("identity.route", "Route", info.identity.route)
         }
     }
 
     private var pkPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Half-life: \(info.pharmacokinetics.halfLifeDisplay) (\(info.pharmacokinetics.halfLifeBand.rawValue))")
-            Text("Onset: \(info.pharmacokinetics.onsetDisplay) (\(info.pharmacokinetics.onsetBand.rawValue))")
-            Text("Duration: \(info.pharmacokinetics.durationDisplay) (\(info.pharmacokinetics.durationBand.rawValue))")
-            Text("Dosing: \(info.pharmacokinetics.dosingFrequency.rawValue)")
-            arabicText(info.pharmacokinetics.pkMemoryLineArabic)
+            fieldToggle("pk.halfLife", "Half-life", "\(info.pharmacokinetics.halfLifeDisplay) (\(info.pharmacokinetics.halfLifeBand.rawValue))")
+            fieldToggle("pk.onset", "Onset", "\(info.pharmacokinetics.onsetDisplay) (\(info.pharmacokinetics.onsetBand.rawValue))")
+            fieldToggle("pk.duration", "Duration", "\(info.pharmacokinetics.durationDisplay) (\(info.pharmacokinetics.durationBand.rawValue))")
+            fieldToggle("pk.dosing", "Dosing", info.pharmacokinetics.dosingFrequency.rawValue)
+            fieldToggle("pk.prodrug", "Prodrug", info.pharmacokinetics.prodrugStatus.rawValue)
+            fieldToggle("pk.excretion", "Metabolism & excretion", [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionRoute.rawValue, info.pharmacokinetics.excretionNotes].compactMap { $0 }.joined(separator: " • "))
+            fieldToggle("pk.memory", "PK memory line", info.pharmacokinetics.pkMemoryLineArabic)
         }
         .font(.subheadline)
     }
@@ -734,27 +753,33 @@ private struct ImportPreviewView: View {
 
     private var counselingPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
-            arabicText(info.counseling.howToTakeArabic)
-            arabicText(info.counseling.foodInstructionArabic)
-            arabicText(info.counseling.simplePatientSentenceArabic)
-            previewList("May feel", info.counseling.whatPatientMayFeelArabic)
-            previewList("Seek help", info.counseling.whenToSeekHelpArabic)
-            arabicText(info.counseling.missedDoseArabic)
+            fieldToggle("counseling.howTo", "How to take", info.counseling.howToTakeArabic)
+            fieldToggle("counseling.food", "Food", info.counseling.foodInstructionArabic)
+            fieldToggle("counseling.sentence", "Patient sentence", info.counseling.simplePatientSentenceArabic)
+            fieldToggle("counseling.feelings", "May feel", info.counseling.whatPatientMayFeelArabic.joined(separator: " • "))
+            fieldToggle("counseling.seekHelp", "Seek help", info.counseling.whenToSeekHelpArabic.joined(separator: " • "))
+            fieldToggle("counseling.missedDose", "Missed dose", info.counseling.missedDoseArabic)
+        }
+    }
+
+    private func fieldToggle(_ key: String, _ label: String, _ value: String) -> some View {
+        Toggle(isOn: Binding(
+            get: { selection.includes(key) },
+            set: { enabled in if enabled { selection.excludedFieldKeys.remove(key) } else { selection.excludedFieldKeys.insert(key) } }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(.caption.weight(.semibold))
+                Text(value.trimmed.isEmpty ? "Unknown" : value).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
+            }
         }
     }
 
     private func safetyLine(_ title: String, _ severity: Severity, _ items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            severityBadge(title, severity)
-            ForEach(items, id: \.self) { Text($0).font(.caption) }
-        }
+        fieldToggle("safety.\(title.lowercased())", title, "\(severity.rawValue) • \(items.joined(separator: " • "))")
     }
 
     private func safetyNote(_ title: String, _ severity: Severity, _ note: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            severityBadge(title, severity)
-            if !note.trimmed.isEmpty { Text(note).font(.caption) }
-        }
+        fieldToggle("safety.\(title.lowercased())", title, "\(severity.rawValue) • \(note)")
     }
 
     private func severityBadge(_ title: String, _ severity: Severity) -> some View {

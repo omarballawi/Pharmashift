@@ -25,6 +25,7 @@ private enum DrugDetailSheet: String, Identifiable {
     case safetySort
     case counselingBuilder
     case voiceCounseling
+    case atomicNotes
     var id: String { rawValue }
 }
 
@@ -81,6 +82,7 @@ struct DrugDetailView: View {
                 case .safetySort: SafetySortView(drug: drug)
                 case .counselingBuilder: CounselingBuilderView(drug: drug)
                 case .voiceCounseling: VoiceCounselingView(drug: drug)
+                case .atomicNotes: AtomicNotesView(drug: drug)
                 }
             }
         }
@@ -131,6 +133,7 @@ struct DrugDetailView: View {
             actions
         case .links:
             notesCard
+            interactiveLessonButton("Add a linked note", icon: "note.text.badge.plus", destination: .atomicNotes)
             connectedKnowledgeCard
             provenanceDetails
         }
@@ -369,7 +372,16 @@ struct DrugDetailView: View {
     }
 
     private var notesCard: some View {
-        card("Personal notes", icon: "note.text") { expandableValue("My notes", drug.notes) }
+        card("Personal notes", icon: "note.text") {
+            expandableValue("My notes", drug.notes)
+            ForEach(drug.atomicNotes.prefix(4)) { note in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack { Text(note.kind.rawValue).font(.caption.bold()).foregroundStyle(theme.tint); Spacer(); Text(note.linkedField).font(.caption2).foregroundStyle(.secondary) }
+                    Text(note.text).font(.subheadline)
+                }
+                .padding(10).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
     }
 
     private var masteryCard: some View {
@@ -702,6 +714,53 @@ private struct CounselingBuilderView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
+}
+
+private struct AtomicNotesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    let drug: Drug
+    @State private var kind: AtomicNoteKind = .memoryTrick
+    @State private var linkedField = "General"
+    @State private var noteText = ""
+    @State private var contextText = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("New atomic note") {
+                    Picker("Type", selection: $kind) { ForEach(AtomicNoteKind.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Linked field", selection: $linkedField) {
+                        ForEach(["General", "Identity", "Uses", "Mechanism", "PK", "Safety", "Counseling", "Shelf"], id: \.self) { Text($0).tag($0) }
+                    }
+                    TextField("One small, specific note", text: $noteText, axis: .vertical).lineLimit(2...5)
+                    TextField("Context or shift (optional)", text: $contextText)
+                    Button { save() } label: { Label("Save linked note", systemImage: "link.badge.plus").frame(maxWidth: .infinity, minHeight: 44) }
+                        .buttonStyle(.borderedProminent).disabled(noteText.trimmed.isEmpty)
+                }
+                Section("Linked to \(drug.displayName)") {
+                    if drug.atomicNotes.isEmpty { Text("No atomic notes yet.").foregroundStyle(.secondary) }
+                    ForEach(drug.atomicNotes) { note in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack { Text(note.kind.rawValue).font(.caption.bold()); Spacer(); Text(note.linkedField).font(.caption2).foregroundStyle(.secondary) }
+                            Text(note.text)
+                            if !note.context.trimmed.isEmpty { Text(note.context).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        .swipeActions { Button("Delete", role: .destructive) { remove(note) } }
+                    }
+                }
+            }
+            .navigationTitle("Atomic Notes").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func save() {
+        var notes = drug.atomicNotes
+        notes.insert(AtomicDrugNote(kindRaw: kind.rawValue, text: noteText.trimmed, linkedField: linkedField, context: contextText.trimmed), at: 0)
+        drug.atomicNotes = notes; try? context.save(); noteText = ""; contextText = ""
+    }
+    private func remove(_ note: AtomicDrugNote) { drug.atomicNotes = drug.atomicNotes.filter { $0.id != note.id }; try? context.save() }
 }
 
 @MainActor

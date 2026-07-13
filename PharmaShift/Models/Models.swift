@@ -232,6 +232,25 @@ struct MemoryItemState: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+enum AtomicNoteKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case memoryTrick = "Memory trick"
+    case patientCounseling = "Patient counseling"
+    case shelfObservation = "Shelf observation"
+    case confusingPoint = "Confusing point"
+    case sourceCorrection = "Source correction"
+    var id: String { rawValue }
+}
+
+struct AtomicDrugNote: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID = UUID()
+    var createdAt: Date = .now
+    var kindRaw: String
+    var text: String
+    var linkedField: String = "General"
+    var context: String = ""
+    var kind: AtomicNoteKind { AtomicNoteKind(rawValue: kindRaw) ?? .confusingPoint }
+}
+
 struct PracticeAnswer: Identifiable, Codable, Equatable {
     var id: UUID
     var questionID: UUID
@@ -345,6 +364,7 @@ final class Drug {
     var flashcards: [String] = []
     var reviewQuestionsJSON: String = ""
     var memoryItemsJSON: String = ""
+    var atomicNotesJSON: String = ""
     var oneLineSummaryArabic: String = ""
     var sourceNeedsReview: Bool = false
     var sourceMissingFields: [String] = []
@@ -526,12 +546,23 @@ final class Drug {
         }
     }
 
+    var atomicNotes: [AtomicDrugNote] {
+        get {
+            guard let data = atomicNotesJSON.data(using: .utf8) else { return [] }
+            return (try? JSONDecoder().decode([AtomicDrugNote].self, from: data)) ?? []
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue), let value = String(data: data, encoding: .utf8) else { atomicNotesJSON = ""; return }
+            atomicNotesJSON = value
+        }
+    }
+
     var masteryCount: Int {
         [masteryScientificName, masteryTradeName, masteryClass, masteryUse, masteryWarning, masteryCounseling]
             .filter { $0 }.count
     }
 
-    var requiredMasteryCount: Int { 6 }
+    var requiredMasteryCount: Int { drugClass.trimmed.isEmpty ? 5 : 6 }
     var isMastered: Bool { masteryCount >= requiredMasteryCount }
 
     func recalculateConfidence() {

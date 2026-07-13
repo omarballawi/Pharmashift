@@ -9,7 +9,7 @@ struct SystemDashboardMetrics {
     var masteredCount: Int { drugs.filter(\.isMastered).count }
     var weakCount: Int { drugs.filter { $0.confidenceLevel == .weak || $0.isConfusing }.count }
     var masteryProgress: Double {
-        let required = drugs.reduce(0) { $0 + $1.requiredMasteryCount }
+        let required = drugs.count * 6
         guard required > 0 else { return 0 }
         return min(1, Double(drugs.reduce(0) { $0 + $1.masteryCount }) / Double(required))
     }

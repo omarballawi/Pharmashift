@@ -265,6 +265,17 @@ private struct DailyRefreshView: View {
                     }
                     .padding(15).background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                 }
+                if let drug = drugs.first(where: { !$0.atomicNotes.isEmpty }), let note = drug.atomicNotes.first {
+                    NavigationLink { DrugDetailView(drug: drug) } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("From your \(note.kind.rawValue.lowercased())", systemImage: "link.circle.fill").font(.headline).foregroundStyle(.tint)
+                            Text(note.text).foregroundStyle(.primary)
+                            Text("\(drug.displayName) • \(note.linkedField)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(15).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                    }.buttonStyle(.plain)
+                }
                 if refreshDrugs.isEmpty && notes.isEmpty {
                     EmptyStateView(icon: "checkmark.seal.fill", title: "All refreshed", message: "Complete a few cards and notes; Renlyst will resurface them here later.")
                 }

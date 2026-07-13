@@ -174,12 +174,7 @@ struct DrugDetailView: View {
 
     private var connectedKnowledgeCard: some View {
         card("Connected knowledge", icon: "point.3.connected.trianglepath.dotted") {
-            value("System", drug.chapterRaw)
-            value("Class", drug.drugClass)
-            expandableValue("Uses", drug.indications.joined(separator: " • "))
-            expandableValue("Warnings", drug.warnings.joined(separator: " • "))
-            Text("Related drugs and backlinks will appear here as your library grows.")
-                .font(.caption).foregroundStyle(.secondary)
+            LocalDrugGraphView(drug: drug)
         }
     }
 
@@ -540,6 +535,56 @@ struct DrugDetailView: View {
     }
     private func severityColor(_ rawValue: String) -> Color {
         switch severity(rawValue) { case .low: .green; case .medium: .orange; case .high: .red; case .unknown: .secondary }
+    }
+}
+
+private struct LocalDrugGraphView: View {
+    @Environment(AppTheme.self) private var theme
+    @Query(sort: \Drug.scientificName) private var allDrugs: [Drug]
+    let drug: Drug
+
+    private var nodes: [(label: String, icon: String, color: Color)] {
+        [
+            (drug.chapterRaw, drug.chapter.icon, theme.colors(for: drug.chapter).first ?? theme.tint),
+            (drug.drugClass.trimmed.isEmpty ? "Class unknown" : drug.drugClass, "square.grid.2x2.fill", .indigo),
+            (drug.indications.first ?? "Use unknown", "cross.case.fill", .green),
+            (drug.warnings.first ?? "Warning unknown", "exclamationmark.triangle.fill", .orange),
+            ("\(related.count) related drugs", "pills.fill", .teal)
+        ]
+    }
+    private var related: [Drug] { allDrugs.filter { $0.id != drug.id && !$0.drugClass.trimmed.isEmpty && $0.drugClass.localizedCaseInsensitiveCompare(drug.drugClass) == .orderedSame } }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            ZStack {
+                Canvas { context, _ in
+                    for index in nodes.indices {
+                        let target = position(index, size: proxy.size)
+                        var path = Path(); path.move(to: center); path.addLine(to: target)
+                        context.stroke(path, with: .color(theme.tint.opacity(0.25)), lineWidth: 1.5)
+                    }
+                }
+                Text(drug.displayName).font(.caption.bold()).foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(2)
+                    .frame(width: 88, height: 88).background(theme.crystalGradient, in: Circle()).position(center)
+                ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
+                    VStack(spacing: 3) { Image(systemName: node.icon); Text(node.label).font(.system(size: 9, weight: .semibold)).lineLimit(2).multilineTextAlignment(.center) }
+                        .foregroundStyle(node.color).frame(width: 84).frame(minHeight: 48).padding(.vertical, 5)
+                        .background(node.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 13)).position(position(index, size: proxy.size))
+                }
+            }
+        }
+        .frame(height: 300).accessibilityElement(children: .ignore)
+        .accessibilityLabel(nodes.map { "\($0.label) linked to \(drug.displayName)" }.joined(separator: "; "))
+        if !related.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack { ForEach(related.prefix(6)) { value in NavigationLink { DrugDetailView(drug: value) } label: { Text(value.displayName).font(.caption.bold()).padding(.horizontal, 10).frame(minHeight: 38).background(.teal.opacity(0.10), in: Capsule()) }.buttonStyle(.plain) } }
+            }
+        }
+    }
+    private func position(_ index: Int, size: CGSize) -> CGPoint {
+        let angle = Double(index) / Double(max(nodes.count, 1)) * .pi * 2 - .pi / 2
+        return CGPoint(x: size.width / 2 + CGFloat(cos(angle)) * max(90, size.width / 2 - 48), y: size.height / 2 + CGFloat(sin(angle)) * max(92, size.height / 2 - 40))
     }
 }
 

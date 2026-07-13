@@ -91,6 +91,9 @@ private struct MoreView: View {
                 }
             }
             Section("App") {
+                NavigationLink { CommandPaletteView() } label: {
+                    Label("Quick search", systemImage: "command.circle.fill")
+                }
                 NavigationLink { BackupDataView() } label: {
                     Label("Backup & Data", systemImage: "externaldrive.fill")
                 }
@@ -104,6 +107,33 @@ private struct MoreView: View {
         }
         .navigationTitle("More / المزيد")
         .accessibilityIdentifier("more.dashboard")
+    }
+}
+
+private struct CommandPaletteView: View {
+    @Environment(AppNavigation.self) private var navigation
+    @Query(sort: \Drug.scientificName) private var drugs: [Drug]
+    @State private var query = ""
+
+    private var results: [Drug] {
+        guard !query.trimmed.isEmpty else { return Array(drugs.prefix(8)) }
+        return drugs.filter { [$0.displayName, $0.tradeNames.joined(separator: " "), $0.drugClass, $0.chapterRaw, $0.notes, $0.arabicExplanation].joined(separator: " ").localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        List {
+            Section("Actions") {
+                Button { navigation.openCapture() } label: { Label("Capture a drug", systemImage: "camera.fill") }
+                Button { navigation.startReview(mode: .smartSession) } label: { Label("Start Smart Session", systemImage: "sparkles") }
+                Button { navigation.openLibrary() } label: { Label("Open Library", systemImage: "books.vertical.fill") }
+            }
+            Section(query.trimmed.isEmpty ? "Recent cards" : "Results") {
+                ForEach(results) { drug in NavigationLink { DrugDetailView(drug: drug) } label: { VStack(alignment: .leading) { Text(drug.displayName); Text([drug.firstTradeName, drug.drugClass].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) } } }
+                if results.isEmpty { Text("No matching drug or note.").foregroundStyle(.secondary) }
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Drug, class, system, note, Arabic")
+        .navigationTitle("Quick Search")
     }
 }
 

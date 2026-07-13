@@ -522,6 +522,7 @@ struct PracticeSessionView: View {
         guard !hasAnswered else { return }
         selectedChoice = choice
         let rating: ReviewRating = choice == question.correctAnswer ? .correct : .wrong
+        UINotificationFeedbackGenerator().notificationOccurred(rating == .correct ? .success : .error)
         record(rating: rating, response: choice, question: question)
     }
 
@@ -537,6 +538,7 @@ struct PracticeSessionView: View {
             .flatMap { $0.components(separatedBy: ",") }
             .map { normalizedName($0) }
         let rating: ReviewRating = accepted.contains(response) ? .correct : .wrong
+        UINotificationFeedbackGenerator().notificationOccurred(rating == .correct ? .success : .error)
         record(rating: rating, response: typedResponse.trimmed, question: question)
     }
 

@@ -92,6 +92,9 @@ final class PharmaShiftUITests: XCTestCase {
 
     private func openDeepSeekSettings(in app: XCUIApplication) {
         app.tabBars.buttons["More"].tap()
+        if !app.descendants(matching: .any)["more.dashboard"].waitForExistence(timeout: 2) {
+            app.tabBars.buttons["More"].tap()
+        }
         let preferences = app.buttons["Practice preferences"]
         XCTAssertTrue(preferences.waitForExistence(timeout: 5))
         preferences.tap()

@@ -103,6 +103,7 @@ private struct MoreView: View {
             }
         }
         .navigationTitle("More / المزيد")
+        .accessibilityIdentifier("more.dashboard")
     }
 }
 

@@ -531,7 +531,7 @@ final class Drug {
             .filter { $0 }.count
     }
 
-    var requiredMasteryCount: Int { drugClass.trimmed.isEmpty ? 5 : 6 }
+    var requiredMasteryCount: Int { 6 }
     var isMastered: Bool { masteryCount >= requiredMasteryCount }
 
     func recalculateConfidence() {

@@ -64,19 +64,19 @@ final class DrugImportServiceTests: XCTestCase {
     func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {
         let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.")
         let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
-        XCTAssertTrue(text.contains("\"max_tokens\":2200"))
+        XCTAssertTrue(text.contains("\"max_tokens\":4500"))
         XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
         XCTAssertTrue(text.contains("does not use RxNorm, DailyMed, or openFDA"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
     }
 
-    func testAIDraftAlwaysNeedsReviewAndUsesConfirmedIdentity() throws {
+    func testStandaloneAIDraftUsesConfirmedIdentityWithoutSourceRequirement() throws {
         let info = try DrugImportValidator.parseAIDraft(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet")
         XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
-        XCTAssertEqual(info.sourceQuality.sourceName, "DeepSeek AI draft")
+        XCTAssertEqual(info.sourceQuality.sourceName, "Generated with AI")
         XCTAssertEqual(info.sourceQuality.sourceURL, "")
-        XCTAssertTrue(info.sourceQuality.needsReview)
-        XCTAssertTrue(info.sourceQuality.notes.contains("Verify every clinical fact"))
+        XCTAssertFalse(info.sourceQuality.needsReview)
+        XCTAssertTrue(info.sourceQuality.notes.contains("editable"))
     }
 
     func testKeyStoreFallsBackToProtectedDeviceStorage() throws {

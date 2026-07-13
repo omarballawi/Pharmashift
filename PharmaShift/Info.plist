@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Renlyst uses the microphone only while you practice counseling a simulated patient.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Renlyst converts your counseling practice to text so it can check whether you covered the saved counseling points.</string>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
 	<key>CFBundleDisplayName</key><string>Renlyst</string>
 	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>

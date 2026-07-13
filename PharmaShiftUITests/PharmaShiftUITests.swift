@@ -1,6 +1,13 @@
 import XCTest
 
 final class PharmaShiftUITests: XCTestCase {
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication, maximumSwipes: Int = 6) {
+        for _ in 0..<maximumSwipes {
+            if element.isHittable { return }
+            app.swipeUp()
+        }
+    }
+
     func testHomeDashboardAndFastCaptureAreReachable() {
         let app = XCUIApplication()
         app.launch()
@@ -136,7 +143,10 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(importButton.waitForExistence(timeout: 10))
         importButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.photo"].waitForExistence(timeout: 5))
-        app.buttons["trustedImport.confirmIdentity"].tap()
+        let confirmIdentity = app.buttons["trustedImport.confirmIdentity"]
+        scrollToHittable(confirmIdentity, in: app)
+        XCTAssertTrue(confirmIdentity.isHittable)
+        confirmIdentity.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
         let scientific = app.textFields["trustedImport.scientificName"]
         XCTAssertTrue(scientific.waitForExistence(timeout: 5))
@@ -147,12 +157,16 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
         let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
+        scrollToHittable(formulation, in: app)
+        XCTAssertTrue(formulation.isHittable)
         formulation.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 10))
         let trade = app.switches["import.field.identity.trade"]
         let scientificField = app.switches["import.field.identity.scientific"]
         XCTAssertEqual(trade.value as? String, "1")
         XCTAssertEqual(scientificField.value as? String, "1")
+        scrollToHittable(scientificField, in: app)
+        XCTAssertTrue(scientificField.isHittable)
         scientificField.tap()
         XCTAssertEqual(scientificField.value as? String, "0")
         app.swipeUp()

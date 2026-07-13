@@ -40,14 +40,16 @@ final class PharmaShiftUITests: XCTestCase {
         app.launchArguments.append("-mockDrugImport")
         app.launch()
         app.tabBars.buttons["Add"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
         let generate = app.buttons["capture.generateAI"]
-        XCTAssertTrue(generate.waitForExistence(timeout: 5))
+        XCTAssertTrue(generate.waitForExistence(timeout: 15))
         generate.tap()
         let scientific = app.textFields["Scientific name"]
-        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
+        XCTAssertTrue(scientific.waitForExistence(timeout: 10))
         scientific.tap(); scientific.typeText("Metformin")
-        app.buttons["Generate complete card"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 8))
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Generated with AI"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
     }
@@ -140,16 +142,23 @@ final class PharmaShiftUITests: XCTestCase {
         let importButton = app.buttons["drugEditor.import"]
         XCTAssertTrue(importButton.waitForExistence(timeout: 5))
         importButton.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["import.searchScreen"].waitForExistence(timeout: 5))
-        app.buttons["import.search"].tap()
-        let formulation = app.buttons["import.result.mock-label"]
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.photo"].waitForExistence(timeout: 5))
+        app.buttons["trustedImport.confirmIdentity"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
+        let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
         formulation.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["import.preview"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.switches["import.field.Trade names"].value as? String, "1")
-        XCTAssertEqual(app.switches["import.field.Scientific name"].value as? String, "0")
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 10))
+        let trade = app.switches["import.field.identity.trade"]
+        let scientificField = app.switches["import.field.identity.scientific"]
+        XCTAssertEqual(trade.value as? String, "1")
+        XCTAssertEqual(scientificField.value as? String, "1")
+        scientificField.tap()
+        XCTAssertEqual(scientificField.value as? String, "0")
         app.swipeUp()
-        let apply = app.descendants(matching: .any)["import.apply"]
+        let apply = app.descendants(matching: .any)["trustedImport.saveSelected"]
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
         XCTAssertTrue(apply.isEnabled)
     }

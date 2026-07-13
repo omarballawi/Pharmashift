@@ -501,6 +501,7 @@ private struct ImportFromPhotoView: View {
                     Label("Confirm identity fields", systemImage: "arrow.right.circle.fill").frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("trustedImport.confirmIdentity")
             }
         }
         .accessibilityIdentifier("trustedImport.photo")
@@ -550,6 +551,7 @@ private struct ConfirmDrugIdentityView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canContinue)
+                .accessibilityIdentifier("trustedImport.continue")
             }
         }
         .accessibilityIdentifier("trustedImport.confirm")
@@ -572,6 +574,7 @@ private struct ImportSourceSearchView: View {
             Section {
                 LabeledContent("Confirmed query", value: query)
                 Button(action: onSearch) { Label("Search again", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("trustedImport.search")
             } footer: {
                 Text("Source priority: your confirmed name, RxNorm normalization, DailyMed labels, then openFDA fallback. Iraqi local trade names may not match perfectly.")
             }
@@ -626,6 +629,7 @@ private struct ImportSourceSearchView: View {
                                 if selectedID == result.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
                             }
                         }
+                        .accessibilityIdentifier("trustedImport.result.\(result.id)")
                     }
                 }
             }
@@ -692,6 +696,7 @@ private struct ImportPreviewView: View {
                 Button(action: onSave) { Label("Save selected sections", systemImage: "square.and.arrow.down.fill").frame(maxWidth: .infinity, minHeight: 48) }
                     .buttonStyle(.borderedProminent)
                     .disabled(selection.sections.isEmpty)
+                    .accessibilityIdentifier("trustedImport.saveSelected")
                 Button(action: {
                     selection.sections = Set(ImportSection.allCases)
                     selection.excludedFieldKeys = []
@@ -774,6 +779,7 @@ private struct ImportPreviewView: View {
                 Text(value.trimmed.isEmpty ? "Unknown" : value).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
             }
         }
+        .accessibilityIdentifier("import.field.\(key)")
     }
 
     private func safetyLine(_ title: String, _ severity: Severity, _ items: [String]) -> some View {

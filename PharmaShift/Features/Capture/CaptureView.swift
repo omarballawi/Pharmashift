@@ -149,6 +149,7 @@ struct CaptureView: View {
                     .disabled(!canSave)
             }
         }
+        .accessibilityIdentifier("capture.screen")
         .navigationTitle("Capture")
         .scrollDismissesKeyboard(.interactively)
         .background(theme.background)
@@ -176,7 +177,6 @@ struct CaptureView: View {
         .navigationDestination(isPresented: $opensSavedDrug) {
             if let savedDrug { DrugDetailView(drug: savedDrug) }
         }
-        .onAppear { focus = isUnknown ? .unknownLabel : .scientific }
         .onAppear {
             if let requested = navigation.captureChapter {
                 chapter = requested

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-13T02:18:03.722946+00:00",
+  "generated_at": "2026-07-13T02:53:19.203358+00:00",
   "nodes": {
     "pharmashift_features_library_drugdetailview_drugdetailview": {
       "code_fingerprint": "514ff2bfd1bb80615daf2976ed66d1c03997de6d599af622de6f65680fa01290",
@@ -12,7 +12,7 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.876781902,
+      "score": 0.876286032,
       "source_file": "PharmaShift/Features/Library/DrugDetailView.swift",
       "status": "tentative",
       "uses": 1
@@ -28,7 +28,7 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.876781902,
+      "score": 0.876286032,
       "source_file": "PharmaShift/Features/Library/DrugEditorView.swift",
       "status": "tentative",
       "uses": 1
@@ -44,8 +44,40 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.876781902,
+      "score": 0.876286032,
       "source_file": "PharmaShift/Features/Practice/PracticeView.swift",
+      "status": "tentative",
+      "uses": 1
+    },
+    "pharmashift_models_models_halflifeband": {
+      "code_fingerprint": "0067728c768a6d010af0e85f13ba8913b1bd8e413f7bc0cf20310524cc53fd26",
+      "label": "HalfLifeBand",
+      "last": "2026-07-07T09:42:35.207330+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-07T09:42:35.207330+00:00",
+          "outcome": "useful",
+          "q": "What should PharmaShift do after Phase 1?"
+        }
+      ],
+      "score": 0.876286032,
+      "source_file": "PharmaShift/Models/Models.swift",
+      "status": "tentative",
+      "uses": 1
+    },
+    "pharmashift_models_models_safetyseverity": {
+      "code_fingerprint": "0067728c768a6d010af0e85f13ba8913b1bd8e413f7bc0cf20310524cc53fd26",
+      "label": "SafetySeverity",
+      "last": "2026-07-07T09:42:35.207330+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-07T09:42:35.207330+00:00",
+          "outcome": "useful",
+          "q": "What should PharmaShift do after Phase 1?"
+        }
+      ],
+      "score": 0.876286032,
+      "source_file": "PharmaShift/Models/Models.swift",
       "status": "tentative",
       "uses": 1
     }

@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import PharmaShift
 
@@ -107,6 +108,36 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertNil(store.apiKey())
     }
 
+    func testFormatterUsesPersistedPreferenceKeyForAuthorization() async throws {
+        let suiteName = "RenlystFormatterTests.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        let store = DeepSeekKeyStore(
+            service: "formatter.\(UUID().uuidString)",
+            fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+            allowsKeychain: false,
+            allowsProtectedFile: false,
+            preferences: preferences
+        )
+        try store.save(apiKey: "ui-test-persisted-key")
+
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [["message": ["content": validJSON()]]]
+        ])
+        DeepSeekURLProtocolStub.requestHandler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ui-test-persisted-key")
+            let response = try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]))
+            return (response, responseBody)
+        }
+        defer { DeepSeekURLProtocolStub.requestHandler = nil }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DeepSeekURLProtocolStub.self]
+        let service = DeepSeekDrugImportService(session: URLSession(configuration: configuration), keyStore: store)
+        let info = try await service.format(packet: mockPacket(), identity: confirmedIdentity())
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
+    }
+
     func testValidatorOverridesIdentityAndFallsBackInvalidEnumsToUnknown() throws {
         let json = """
         {
@@ -186,4 +217,25 @@ final class DrugImportServiceTests: XCTestCase {
         }
         """
     }
+}
+
+private final class DeepSeekURLProtocolStub: URLProtocol {
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let handler = try XCTUnwrap(Self.requestHandler)
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }

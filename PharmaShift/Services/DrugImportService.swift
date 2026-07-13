@@ -1117,7 +1117,7 @@ enum DrugImportApplier {
                     relatedField: item.relatedField.trimmed,
                     difficulty: item.difficulty.trimmed.isEmpty ? "medium" : item.difficulty.trimmed
                 )
-            } }
+            }; drug.reviewQuestionsNeedRegeneration = false }
             if selection.includes("memory.summary") { drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic }
             if selection.includes("memory.flashcards") { drug.patientQuestions = info.memorization.flashcards.map(\.question) }
         }

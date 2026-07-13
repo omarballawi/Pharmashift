@@ -19,6 +19,7 @@ final class BackupServiceTests: XCTestCase {
             GeneratedReviewQuestion(prompt: "What class is metformin?", choices: ["Biguanide", "Sulfonylurea", "DPP-4 inhibitor", "GLP-1 agonist"], correctAnswer: "Biguanide", explanation: "Metformin is a biguanide.", questionType: .drugClass, relatedField: "class")
         ]
         drug.atomicNotes = [AtomicDrugNote(kindRaw: AtomicNoteKind.memoryTrick.rawValue, text: "Remember the biguanide link", linkedField: "Class")]
+        drug.reviewQuestionsNeedRegeneration = true
         let review = ReviewLog(drug: drug, drugNameSnapshot: drug.displayName, questionType: .use, rating: .correct, scoreBefore: 1, scoreAfter: 2)
         let shift = ShiftLog(chapterFocus: .endocrine)
         shift.whatILearned = "تعلمت اليوم"
@@ -49,6 +50,7 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertTrue(restoredDrug.masteryScientificName)
         XCTAssertEqual(restoredDrug.generatedReviewQuestions, drug.generatedReviewQuestions)
         XCTAssertEqual(restoredDrug.atomicNotes, drug.atomicNotes)
+        XCTAssertTrue(restoredDrug.reviewQuestionsNeedRegeneration)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<ReviewLog>()).first).drug?.id, drug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<EncounterNote>()).first).relatedDrug?.id, drug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<ShiftLog>()).first).whatILearned, "تعلمت اليوم")

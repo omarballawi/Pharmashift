@@ -365,6 +365,7 @@ final class Drug {
     var reviewQuestionsJSON: String = ""
     var memoryItemsJSON: String = ""
     var atomicNotesJSON: String = ""
+    var reviewQuestionsNeedRegeneration: Bool = false
     var oneLineSummaryArabic: String = ""
     var sourceNeedsReview: Bool = false
     var sourceMissingFields: [String] = []
@@ -555,6 +556,12 @@ final class Drug {
             guard let data = try? JSONEncoder().encode(newValue), let value = String(data: data, encoding: .utf8) else { atomicNotesJSON = ""; return }
             atomicNotesJSON = value
         }
+    }
+
+    var reviewContentFingerprint: String {
+        [scientificName, tradeNames.joined(separator: "|"), drugClass, indications.joined(separator: "|"), mechanism,
+         halfLifeText, onsetText, durationText, warnings.joined(separator: "|"), contraindications.joined(separator: "|"),
+         interactions.joined(separator: "|"), counselingSentence, howToTake, foodInstruction].joined(separator: "¦")
     }
 
     var masteryCount: Int {

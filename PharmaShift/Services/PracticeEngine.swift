@@ -144,7 +144,11 @@ enum PracticeGenerator {
             }
             questionType = .counseling; candidates = []; image = nil
         case .smartSession, .weakDrug, .dueReview, .systemSpecific, .casePractice:
-            fatalError("Resolved above")
+            prompt = "Which fact belongs to \(drug.displayName)?"
+            answer = drug.indications.first ?? drug.drugClass
+            questionType = .use
+            candidates = all.compactMap(\.indications.first)
+            image = nil
         }
         if resolvedMode != .imageQuiz && (questionType == .scientificName || questionType == .tradeName) {
             return PracticeQuestion(

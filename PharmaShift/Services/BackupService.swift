@@ -141,6 +141,7 @@ struct DrugBackupDTO: Codable {
     var reviewQuestionsJSON: String = ""
     var memoryItemsJSON: String = ""
     var atomicNotesJSON: String = ""
+    var reviewQuestionsNeedRegeneration: Bool = false
 
     init(_ drug: Drug, includesImages: Bool) {
         id = drug.id
@@ -239,6 +240,7 @@ struct DrugBackupDTO: Codable {
         reviewQuestionsJSON = drug.reviewQuestionsJSON
         memoryItemsJSON = drug.memoryItemsJSON
         atomicNotesJSON = drug.atomicNotesJSON
+        reviewQuestionsNeedRegeneration = drug.reviewQuestionsNeedRegeneration
     }
 
     func makeModel() -> Drug {
@@ -345,6 +347,7 @@ struct DrugBackupDTO: Codable {
         drug.reviewQuestionsJSON = reviewQuestionsJSON
         drug.memoryItemsJSON = memoryItemsJSON
         drug.atomicNotesJSON = atomicNotesJSON
+        drug.reviewQuestionsNeedRegeneration = reviewQuestionsNeedRegeneration
     }
 }
 

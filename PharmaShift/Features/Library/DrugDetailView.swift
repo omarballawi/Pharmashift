@@ -26,6 +26,7 @@ private enum DrugDetailSheet: String, Identifiable {
     case counselingBuilder
     case voiceCounseling
     case atomicNotes
+    case regenerateReview
     var id: String { rawValue }
 }
 
@@ -83,6 +84,7 @@ struct DrugDetailView: View {
                 case .counselingBuilder: CounselingBuilderView(drug: drug)
                 case .voiceCounseling: VoiceCounselingView(drug: drug)
                 case .atomicNotes: AtomicNotesView(drug: drug)
+                case .regenerateReview: DrugImportView(drug: drug, startsInAIMode: true)
                 }
             }
         }
@@ -420,6 +422,12 @@ struct DrugDetailView: View {
 
     private var actions: some View {
         card("Review actions", icon: "brain.head.profile") {
+            if drug.reviewQuestionsNeedRegeneration {
+                Label("Questions need regeneration because linked card facts changed.", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .font(.caption).foregroundStyle(.orange)
+                Button { sheet = .regenerateReview } label: { Label("Regenerate with AI", systemImage: "sparkles") }
+                    .buttonStyle(.bordered)
+            }
             Button { sheet = .review } label: {
                 Label("Start review / ابدأ المراجعة", systemImage: "brain.head.profile").frame(maxWidth: .infinity, minHeight: 48)
             }

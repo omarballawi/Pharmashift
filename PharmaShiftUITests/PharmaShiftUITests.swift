@@ -174,7 +174,8 @@ final class PharmaShiftUITests: XCTestCase {
         scrollToHittable(scientificField, in: app)
         XCTAssertTrue(scientificField.isHittable)
         scientificField.tap()
-        XCTAssertEqual(scientificField.value as? String, "0")
+        expectation(for: NSPredicate(format: "value == '0'"), evaluatedWith: scientificField)
+        waitForExpectations(timeout: 5)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

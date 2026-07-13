@@ -131,20 +131,18 @@ final class PharmaShiftUITests: XCTestCase {
         app.launchArguments.append("-mockDrugImport")
         app.launch()
         app.tabBars.buttons["Add"].tap()
-        let scientific = app.textFields["capture.scientificName"]
-        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
-        scientific.tap()
-        scientific.typeText("Mock Drug")
-        app.swipeUp()
-        app.buttons["capture.saveOpen"].tap()
-        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5))
-        app.buttons["Edit"].tap()
-        let importButton = app.buttons["drugEditor.import"]
-        XCTAssertTrue(importButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
+        let importButton = app.buttons["capture.trustedImport"]
+        XCTAssertTrue(importButton.waitForExistence(timeout: 10))
         importButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.photo"].waitForExistence(timeout: 5))
         app.buttons["trustedImport.confirmIdentity"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
+        let scientific = app.textFields["Scientific name"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
+        scientific.tap()
+        scientific.typeText("Mock Drug")
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
         app.buttons["trustedImport.continue"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
         let formulation = app.buttons["trustedImport.result.mock-label"]

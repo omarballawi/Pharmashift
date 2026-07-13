@@ -61,6 +61,7 @@ struct CaptureView: View {
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("capture.trustedImport")
                 Text("Use this when you want OCR, trusted-source search, DeepSeek formatting, preview, and a memory challenge.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

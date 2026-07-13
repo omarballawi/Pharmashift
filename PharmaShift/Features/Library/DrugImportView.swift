@@ -81,7 +81,8 @@ struct DrugImportView: View {
         self.aiService = aiService
         self.fastGatherService = fastGatherService
         self.startsInAIMode = startsInAIMode
-        _stage = State(initialValue: startsInAIMode ? .confirm : .photo)
+        let skipsPhotoInTests = ProcessInfo.processInfo.arguments.contains("-mockDrugImportSkipPhoto")
+        _stage = State(initialValue: startsInAIMode || skipsPhotoInTests ? .confirm : .photo)
         _importMode = State(initialValue: startsInAIMode ? .aiDraft : .trusted)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)

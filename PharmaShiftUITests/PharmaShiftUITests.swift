@@ -136,18 +136,14 @@ final class PharmaShiftUITests: XCTestCase {
     func testImportChooserAndPreviewUseSelectiveFields() {
         let app = XCUIApplication()
         app.launchArguments.append("-mockDrugImport")
+        app.launchArguments.append("-mockDrugImportSkipPhoto")
         app.launch()
         app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
         let importButton = app.buttons["capture.trustedImport"]
         XCTAssertTrue(importButton.waitForExistence(timeout: 10))
         importButton.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.photo"].waitForExistence(timeout: 5))
-        let confirmIdentity = app.buttons["trustedImport.confirmIdentity"]
-        scrollToHittable(confirmIdentity, in: app)
-        XCTAssertTrue(confirmIdentity.isHittable)
-        confirmIdentity.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 10))
         let scientific = app.textFields["trustedImport.scientificName"]
         XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()

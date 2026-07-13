@@ -148,6 +148,14 @@ enum ReviewRating: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum MemoryReviewGrade: String, CaseIterable, Identifiable {
+    case again = "Again"
+    case hard = "Hard"
+    case good = "Good"
+    case easy = "Easy"
+    var id: String { rawValue }
+}
+
 enum PracticeInteraction: String, Codable {
     case multipleChoice
     case trueFalse

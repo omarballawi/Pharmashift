@@ -13,15 +13,15 @@ permissions:
 
 jobs:
   test:
-    name: Run focused tests (iPhone 16 Pro Max)
+    name: Run unit tests
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     steps:
       - name: Check out project
         uses: actions/checkout@v6
 
-      - name: Run unit and full UI test suites
+      - name: Run unit test suite
         run: |
           set -euo pipefail
           xcodebuild \
@@ -31,12 +31,44 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max' \
             -derivedDataPath build/TestDerivedData \
             -only-testing:PharmaShiftTests \
-            -only-testing:PharmaShiftUITests \
+            test
+
+  ui-test:
+    name: UI · ${{ matrix.test }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - testHomeDashboardAndFastCaptureAreReachable
+          - testFivePageDrugCardNavigatesThroughLearnAndSafety
+          - testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep
+          - testPhotoLibraryButtonPresentsLibraryInsteadOfCamera
+          - testBackupAndDataFlowIsReachable
+          - testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch
+          - testImportChooserAndPreviewUseSelectiveFields
+          - testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v6
+
+      - name: Run UI journey
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project PharmaShift.xcodeproj \
+            -scheme PharmaShift \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max' \
+            -derivedDataPath build/UITestDerivedData \
+            -only-testing:PharmaShiftUITests/PharmaShiftUITests/${{ matrix.test }} \
             test
 
   build:
     name: Build IPA for Windows sideloading
-    needs: test
+    needs: [test, ui-test]
     runs-on: macos-15
     timeout-minutes: 20
 

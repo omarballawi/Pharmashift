@@ -354,6 +354,7 @@ struct PracticeSessionView: View {
     @State private var hasAnswered = false
     @State private var answers: [PracticeAnswer] = []
     @State private var result: PracticeSessionResult?
+    @State private var memoryGrade: MemoryReviewGrade?
 
     init(initialDrug: Drug? = nil, mode: PracticeMode = .tradeToScientific, chapter: Chapter? = nil, questions: [PracticeQuestion]? = nil, title: String? = nil) {
         self.initialDrug = initialDrug; self.mode = mode; self.chapter = chapter; self.providedQuestions = questions; self.customTitle = title
@@ -419,6 +420,7 @@ struct PracticeSessionView: View {
             }
             if hasAnswered {
                 feedback(question)
+                memoryGradeControls(question)
                 nextButton
             }
         }
@@ -435,7 +437,7 @@ struct PracticeSessionView: View {
                         .tint(rating == .correct ? .green : (rating == .wrong ? .red : .orange))
                         .disabled(hasAnswered)
                 }
-                if hasAnswered { nextButton }
+                if hasAnswered { memoryGradeControls(question); nextButton }
             } else {
                 Button("Reveal answer") { withAnimation(reduceMotion ? nil : .easeInOut) { answerRevealed = true } }
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity, minHeight: 48)
@@ -460,6 +462,7 @@ struct PracticeSessionView: View {
                 .accessibilityIdentifier("practice.textEntry")
             if hasAnswered {
                 feedback(question)
+                memoryGradeControls(question)
                 nextButton
             } else {
                 Button {
@@ -484,6 +487,35 @@ struct PracticeSessionView: View {
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background((isCorrect ? Color.green : Color.orange).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    @ViewBuilder private func memoryGradeControls(_ question: PracticeQuestion) -> some View {
+        if answers.last?.isCorrect == true {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("How strong was the recall?").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                HStack(spacing: 7) {
+                    ForEach([MemoryReviewGrade.hard, .good, .easy]) { grade in
+                        Button(grade.rawValue) { adjustMemory(grade, question: question) }
+                            .buttonStyle(.borderedProminent)
+                            .tint(memoryGrade == grade ? gradeColor(grade) : .secondary)
+                    }
+                }
+            }
+        } else {
+            Label("Again • returns tomorrow", systemImage: "arrow.counterclockwise.circle.fill")
+                .font(.caption).foregroundStyle(.orange)
+        }
+    }
+
+    private func adjustMemory(_ grade: MemoryReviewGrade, question: PracticeQuestion) {
+        guard let id = question.drugID, let drug = allDrugs.first(where: { $0.id == id }) else { return }
+        memoryGrade = grade
+        scheduler.adjust(field: question.questionType, grade: grade, for: drug)
+        try? context.save()
+    }
+
+    private func gradeColor(_ grade: MemoryReviewGrade) -> Color {
+        switch grade { case .again: .red; case .hard: .orange; case .good: .teal; case .easy: .green }
     }
 
     private var nextButton: some View {
@@ -522,7 +554,6 @@ struct PracticeSessionView: View {
         guard !hasAnswered else { return }
         selectedChoice = choice
         let rating: ReviewRating = choice == question.correctAnswer ? .correct : .wrong
-        UINotificationFeedbackGenerator().notificationOccurred(rating == .correct ? .success : .error)
         record(rating: rating, response: choice, question: question)
     }
 
@@ -538,7 +569,6 @@ struct PracticeSessionView: View {
             .flatMap { $0.components(separatedBy: ",") }
             .map { normalizedName($0) }
         let rating: ReviewRating = accepted.contains(response) ? .correct : .wrong
-        UINotificationFeedbackGenerator().notificationOccurred(rating == .correct ? .success : .error)
         record(rating: rating, response: typedResponse.trimmed, question: question)
     }
 
@@ -571,7 +601,7 @@ struct PracticeSessionView: View {
             try? LearningProgressService.record(result: value, context: context)
             if !reduceMotion { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         } else {
-            index += 1; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false
+            index += 1; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; memoryGrade = nil
         }
     }
 
@@ -585,7 +615,7 @@ struct PracticeSessionView: View {
     }
 
     private func restart() {
-        index = 0; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; answers = []; result = nil
+        index = 0; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; memoryGrade = nil; answers = []; result = nil
         if let initialDrug, !initialDrug.generatedReviewQuestions.isEmpty, providedQuestions == nil {
             questions = PracticeGenerator.generatedReview(for: initialDrug)
         } else {

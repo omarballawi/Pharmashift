@@ -530,6 +530,7 @@ private struct ConfirmDrugIdentityView: View {
                 TextField("Scientific name", text: $identity.scientificName)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("trustedImport.scientificName")
                 TextField("Trade name(s), one per line", text: tradeNamesText, axis: .vertical)
                     .lineLimit(2...5)
                 TextField("Strength (optional)", text: $identity.strength)

@@ -44,7 +44,7 @@ final class PharmaShiftUITests: XCTestCase {
         let generate = app.buttons["capture.generateAI"]
         XCTAssertTrue(generate.waitForExistence(timeout: 15))
         generate.tap()
-        let scientific = app.textFields["Scientific name"]
+        let scientific = app.textFields["trustedImport.scientificName"]
         XCTAssertTrue(scientific.waitForExistence(timeout: 10))
         scientific.tap(); scientific.typeText("Metformin")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
@@ -138,7 +138,7 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.photo"].waitForExistence(timeout: 5))
         app.buttons["trustedImport.confirmIdentity"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
-        let scientific = app.textFields["Scientific name"]
+        let scientific = app.textFields["trustedImport.scientificName"]
         XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()
         scientific.typeText("Mock Drug")

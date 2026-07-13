@@ -248,6 +248,13 @@ enum LearningProgressService {
         award("First Five", when: profile.completedQuestions >= 5, profile: profile)
         award("Three Day Streak", when: profile.currentStreak >= 3, profile: profile)
         award("Practice 25", when: profile.completedQuestions >= 25, profile: profile)
+        let logs = try context.fetch(FetchDescriptor<ReviewLog>())
+        award("Recovered 10 forgotten facts", when: logs.filter { $0.wasCorrect && $0.scoreAfter > $0.scoreBefore }.count >= 10, profile: profile)
+        award("Completed 7 counseling practices", when: logs.filter { $0.wasCorrect && $0.questionType == .counseling }.count >= 7, profile: profile)
+        award("Solved 5 cases without hints", when: logs.filter { $0.wasCorrect && $0.questionType == .casePractice }.count >= 5, profile: profile)
+        let drugs = try context.fetch(FetchDescriptor<Drug>()).filter { !$0.isUnknown && !$0.drugClass.trimmed.isEmpty }
+        let masteredClass = Dictionary(grouping: drugs, by: { $0.drugClass.lowercased() }).values.contains { !$0.isEmpty && $0.allSatisfy(\.isMastered) }
+        award("Mastered an entire class", when: masteredClass, profile: profile)
         try context.save()
         return profile
     }

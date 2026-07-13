@@ -25,6 +25,7 @@ struct HomeView: View {
     @Query private var profiles: [LearningProfile]
     @Query(sort: \DailyActivity.day, order: .reverse) private var activities: [DailyActivity]
     @State private var showsShift = false
+    @State private var showsShelfQuest = false
 
     private let primaryChapters: [Chapter] = [
         .cardiovascular, .respiratory, .endocrine, .musculoskeletal, .eye, .earNoseOropharynx
@@ -73,6 +74,7 @@ struct HomeView: View {
         .navigationTitle("Renlyst")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showsShift) { ShiftView() }
+        .navigationDestination(isPresented: $showsShelfQuest) { ShelfQuestView(chapter: currentChapter) }
         .accessibilityIdentifier("home.dashboard")
     }
 
@@ -248,7 +250,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button { navigation.openCapture(chapter: currentChapter) } label: {
+            Button { showsShelfQuest = true } label: {
                 Image(systemName: "camera.fill").frame(width: 44, height: 44)
             }
             .buttonStyle(.bordered)
@@ -314,6 +316,51 @@ struct HomeView: View {
     }
 }
 
+private struct ShelfQuestView: View {
+    @Environment(AppNavigation.self) private var navigation
+    @Environment(AppTheme.self) private var theme
+    @Query(sort: \Drug.dateAdded, order: .reverse) private var drugs: [Drug]
+    let chapter: Chapter
+
+    private var targets: [String] {
+        switch chapter {
+        case .cardiovascular: ["ACE inhibitor", "ARB", "Beta blocker", "Calcium channel blocker"]
+        case .respiratory: ["SABA", "LABA", "Inhaled corticosteroid", "Antihistamine"]
+        case .endocrine: ["Biguanide", "Sulfonylurea", "Insulin", "Thyroid medicine"]
+        default: ["First package", "Different dosage form", "Safety warning", "Counseling example"]
+        }
+    }
+    private func matched(_ target: String) -> Drug? {
+        drugs.first { $0.chapter == chapter && [$0.drugClass, $0.displayName, $0.notes].joined(separator: " ").localizedCaseInsensitiveContains(target) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Label("Today’s Shelf Quest", systemImage: "shippingbox.fill").font(.largeTitle.bold())
+                    Text("Find real packages, capture them, then connect what is easiest to confuse.").foregroundStyle(.secondary)
+                }
+                ForEach(targets, id: \.self) { target in
+                    HStack(spacing: 12) {
+                        Image(systemName: matched(target) == nil ? "square" : "checkmark.square.fill").foregroundStyle(matched(target) == nil ? .secondary : theme.tint).font(.title3)
+                        VStack(alignment: .leading) { Text(target).font(.headline); if let drug = matched(target) { Text(drug.displayName).font(.caption).foregroundStyle(.secondary) } }
+                        Spacer()
+                        if matched(target) == nil { Button { navigation.openCapture(chapter: chapter) } label: { Image(systemName: "camera.fill").frame(width: 44, height: 44) }.buttonStyle(.bordered) }
+                    }
+                    .padding(14).background(theme.card, in: RoundedRectangle(cornerRadius: 17))
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Connect the shelf").font(.headline)
+                    Text("Which two packages are easiest to confuse? Open Compare Canvas in Library and record one difference as an atomic note.").font(.subheadline).foregroundStyle(.secondary)
+                    Button { navigation.openLibrary(chapter: chapter) } label: { Label("Open Library", systemImage: "square.split.2x1").frame(maxWidth: .infinity, minHeight: 46) }.buttonStyle(.borderedProminent)
+                }.padding(16).background(theme.softTint, in: RoundedRectangle(cornerRadius: 20))
+            }.padding()
+        }
+        .background(theme.background).navigationTitle("Shelf Quest").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 private struct SignalRow: View {
     let icon: String
     let eyebrow: String
@@ -349,7 +396,7 @@ private struct SystemPathRow: View {
     let metrics: SystemDashboardMetrics
 
     var body: some View {
-        Button { navigation.openLibrary(chapter: metrics.chapter) } label: {
+        NavigationLink { SystemPathView(chapter: metrics.chapter) } label: {
             HStack(spacing: 14) {
                 Image(systemName: metrics.chapter.icon)
                     .font(.title3.bold())
@@ -376,5 +423,84 @@ private struct SystemPathRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.system.\(metrics.chapter.rawValue)")
+    }
+}
+
+private struct SystemPathView: View {
+    @Environment(AppTheme.self) private var theme
+    @Query(sort: \Drug.drugClass) private var allDrugs: [Drug]
+    let chapter: Chapter
+
+    private var drugs: [Drug] { allDrugs.filter { !$0.isUnknown && $0.chapter == chapter } }
+    private var classes: [(name: String, drugs: [Drug])] {
+        Dictionary(grouping: drugs, by: { $0.drugClass.trimmed.isEmpty ? "Foundations" : $0.drugClass })
+            .map { ($0.key, $0.value) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+    private var systemProgress: Double {
+        guard !drugs.isEmpty else { return 0 }
+        return Double(drugs.reduce(0) { $0 + $1.masteryCount }) / Double(drugs.count * 6)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("\(chapter.rawValue) Path", systemImage: chapter.icon).font(.largeTitle.bold())
+                    Text("Recognize → Understand → Safety → Counsel → Apply").font(.subheadline).foregroundStyle(.white.opacity(0.76))
+                    ProgressView(value: systemProgress).tint(theme.crystalCyan)
+                    Text("\(Int(systemProgress * 100))% crystal illuminated").font(.caption.bold()).foregroundStyle(theme.crystalCyan)
+                }
+                .foregroundStyle(.white).padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                .background(theme.crystalGradient, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+
+                if classes.isEmpty {
+                    EmptyStateView(icon: chapter.icon, title: "Start this path", message: "Capture a \(chapter.rawValue.lowercased()) drug and its first class lesson will appear here.")
+                } else {
+                    ForEach(Array(classes.enumerated()), id: \.offset) { index, group in
+                        classLesson(index + 1, group: group)
+                    }
+                    NavigationLink { PracticeSessionView(mode: .systemSpecific, chapter: chapter) } label: {
+                        HStack {
+                            Image(systemName: "flag.checkered.circle.fill").font(.title2)
+                            VStack(alignment: .leading) { Text("System Checkpoint").font(.headline); Text("Mixed application challenge").font(.caption).foregroundStyle(.secondary) }
+                            Spacer(); Image(systemName: "chevron.forward")
+                        }
+                        .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20))
+                    }.buttonStyle(.plain)
+                }
+            }.padding()
+        }
+        .background(theme.background).navigationTitle(chapter.rawValue).navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func classLesson(_ number: Int, group: (name: String, drugs: [Drug])) -> some View {
+        let total = max(1, group.drugs.count * 6)
+        let completed = group.drugs.reduce(0) { $0 + $1.masteryCount }
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("\(number)").font(.caption.bold()).foregroundStyle(.white).frame(width: 30, height: 30)
+                    .background(theme.colors(for: chapter).last ?? theme.tint, in: Circle())
+                VStack(alignment: .leading, spacing: 2) { Text(group.name).font(.headline); Text("\(group.drugs.count) drug\(group.drugs.count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary) }
+                Spacer(); Text("\(completed)/\(total)").font(.caption.bold().monospacedDigit()).foregroundStyle(.secondary)
+            }
+            ProgressView(value: Double(completed), total: Double(total)).tint(theme.colors(for: chapter).last ?? theme.tint)
+            HStack(spacing: 5) {
+                stage("Recognize", ready: group.drugs.contains { $0.masteryScientificName || $0.masteryTradeName })
+                stage("Understand", ready: group.drugs.contains { $0.masteryClass || $0.masteryUse })
+                stage("Safety", ready: group.drugs.contains { $0.masteryWarning })
+                stage("Counsel", ready: group.drugs.contains { $0.masteryCounseling })
+                stage("Apply", ready: group.drugs.contains { $0.correctStreak >= 2 })
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(group.drugs) { drug in NavigationLink { DrugDetailView(drug: drug) } label: { Text(drug.displayName).font(.caption.bold()).padding(.horizontal, 10).frame(minHeight: 38).background(.secondary.opacity(0.09), in: Capsule()) }.buttonStyle(.plain) } }
+            }
+        }
+        .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func stage(_ title: String, ready: Bool) -> some View {
+        VStack(spacing: 3) { Image(systemName: ready ? "diamond.fill" : "diamond"); Text(title).font(.system(size: 8, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7) }
+            .foregroundStyle(ready ? theme.tint : .secondary).frame(maxWidth: .infinity)
     }
 }

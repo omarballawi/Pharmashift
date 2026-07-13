@@ -50,6 +50,24 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertLessThanOrEqual(packet.warningsText.count, TrustedDrugSourcePacketExtractor.sectionLimit)
     }
 
+    func testConsistencyNormalizerDerivesBandsAndFixesOralTypo() {
+        let drug = Drug(scientificName: "Example")
+        drug.routes = ["Orak"]
+        drug.onsetText = "30–60 minutes"
+        drug.durationText = "6–8 hours"
+        drug.halfLifeText = "2 days"
+        drug.dosingFrequency = .threeTimesDaily
+        DrugDataConsistencyNormalizer.normalize(drug)
+        XCTAssertEqual(drug.routes, ["Oral"])
+        XCTAssertEqual(drug.onsetMinutes, 45)
+        XCTAssertEqual(drug.onsetBand, .fast)
+        XCTAssertEqual(drug.durationHours, 7)
+        XCTAssertEqual(drug.durationBand, .short)
+        XCTAssertEqual(drug.halfLifeHours, 48)
+        XCTAssertEqual(drug.halfLifeBand, .long)
+        XCTAssertEqual(drug.timesPerDay, 3)
+    }
+
     func testDeepSeekRequestUsesJSONModeAndNoImagePayload() throws {
         let request = try DeepSeekDrugImportService.makeRequest(apiKey: "secret", packet: mockPacket(), identity: confirmedIdentity())
         let body = try XCTUnwrap(request.httpBody)

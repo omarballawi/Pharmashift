@@ -1146,7 +1146,52 @@ enum DrugImportApplier {
         }
         if let imageData { drug.imageData = imageData }
         if let thumbnailData { drug.thumbnailData = thumbnailData }
+        DrugDataConsistencyNormalizer.normalize(drug)
         drug.recalculateConfidence()
+    }
+}
+
+enum DrugDataConsistencyNormalizer {
+    static func normalize(_ drug: Drug) {
+        drug.routes = drug.routes.map { route in route.localizedCaseInsensitiveCompare("Orak") == .orderedSame ? "Oral" : route }
+        if drug.halfLifeHours == nil, let value = normalizedValue(from: drug.halfLifeText, targetUnit: .hours) { drug.halfLifeHours = value }
+        if drug.onsetMinutes == nil, let value = normalizedValue(from: drug.onsetText, targetUnit: .minutes) { drug.onsetMinutes = value }
+        if drug.durationHours == nil, let value = normalizedValue(from: drug.durationText, targetUnit: .hours) { drug.durationHours = value }
+        if let value = drug.halfLifeHours, drug.halfLifeBand == .unknown {
+            drug.halfLifeBand = value < 6 ? .short : (value < 24 ? .medium : (value < 72 ? .long : .veryLong))
+        }
+        if let value = drug.onsetMinutes, drug.onsetBand == .unknown {
+            drug.onsetBand = value <= 60 ? .fast : (value <= 240 ? .moderate : .slow)
+        }
+        if let value = drug.durationHours, drug.durationBand == .unknown {
+            drug.durationBand = value < 8 ? .short : (value <= 24 ? .medium : .long)
+        }
+        if drug.timesPerDay == nil {
+            drug.timesPerDay = switch drug.dosingFrequency { case .onceDaily: 1; case .twiceDaily: 2; case .threeTimesDaily: 3; case .fourTimesDaily: 4; default: nil }
+        }
+    }
+
+    private enum Unit { case minutes, hours }
+    private static func normalizedValue(from text: String, targetUnit: Unit) -> Double? {
+        let pattern = #"\d+(?:\.\d+)?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern), !text.trimmed.isEmpty else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        let numbers = regex.matches(in: text, range: range).compactMap { match -> Double? in
+            guard let valueRange = Range(match.range, in: text) else { return nil }
+            return Double(text[valueRange])
+        }
+        guard !numbers.isEmpty else { return nil }
+        var value = numbers.prefix(2).reduce(0, +) / Double(min(numbers.count, 2))
+        let lower = text.lowercased()
+        switch targetUnit {
+        case .minutes:
+            if lower.contains("hour") || lower.contains(" hr") { value *= 60 }
+            else if lower.contains("day") { value *= 1_440 }
+        case .hours:
+            if lower.contains("minute") || lower.contains(" min") { value /= 60 }
+            else if lower.contains("day") { value *= 24 }
+        }
+        return value
     }
 }
 

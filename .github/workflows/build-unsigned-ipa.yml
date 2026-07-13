@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    name: Run focused unit tests (iPhone 16 Pro Max)
+    name: Run focused tests (iPhone 16 Pro Max)
     runs-on: macos-15
     timeout-minutes: 15
 
@@ -21,7 +21,7 @@ jobs:
       - name: Check out project
         uses: actions/checkout@v6
 
-      - name: Run unit tests on iPhone 16 Pro Max
+      - name: Run unit tests and DeepSeek save UI regression
         run: |
           set -euo pipefail
           xcodebuild \
@@ -31,6 +31,7 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=26.2' \
             -derivedDataPath build/TestDerivedData \
             -only-testing:PharmaShiftTests \
+            -only-testing:PharmaShiftUITests/PharmaShiftUITests/testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch \
             test
 
   build:
@@ -69,8 +70,8 @@ jobs:
           APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/Renlyst.app'
           test -d "$APP_PATH"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.renlyst.app'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.6.3'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '9'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.6.4'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '10'
           mkdir Payload
           ditto "$APP_PATH" 'Payload/Renlyst.app'
           /usr/bin/zip -qry Renlyst.ipa Payload

@@ -121,25 +121,35 @@ private struct LearningSettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
+                    .accessibilityIdentifier("deepSeek.keyField")
                 PasteButton(payloadType: String.self) { strings in
                     deepSeekKey = strings.first?.normalizedAPIKey ?? ""
                 }
                 .buttonStyle(.bordered)
-                HStack {
-                    Button { saveDeepSeekKey() } label: { Label("Save key", systemImage: "key.fill") }
-                        .disabled(deepSeekKey.normalizedAPIKey.isEmpty)
-                    Spacer()
-                    Button(role: .destructive) { clearDeepSeekKey() } label: { Label("Clear", systemImage: "trash") }
+                Button { saveDeepSeekKey() } label: {
+                    Label("Save key", systemImage: "key.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(deepSeekKey.normalizedAPIKey.isEmpty)
+                .accessibilityIdentifier("deepSeek.saveKey")
+                Button(role: .destructive) { clearDeepSeekKey() } label: {
+                    Label("Clear saved key", systemImage: "trash")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("deepSeek.clearKey")
                 Button {
                     checkConnection()
                 } label: {
                     Label(checkingConnection ? "Checking connection" : "Check connection", systemImage: "network")
                 }
                 .disabled(checkingConnection)
+                .accessibilityIdentifier("deepSeek.checkConnection")
                 Text(keyStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("deepSeek.keyStatus")
                 LabeledContent("App build", value: appBuild)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -161,6 +171,7 @@ private struct LearningSettingsView: View {
             }
         }
         .navigationTitle("Practice Preferences")
+        .accessibilityIdentifier("deepSeek.settings")
         .onAppear { refreshKeyStatus() }
         .alert("DeepSeek key", isPresented: $showsKeyStatus) {
             Button("OK", role: .cancel) {}
@@ -173,8 +184,7 @@ private struct LearningSettingsView: View {
         do {
             let location = try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
             guard DeepSeekKeyStore.shared.apiKey() == deepSeekKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
-            deepSeekKey = ""
-            keyStatus = "Saved key via \(location.label): \(DeepSeekKeyStore.shared.savedKeyStatusDescription())"
+            keyStatus = "Saved key ••••\(deepSeekKey.normalizedAPIKey.suffix(4)) via \(location.label)"
             showsKeyStatus = true
         } catch {
             keyStatus = "Could not save key: \(error.localizedDescription)"

@@ -1,16 +1,16 @@
 # Graph Report - pharmashift  (2026-07-13)
 
 ## Corpus Check
-- 44 files · ~67,803 words
+- 44 files · ~67,904 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1062 nodes · 2605 edges · 54 communities (52 shown, 2 thin omitted)
+- 1066 nodes · 2618 edges · 50 communities (49 shown, 1 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 101 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `431b347c`
+- Built from commit: `f74d3827`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -38,36 +38,32 @@
 - [[_COMMUNITY_AGENTS|AGENTS.md]]
 - [[_COMMUNITY_ModelAndPersistenceTests|ModelAndPersistenceTests]]
 - [[_COMMUNITY_QuestionType|QuestionType]]
-- [[_COMMUNITY_ReportEditorView|ReportEditorView]]
 - [[_COMMUNITY_Q What should PharmaShift do after Phase 1|Q: What should PharmaShift do after Phase 1?]]
 - [[_COMMUNITY_Identifiable|Identifiable]]
 - [[_COMMUNITY_FocusField|FocusField]]
-- [[_COMMUNITY_AppTheme|AppTheme]]
 - [[_COMMUNITY_Foundation|Foundation]]
 - [[_COMMUNITY_ReportEditorView|ReportEditorView]]
 - [[_COMMUNITY_Path|Path]]
 - [[_COMMUNITY_ModelAndPersistenceTests|ModelAndPersistenceTests]]
 - [[_COMMUNITY_Design|Design]]
 - [[_COMMUNITY_PharmacologyScale|PharmacologyScale]]
-- [[_COMMUNITY_.reportSection|.reportSection]]
 - [[_COMMUNITY_LibraryView|LibraryView]]
-- [[_COMMUNITY_Components.swift|Components.swift]]
 - [[_COMMUNITY_Drug|Drug]]
 - [[_COMMUNITY_SafetyRadar|SafetyRadar]]
-- [[_COMMUNITY_ImportedExcretionRoute|ImportedExcretionRoute]]
-- [[_COMMUNITY_DrugSearchResult|DrugSearchResult]]
-- [[_COMMUNITY_AppTheme|AppTheme]]
-- [[_COMMUNITY_.importIfNeeded|.importIfNeeded]]
 - [[_COMMUNITY_ImportStage|ImportStage]]
-- [[_COMMUNITY_.containsObviousIdentifier|.containsObviousIdentifier]]
 - [[_COMMUNITY_DosingFrequency|DosingFrequency]]
-- [[_COMMUNITY_ImportedDosingFrequency|ImportedDosingFrequency]]
+- [[_COMMUNITY_QuestionType|QuestionType]]
+- [[_COMMUNITY_PracticeQuestion|PracticeQuestion]]
 - [[_COMMUNITY_.generate|.generate]]
 - [[_COMMUNITY_ReportFile.swift|ReportFile.swift]]
+- [[_COMMUNITY_ImportedDosingFrequency|ImportedDosingFrequency]]
+- [[_COMMUNITY_.populate|.populate]]
+- [[_COMMUNITY_SafetyFlag|SafetyFlag]]
 - [[_COMMUNITY_CropViewportState|CropViewportState]]
 - [[_COMMUNITY_DrugEditorSection|DrugEditorSection]]
 - [[_COMMUNITY_HalfLifeBand|HalfLifeBand]]
-- [[_COMMUNITY_ImportSelection|ImportSelection]]
+- [[_COMMUNITY_VerificationStatus|VerificationStatus]]
+- [[_COMMUNITY_StorageLocation|StorageLocation]]
 - [[_COMMUNITY_UIImage|UIImage]]
 
 ## God Nodes (most connected - your core abstractions)
@@ -97,43 +93,43 @@
 ## Import Cycles
 - None detected.
 
-## Communities (54 total, 2 thin omitted)
+## Communities (50 total, 1 thin omitted)
 
 ### Community 0 - "ShiftLog"
-Cohesion: 0.06
-Nodes (50): PracticeSessionView, Drug, String, ReportView, Drug, DailyActivity, Drug, EncounterNote (+42 more)
+Cohesion: 0.25
+Nodes (12): DailyActivity, Drug, EncounterNote, LearningProfile, ReviewLog, ShiftLog, Bool, Calendar (+4 more)
 
 ### Community 1 - "SwiftUI"
-Cohesion: 0.16
-Nodes (11): Coordinator, NativeCropScrollView, Bool, Int, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIScrollView, UIScrollViewDelegate (+3 more)
+Cohesion: 0.15
+Nodes (12): NSObject, Coordinator, NativeCropScrollView, Bool, Int, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIScrollView (+4 more)
 
 ### Community 2 - "Drug"
-Cohesion: 0.15
-Nodes (12): DailyMedProvider, DrugSearchRanker, DrugSearchResult, DrugSourceProvider, MockDrugSourceProvider, OpenFDALabelProvider, RxNormProvider, Int (+4 more)
+Cohesion: 0.14
+Nodes (12): DailyMedProvider, DeepSeekDrugImportService, DeepSeekFastDrugGatherService, DrugImportFormattingService, DrugSourceProvider, DrugSourceProviderFactory, MockDeepSeekDrugImportService, OpenFDALabelProvider (+4 more)
 
 ### Community 3 - "ImageCapture.swift"
-Cohesion: 0.17
-Nodes (10): DrugDetailSheet, editor, review, DrugDetailView, Color, Content, Drug, Set (+2 more)
+Cohesion: 0.15
+Nodes (14): BackupImportPreviewView, Int, Void, DrugDetailSheet, editor, review, DrugDetailView, Color (+6 more)
 
 ### Community 4 - "String"
-Cohesion: 0.13
-Nodes (11): Encoder, DeepSeekDrugImportService, DeepSeekFastDrugGatherService, DrugImportFormattingService, DrugImportValidator, DrugSourceProviderFactory, FastGatherPromptBuilder, MockDeepSeekDrugImportService (+3 more)
+Cohesion: 0.27
+Nodes (5): Encoder, DrugImportValidator, FastGatherPromptBuilder, UserConfirmedDrugIdentity, URLRequest
 
 ### Community 5 - "Chapter"
-Cohesion: 0.12
-Nodes (10): CoreTransferable, Foundation, PrivacyValidator, Bool, String, ReportFile, String, Transferable (+2 more)
+Cohesion: 0.18
+Nodes (11): ImageIO, DrugImagePayload, DrugPhotoGalleryView, DrugPhotoView, DrugThumbnailView, ImageDraft, ImageEditorView, CGFloat (+3 more)
 
 ### Community 6 - "QuestionType"
-Cohesion: 0.24
-Nodes (8): NSObject, NameKind, brand, generic, SPLParser, SPLXMLDelegate, XMLParser, XMLParserDelegate
+Cohesion: 0.27
+Nodes (8): PromptBuilder, SPLParser, SPLXMLDelegate, String, TrustedDrugSourcePacket, TrustedDrugSourcePacketExtractor, XMLParser, XMLParserDelegate
 
 ### Community 7 - "LibraryView"
-Cohesion: 0.06
-Nodes (47): ClosedRange, Hashable, DrugEditorView, Binding, Bool, Double, Drug, Int (+39 more)
+Cohesion: 0.23
+Nodes (8): DrugEditorView, Binding, Bool, Double, Drug, Int, PhotosPickerItem, ReferenceWritableKeyPath
 
 ### Community 8 - "PracticeSessionView"
-Cohesion: 0.28
-Nodes (5): DrugImportApplier, FastDrugGatheringService, ImportSelection, Drug, Set
+Cohesion: 0.13
+Nodes (11): DrugImportView, Data, Drug, PhotosPickerItem, DeepSeekIdentityResolver, DrugIdentityResolving, DrugImportApplier, FastDrugGatheringService (+3 more)
 
 ### Community 9 - "ShiftView"
 Cohesion: 0.16
@@ -144,80 +140,72 @@ Cohesion: 0.05
 Nodes (37): CodingKey, CodingKeys, dailyActivities, drugs, encounters, learningProfiles, reports, reviews (+29 more)
 
 ### Community 11 - "SafetyFlag"
-Cohesion: 0.06
-Nodes (32): ImportedDosingFrequency, fourTimesDaily, onceDaily, other, PRN, threeTimesDaily, twiceDaily, unknown (+24 more)
+Cohesion: 0.33
+Nodes (6): ImportedExcretionRoute, hepatic, mixed, other, renal, unknown
 
 ### Community 12 - "DosingFrequency"
 Cohesion: 0.06
 Nodes (30): PracticeView, Int, Drug, FocusAction, addDrug, finishShift, practiceWeak, reviewDue (+22 more)
 
 ### Community 13 - "HalfLifeBand"
-Cohesion: 0.40
-Nodes (5): CaseIterable, ProdrugStatus, active, prodrug, unknown
+Cohesion: 0.38
+Nodes (4): CGRect, CGSize, ImageCompressor, UIImage
 
 ### Community 14 - "Build and install PharmaShift using only Windows"
 Cohesion: 0.15
 Nodes (10): Final Release Gate, PharmaShift Delivery Roadmap, Phase 2 - Visual Pharmacology and Safety, Phase 3 - Backup, Restore, and Export, Phase 4 - Drug Information Import, Phase 5 - Focus, Practice, and Motivation, Renlyst, 1. Build the IPA on GitHub (+2 more)
 
 ### Community 15 - "CaseIterable"
-Cohesion: 0.23
-Nodes (11): ConfirmDrugIdentityView, FlowChips, ImportFromPhotoView, ImportMemorizationChallengeView, ImportPreviewView, ImportSourceSearchView, Bool, Color (+3 more)
+Cohesion: 0.06
+Nodes (37): Int, ConfirmDrugIdentityView, FlowChips, ImportFromPhotoView, ImportMemorizationChallengeView, ImportMode, aiDraft, trusted (+29 more)
 
 ### Community 16 - "Codable"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (30): BackupError, duplicateIdentifiers, invalidCounts, malformed, newerVersion, BackupRecordCounts, BackupRestoreMode, merge (+22 more)
 
 ### Community 17 - "ConfidenceLevel"
-Cohesion: 0.17
-Nodes (12): Error, FileDocument, FileWrapper, BackupDataView, BackupImportPreview, PharmaShiftExportDocument, Data, URL (+4 more)
+Cohesion: 0.29
+Nodes (5): Any, Context, CameraPicker, UIImagePickerController, UIViewControllerRepresentable
 
 ### Community 18 - "DurationBand"
 Cohesion: 0.06
 Nodes (34): Observation, AboutView, AppNavigation, AppShell, AppTab, capture, home, library (+26 more)
 
 ### Community 19 - "OnsetBand"
-Cohesion: 0.67
-Nodes (3): ImportMode, aiDraft, trusted
+Cohesion: 0.25
+Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
 
 ### Community 21 - "ModelAndPersistenceTests"
-Cohesion: 0.10
-Nodes (15): CaptureView, Binding, Bool, Data, Drug, Int, PhotosPickerItem, String (+7 more)
+Cohesion: 0.09
+Nodes (16): CaptureView, SaveAction, another, later, open, Binding, Bool, Data (+8 more)
 
 ### Community 22 - "QuestionType"
-Cohesion: 0.20
-Nodes (10): ImportSection, adverseEffects, arabicExplanation, counseling, identity, memorization, pharmacokinetics, safety (+2 more)
-
-### Community 23 - "ReportEditorView"
-Cohesion: 0.26
-Nodes (8): ReviewScheduler, Bool, Calendar, Date, Drug, Int, String, ReviewSchedulerTests
+Cohesion: 0.67
+Nodes (3): ImageAcquisitionSource, camera, library
 
 ### Community 24 - "Q: What should PharmaShift do after Phase 1?"
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: What should PharmaShift do after Phase 1?, Source Nodes
 
 ### Community 25 - "Identifiable"
-Cohesion: 0.17
-Nodes (8): Drug, Bool, Data, Date, Int, String, UUID, ModelAndPersistenceTests
+Cohesion: 0.06
+Nodes (25): Foundation, DrugFilter, Bool, Calendar, Date, Drug, PrivacyValidator, Bool (+17 more)
 
 ### Community 26 - "FocusField"
-Cohesion: 0.12
-Nodes (13): LearningSettingsView, Binding, Bool, DeepSeekKeyStore, deepSeekHTTPStatus, keychain, StorageLocation, appPreferences (+5 more)
-
-### Community 27 - "AppTheme"
-Cohesion: 0.28
-Nodes (5): DrugFilter, Bool, Calendar, Date, Drug
+Cohesion: 0.09
+Nodes (12): LearningSettingsView, Binding, Bool, DeepSeekKeyStore, deepSeekHTTPStatus, keychain, Data, URL (+4 more)
 
 ### Community 28 - "Foundation"
-Cohesion: 0.15
-Nodes (26): Decodable, Encodable, OSStatus, Candidate, Choice, DailyMedSearchItem, DailyMedSearchPayload, DeepSeekRequest (+18 more)
+Cohesion: 0.14
+Nodes (20): Encodable, OSStatus, DailyMedSearchItem, DailyMedSearchPayload, DeepSeekRequest, KeyStoreError, readBackFailed, Message (+12 more)
 
 ### Community 29 - "ReportEditorView"
-Cohesion: 0.29
-Nodes (23): Codable, Equatable, Flashcard, ImportedAdverseEffects, ImportedArabicExplanation, ImportedCounseling, ImportedDrugInfo, ImportedIdentity (+15 more)
+Cohesion: 0.39
+Nodes (19): Codable, Equatable, ResolvedDrugIdentity, Flashcard, ImportedAdverseEffects, ImportedArabicExplanation, ImportedCounseling, ImportedDrugInfo (+11 more)
 
 ### Community 30 - "Path"
-Cohesion: 0.20
-Nodes (11): ImageIO, DrugImagePayload, DrugPhotoGalleryView, DrugPhotoView, DrugThumbnailView, ImageDraft, ImageEditorView, CGFloat (+3 more)
+Cohesion: 0.18
+Nodes (14): ClosedRange, EmptyStateView, LabeledValue, MasteryBadge, MetricCard, PharmacologyMeter, PharmacologyScale, duration (+6 more)
 
 ### Community 31 - "ModelAndPersistenceTests"
 Cohesion: 0.17
@@ -228,80 +216,76 @@ Cohesion: 0.17
 Nodes (11): Accessibility floor, Aesthetic direction, Brand voice, Color tokens, Core component inventory, Design, Dials, Last updated (+3 more)
 
 ### Community 33 - "PharmacologyScale"
-Cohesion: 0.07
-Nodes (28): Int, DrugImportView, ImportStage, challenge, confirm, photo, preview, source (+20 more)
-
-### Community 34 - ".reportSection"
-Cohesion: 0.41
-Nodes (4): CGRect, CGSize, ImageCompressor, UIImage
+Cohesion: 0.13
+Nodes (21): Decodable, AIPracticePack, AIPracticePackStore, AIPracticePayload, AIPracticeQuestion, Choice, DeepSeekContentResponse, DeepSeekJSONClient (+13 more)
 
 ### Community 35 - "LibraryView"
-Cohesion: 0.05
-Nodes (37): App, MigrationStage, PersistentModel, PharmaShift, PharmaShiftApp, FocusField, scientific, trade (+29 more)
-
-### Community 36 - "Components.swift"
-Cohesion: 0.18
-Nodes (4): MigrationFixtureTests, ReportBuilderTests, PharmaShiftUITests, XCTestCase
+Cohesion: 0.11
+Nodes (14): Hashable, DrugRow, LibraryFilterView, LibraryView, Bool, Drug, Int, String (+6 more)
 
 ### Community 37 - "Drug"
 Cohesion: 0.25
 Nodes (8): DosingFrequency, asNeeded, fourTimesDaily, onceDaily, other, threeTimesDaily, twiceDaily, unknown
 
 ### Community 38 - "SafetyRadar"
-Cohesion: 0.40
-Nodes (5): Identifiable, BackupExportKind, complete, csv, lightweight
-
-### Community 39 - "ImportedExcretionRoute"
-Cohesion: 0.40
-Nodes (3): BackupImportPreviewView, Int, Void
-
-### Community 40 - "DrugSearchResult"
-Cohesion: 0.40
-Nodes (5): ConfidenceLevel, mastered, medium, strong, weak
-
-### Community 41 - "AppTheme"
-Cohesion: 0.40
-Nodes (5): DurationBand, long, medium, short, unknown
-
-### Community 42 - ".importIfNeeded"
-Cohesion: 0.27
-Nodes (6): report, ReportEditorView, Binding, Date, ReferenceWritableKeyPath, String
+Cohesion: 0.07
+Nodes (28): CoreTransferable, Error, FileDocument, FileWrapper, BackupDataView, BackupExportKind, complete, csv (+20 more)
 
 ### Community 43 - "ImportStage"
-Cohesion: 0.40
-Nodes (5): ExcretionRoute, hepatic, mixed, renal, unknown
-
-### Community 44 - ".containsObviousIdentifier"
-Cohesion: 0.23
-Nodes (3): DrugImportServiceTests, Bool, String
+Cohesion: 0.31
+Nodes (4): LearningProgressService, Bool, ModelContext, Int
 
 ### Community 45 - "DosingFrequency"
-Cohesion: 0.40
-Nodes (5): OnsetBand, fast, moderate, slow, unknown
+Cohesion: 0.18
+Nodes (12): SafetySeverity, high, low, medium, unknown, DosingFrequencyMeter, SafetyRadar, CGFloat (+4 more)
 
-### Community 46 - "ImportedDosingFrequency"
-Cohesion: 0.40
-Nodes (5): ImportedOnsetBand, fast, moderate, slow, unknown
+### Community 47 - "QuestionType"
+Cohesion: 0.15
+Nodes (12): PracticeInteraction, multipleChoice, recall, QuestionType, casePractice, counseling, drugClass, scientificName (+4 more)
+
+### Community 49 - "PracticeQuestion"
+Cohesion: 0.21
+Nodes (10): PracticeSessionView, Drug, String, PracticeAnswer, PracticeQuestion, PracticeSessionResult, ReviewRating, correct (+2 more)
 
 ### Community 51 - ".generate"
-Cohesion: 0.29
-Nodes (5): Any, Context, CameraPicker, UIImagePickerController, UIViewControllerRepresentable
+Cohesion: 0.06
+Nodes (29): App, MigrationStage, PersistentModel, PharmaShift, PharmaShiftApp, FocusField, scientific, trade (+21 more)
 
 ### Community 52 - "ReportFile.swift"
 Cohesion: 0.20
 Nodes (10): DrugCardAnchor, arabic, counseling, identity, mastery, notes, pharmacology, review (+2 more)
 
-### Community 58 - "CropViewportState"
+### Community 54 - "ImportedDosingFrequency"
+Cohesion: 0.06
+Nodes (31): ImportedDosingFrequency, fourTimesDaily, onceDaily, other, PRN, threeTimesDaily, twiceDaily, unknown (+23 more)
+
+### Community 55 - ".populate"
+Cohesion: 0.27
+Nodes (7): ReportView, Drug, TrainingReport, ReportBuilder, Calendar, Drug, String
+
+### Community 57 - "SafetyFlag"
 Cohesion: 0.25
-Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
+Nodes (8): SafetyFlag, anticoagulant, children, controlledDrug, corticosteroid, insulin, pregnancy, severeSymptoms
+
+### Community 58 - "CropViewportState"
+Cohesion: 0.33
+Nodes (4): DrugSearchRanker, DrugSearchResult, MockDrugSourceProvider, Int
 
 ### Community 59 - "DrugEditorSection"
 Cohesion: 0.29
 Nodes (7): DrugEditorSection, basics, counseling, notes, pk, safety, uses
 
 ### Community 62 - "HalfLifeBand"
-Cohesion: 0.33
-Nodes (6): HalfLifeBand, long, medium, short, unknown, veryLong
+Cohesion: 0.08
+Nodes (33): CaseIterable, Identifiable, ConfidenceLevel, mastered, medium, strong, weak, DurationBand (+25 more)
+
+### Community 70 - "VerificationStatus"
+Cohesion: 0.50
+Nodes (4): VerificationStatus, pendingPharmacist, personal, pharmacistVerified
+
+### Community 71 - "StorageLocation"
+Cohesion: 0.50
+Nodes (4): StorageLocation, appPreferences, keychain, protectedFile
 
 ### Community 73 - "UIImage"
 Cohesion: 0.47
@@ -310,22 +294,22 @@ Nodes (3): CGImagePropertyOrientation, OCRService, UIImage
 ## Knowledge Gaps
 - **250 isolated node(s):** `home`, `library`, `capture`, `practice`, `more` (+245 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DrugImportView` connect `PharmacologyScale` to `Drug`, `String`, `PracticeSessionView`, `CaseIterable`, `OnsetBand`, `ModelAndPersistenceTests`, `ReportEditorView`, `Path`, `ImportSelection`?**
-  _High betweenness centrality (0.074) - this node is a cross-community bridge._
-- **Why does `Chapter` connect `DurationBand` to `ShiftLog`, `ImageCapture.swift`, `SafetyRadar`, `LibraryView`, `ShiftView`, `DosingFrequency`, `HalfLifeBand`, `ModelAndPersistenceTests`, `ReportEditorView`?**
+- **Why does `DrugImportView` connect `PracticeSessionView` to `Drug`, `ImageCapture.swift`, `String`, `Chapter`, `QuestionType`, `HalfLifeBand`, `CaseIterable`, `ModelAndPersistenceTests`, `CropViewportState`, `ReportEditorView`?**
   _High betweenness centrality (0.073) - this node is a cross-community bridge._
-- **Why does `CodingKeys` connect `Identifiable` to `Drug`, `Foundation`?**
-  _High betweenness centrality (0.063) - this node is a cross-community bridge._
+- **Why does `Chapter` connect `DurationBand` to `ShiftLog`, `ImageCapture.swift`, `LibraryView`, `ShiftView`, `DosingFrequency`, `Codable`, `PracticeQuestion`, `ModelAndPersistenceTests`, `ReportEditorView`, `HalfLifeBand`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `SwiftData` connect `.generate` to `LibraryView`, `ImageCapture.swift`, `SafetyRadar`, `ShiftView`, `DosingFrequency`, `CaseIterable`, `Codable`, `DurationBand`, `HalfLifeBand`?**
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `DrugImportView` (e.g. with `DeepSeekIdentityResolver` and `DeepSeekFastDrugGatherService`) actually correct?**
   _`DrugImportView` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `home`, `library`, `capture` to the rest of the system?**
   _250 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `ShiftLog` be split into smaller, more focused modules?**
-  _Cohesion score 0.06138975966562173 - nodes in this community are weakly interconnected._
 - **Should `Drug` be split into smaller, more focused modules?**
-  _Cohesion score 0.146218487394958 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.1354679802955665 - nodes in this community are weakly interconnected._
+- **Should `ImageCapture.swift` be split into smaller, more focused modules?**
+  _Cohesion score 0.1452991452991453 - nodes in this community are weakly interconnected._

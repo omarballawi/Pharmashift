@@ -60,6 +60,50 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.buttons["backup.import"].exists)
     }
 
+    func testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch() {
+        let app = XCUIApplication()
+        app.launch()
+        openDeepSeekSettings(in: app)
+
+        let clear = app.buttons["deepSeek.clearKey"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.tap()
+        dismissDeepSeekAlert(in: app)
+
+        let field = app.secureTextFields["deepSeek.keyField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("ui-test-key-1234")
+        app.buttons["deepSeek.saveKey"].tap()
+
+        let alert = app.alerts["DeepSeek key"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Saved key")).firstMatch.exists)
+        alert.buttons["OK"].tap()
+        XCTAssertTrue(app.staticTexts["deepSeek.keyStatus"].label.contains("1234"))
+
+        app.terminate()
+        app.launch()
+        openDeepSeekSettings(in: app)
+        let status = app.staticTexts["deepSeek.keyStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.label.contains("1234"))
+    }
+
+    private func openDeepSeekSettings(in app: XCUIApplication) {
+        app.tabBars.buttons["More"].tap()
+        let preferences = app.buttons["Practice preferences"]
+        XCTAssertTrue(preferences.waitForExistence(timeout: 5))
+        preferences.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["deepSeek.settings"].waitForExistence(timeout: 5))
+    }
+
+    private func dismissDeepSeekAlert(in app: XCUIApplication) {
+        let alert = app.alerts["DeepSeek key"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["OK"].tap()
+    }
+
     func testImportChooserAndPreviewUseSelectiveFields() {
         let app = XCUIApplication()
         app.launchArguments.append("-mockDrugImport")

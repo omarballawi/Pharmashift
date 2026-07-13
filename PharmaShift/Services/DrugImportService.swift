@@ -1207,12 +1207,21 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     private let account: String
     private let fallbackDirectory: URL
     private let allowsKeychain: Bool
+    private let allowsProtectedFile: Bool
+    private let preferences: UserDefaults
 
     enum StorageLocation: String, Equatable, Sendable {
         case keychain
         case protectedFile
+        case appPreferences
 
-        var label: String { self == .keychain ? "iOS Keychain" : "protected device storage" }
+        var label: String {
+            switch self {
+            case .keychain: "iOS Keychain"
+            case .protectedFile: "protected device storage"
+            case .appPreferences: "app preferences"
+            }
+        }
     }
 
     enum KeyStoreError: LocalizedError, Equatable {
@@ -1230,11 +1239,20 @@ final class DeepSeekKeyStore: @unchecked Sendable {
         }
     }
 
-    init(service: String = "com.renlyst.deepseek", account: String = "api-key", fallbackDirectory: URL? = nil, allowsKeychain: Bool = true) {
+    init(
+        service: String = "com.renlyst.deepseek",
+        account: String = "api-key",
+        fallbackDirectory: URL? = nil,
+        allowsKeychain: Bool = true,
+        allowsProtectedFile: Bool = true,
+        preferences: UserDefaults = .standard
+    ) {
         self.service = service
         self.account = account
         self.fallbackDirectory = fallbackDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.allowsKeychain = allowsKeychain
+        self.allowsProtectedFile = allowsProtectedFile
+        self.preferences = preferences
     }
 
     func apiKey() -> String? { try? storedKey()?.value }
@@ -1250,6 +1268,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
 
     private func storedKey() throws -> (value: String, location: StorageLocation)? {
         var keychainError: Error?
+        var protectedFileError: Error?
         if allowsKeychain {
             do {
                 if let key = try storedAPIKey() { return (key, .keychain) }
@@ -1257,8 +1276,16 @@ final class DeepSeekKeyStore: @unchecked Sendable {
                 keychainError = error
             }
         }
-        if let key = try storedFallbackKey() { return (key, .protectedFile) }
+        if allowsProtectedFile {
+            do {
+                if let key = try storedFallbackKey() { return (key, .protectedFile) }
+            } catch {
+                protectedFileError = error
+            }
+        }
+        if let key = storedPreferencesKey() { return (key, .appPreferences) }
         if let keychainError { throw keychainError }
+        if let protectedFileError { throw protectedFileError }
         return nil
     }
 
@@ -1291,9 +1318,19 @@ final class DeepSeekKeyStore: @unchecked Sendable {
                 // Re-signed/sideloaded applications can lack a Keychain access group.
             }
         }
-        try saveToFallback(apiKey)
-        guard try storedFallbackKey() == apiKey else { throw KeyStoreError.readBackFailed }
-        return .protectedFile
+        if allowsProtectedFile {
+            do {
+                try saveToFallback(apiKey)
+                guard try storedFallbackKey() == apiKey else { throw KeyStoreError.readBackFailed }
+                deletePreferences()
+                return .protectedFile
+            } catch {
+                // Some sideloaded installations do not permit protected-file writes.
+            }
+        }
+        saveToPreferences(apiKey)
+        guard storedPreferencesKey() == apiKey else { throw KeyStoreError.readBackFailed }
+        return .appPreferences
     }
 
     private func saveToKeychain(_ apiKey: String) throws {
@@ -1334,6 +1371,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
 
     func delete() {
         deleteFallback()
+        deletePreferences()
         guard allowsKeychain else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -1349,6 +1387,7 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     }
 
     private var fallbackURL: URL { fallbackDirectory.appendingPathComponent("deepseek-api-key.bin", isDirectory: false) }
+    private var preferenceKey: String { "DeepSeekKeyStore.\(service).\(account).v1" }
 
     private func storedFallbackKey() throws -> String? {
         let url = fallbackURL
@@ -1367,6 +1406,14 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     }
 
     private func deleteFallback() { try? FileManager.default.removeItem(at: fallbackURL) }
+
+    private func storedPreferencesKey() -> String? {
+        guard let key = preferences.string(forKey: preferenceKey), !key.trimmed.isEmpty else { return nil }
+        return key
+    }
+
+    private func saveToPreferences(_ apiKey: String) { preferences.set(apiKey, forKey: preferenceKey) }
+    private func deletePreferences() { preferences.removeObject(forKey: preferenceKey) }
 }
 
 private extension String {

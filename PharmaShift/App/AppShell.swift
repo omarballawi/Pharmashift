@@ -171,9 +171,10 @@ private struct LearningSettingsView: View {
 
     private func saveDeepSeekKey() {
         do {
-            try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
+            let location = try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
+            guard DeepSeekKeyStore.shared.apiKey() == deepSeekKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
             deepSeekKey = ""
-            keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+            keyStatus = "Saved key via \(location.label): \(DeepSeekKeyStore.shared.savedKeyStatusDescription())"
             showsKeyStatus = true
         } catch {
             keyStatus = "Could not save key: \(error.localizedDescription)"

@@ -89,6 +89,24 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertNil(store.apiKey())
     }
 
+    func testKeyStoreFallsBackToAppPreferencesWhenOtherStoresAreUnavailable() throws {
+        let suiteName = "RenlystTests.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        let store = DeepSeekKeyStore(
+            service: "test.\(UUID().uuidString)",
+            fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+            allowsKeychain: false,
+            allowsProtectedFile: false,
+            preferences: preferences
+        )
+        XCTAssertEqual(try store.save(apiKey: "sk-test-preferences"), .appPreferences)
+        XCTAssertEqual(store.apiKey(), "sk-test-preferences")
+        XCTAssertTrue(store.savedKeyStatusDescription().contains("app preferences"))
+        store.delete()
+        XCTAssertNil(store.apiKey())
+    }
+
     func testValidatorOverridesIdentityAndFallsBackInvalidEnumsToUnknown() throws {
         let json = """
         {

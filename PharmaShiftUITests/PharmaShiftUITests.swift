@@ -57,7 +57,7 @@ final class PharmaShiftUITests: XCTestCase {
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
         app.buttons["trustedImport.continue"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Generated with AI"].exists)
+        XCTAssertTrue(app.staticTexts["DailyMed"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
     }
 

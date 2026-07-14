@@ -84,7 +84,7 @@ final class DrugImportServiceTests: XCTestCase {
         let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
         XCTAssertTrue(text.contains("\"max_tokens\":4500"))
         XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
-        XCTAssertTrue(text.contains("does not use RxNorm, DailyMed, or openFDA"))
+        XCTAssertTrue(text.contains("Trusted source lookup did not return a usable page"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
     }
 

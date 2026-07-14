@@ -236,6 +236,7 @@ enum DrugImportError: LocalizedError, Equatable {
     case parsingFailed
     case missingDeepSeekKey
     case invalidAIJSON
+    case aiResponseTruncated
     case aiReturnedEmpty
     case unresolvedLocalBrand
     case deepSeekHTTPStatus(Int)
@@ -246,7 +247,8 @@ enum DrugImportError: LocalizedError, Equatable {
         case .invalidResponse: "The trusted source returned an unexpected response. Please try again."
         case .parsingFailed: "The trusted source label could not be read."
         case .missingDeepSeekKey: "Add your DeepSeek API key in Settings before using AI formatting."
-        case .invalidAIJSON: "DeepSeek did not return a complete valid card. Retry generation."
+        case .invalidAIJSON: "DeepSeek returned unreadable data. Try again; Renlyst now accepts incomplete cards and fills safe defaults automatically."
+        case .aiResponseTruncated: "DeepSeek cut the answer off before finishing the card. Retry once; Renlyst has reduced the request size for future cards."
         case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry generation."
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
@@ -872,8 +874,16 @@ actor DeepSeekDrugImportService: DrugImportFormattingService {
     private let session: URLSession
     private let keyStore: DeepSeekKeyStore
 
-    init(session: URLSession = .shared, keyStore: DeepSeekKeyStore = .shared) {
-        self.session = session
+    init(session: URLSession? = nil, keyStore: DeepSeekKeyStore = .shared) {
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.waitsForConnectivity = false
+            configuration.timeoutIntervalForRequest = 45
+            configuration.timeoutIntervalForResource = 60
+            self.session = URLSession(configuration: configuration)
+        }
         self.keyStore = keyStore
     }
 
@@ -885,7 +895,11 @@ actor DeepSeekDrugImportService: DrugImportFormattingService {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
         let payload = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
         guard let content = payload.choices.first?.message.content, !content.trimmed.isEmpty else { throw DrugImportError.aiReturnedEmpty }
-        return try DrugImportValidator.parse(jsonString: content, confirmedIdentity: identity, packet: packet)
+        do {
+            return try DrugImportValidator.parse(jsonString: content, confirmedIdentity: identity, packet: packet)
+        } catch DrugImportError.invalidAIJSON where payload.choices.first?.finishReason == "length" {
+            throw DrugImportError.aiResponseTruncated
+        }
     }
 
     static func makeRequest(apiKey: String, packet: TrustedDrugSourcePacket, identity: UserConfirmedDrugIdentity) throws -> URLRequest {
@@ -925,8 +939,16 @@ actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
     private let session: URLSession
     private let keyStore: DeepSeekKeyStore
 
-    init(session: URLSession = .shared, keyStore: DeepSeekKeyStore = .shared) {
-        self.session = session
+    init(session: URLSession? = nil, keyStore: DeepSeekKeyStore = .shared) {
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.waitsForConnectivity = false
+            configuration.timeoutIntervalForRequest = 45
+            configuration.timeoutIntervalForResource = 60
+            self.session = URLSession(configuration: configuration)
+        }
         self.keyStore = keyStore
     }
 
@@ -938,7 +960,11 @@ actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
         guard (200..<300).contains(http.statusCode) else { throw DrugImportError.deepSeekHTTPStatus(http.statusCode) }
         let payload = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
         guard let content = payload.choices.first?.message.content, !content.trimmed.isEmpty else { throw DrugImportError.aiReturnedEmpty }
-        return try DrugImportValidator.parseAIDraft(jsonString: content, confirmedIdentity: identity, packageText: packageText)
+        do {
+            return try DrugImportValidator.parseAIDraft(jsonString: content, confirmedIdentity: identity, packageText: packageText)
+        } catch DrugImportError.invalidAIJSON where payload.choices.first?.finishReason == "length" {
+            throw DrugImportError.aiResponseTruncated
+        }
     }
 
     static func makeRequest(apiKey: String, identity: UserConfirmedDrugIdentity, packageText: String) throws -> URLRequest {
@@ -981,7 +1007,12 @@ private struct DeepSeekRequest: Encodable {
 }
 
 private struct DeepSeekResponse: Decodable {
-    struct Choice: Decodable { struct Message: Decodable { var content: String? }; var message: Message }
+    struct Choice: Decodable {
+        struct Message: Decodable { var content: String? }
+        var message: Message
+        var finishReason: String?
+        enum CodingKeys: String, CodingKey { case message; case finishReason = "finish_reason" }
+    }
     var choices: [Choice]
 }
 
@@ -1105,7 +1136,7 @@ enum PromptBuilder {
           "counseling": {"howToTakeArabic": "", "foodInstructionArabic": "", "simplePatientSentenceArabic": "", "whatPatientMayFeelArabic": [], "whenToSeekHelpArabic": [], "missedDoseArabic": ""},
           "arabicExplanation": {"shortExplanation": "", "memoryStory": "", "importantNote": ""},
           "adverseEffects": {"common": [], "serious": []},
-          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": "", "reviewQuestions": [{"prompt": "", "choices": ["", "", "", ""], "correctAnswer": "", "explanation": "", "questionType": "Use", "relatedField": "indications", "difficulty": "medium"}]},
+          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": "", "reviewQuestions": []},
           "doseRegimens": [{"indication": "", "population": "Adult", "formula": "Fixed dose", "route": "", "minimumAgeMonths": null, "maximumAgeMonths": null, "minimumWeightKG": null, "maximumWeightKG": null, "sexRestriction": null, "fixedDoseMG": null, "amountPerKG": null, "amountPerSquareMeter": null, "dividedDoses": 1, "intervalHours": null, "maximumSingleDoseMG": null, "maximumDailyDoseMG": null, "durationText": "", "renalAdjustment": "", "hepaticAdjustment": "", "requiresMeasuredWeight": false, "sourceIDs": []}],
           "prodrugInfo": {"classification": "Unknown", "administeredCompound": "", "activeCompound": "", "activationSite": "", "activationPathway": "", "explanation": "", "sourceIDs": []},
           "eliminationInfo": {"metabolismSite": "", "metabolismEnzymes": [], "routes": [{"pathway": "Unknown", "percentage": null, "detail": ""}], "dominantPathway": "Unknown", "summary": "", "sourceIDs": []},
@@ -1118,7 +1149,7 @@ private enum FastGatherPromptBuilder {
     You create complete, practical pharmacy learning cards from a confirmed medicine identity and supplied package or leaflet text.
     Fill every relevant field: identity, class, uses, mechanism, indication- and population-specific dose regimens, pharmacokinetics, dosing frequency, precise active-drug/prodrug status, organ/pathway of elimination, adverse effects, safety, and counseling. Never treat package strength as a standard dose. Use "unknown" only when a fact genuinely cannot be established. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
 
-    Also create 8 high-quality review questions. Except for Scientific name and Trade name spelling questions, every question must be either four-option multiple choice or True/False. Each MCQ must have one unambiguously correct answer, three plausible distractors, and a short explanation. Do not reveal the answer in the prompt.
+    Keep the response compact. Do not create reviewQuestions; Renlyst builds those locally from the completed card so the clinical card cannot be lost to a long response.
     """
 
     static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
@@ -1136,7 +1167,7 @@ private enum FastGatherPromptBuilder {
         Optional OCR or pasted package details:
         \(packageText.prefix(2_000))
 
-        Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and eight review questions spanning identity, class, use, mechanism, PK, safety, and counseling.
+        Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and up to four short flashcards. Set memorization.reviewQuestions to an empty array; Renlyst creates eight review questions locally after decoding.
 
         Output JSON only using this exact structure:
         \(PromptBuilder.cardJSONSchema)
@@ -1160,6 +1191,7 @@ enum DrugImportValidator {
         if packet.isTruncated { info.sourceQuality.needsReview = true; info.sourceQuality.notes = [info.sourceQuality.notes, "Trusted source packet was trimmed before AI formatting."].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
         info.sourceQuality.missingImportantFields = missing
         if !missing.isEmpty { info.sourceQuality.needsReview = true }
+        ensureLearningContent(&info)
         return info
     }
 
@@ -1173,18 +1205,215 @@ enum DrugImportValidator {
             missingImportantFields: info.sourceQuality.missingImportantFields,
             notes: "Generated from the confirmed drug identity. Every section remains editable before saving."
         )
+        ensureLearningContent(&info)
         return info
     }
 
     private static func decodedInfo(_ jsonString: String) throws -> ImportedDrugInfo {
-        let trimmed = jsonString.trimmed
-        guard trimmed.first == "{", trimmed.last == "}" else { throw DrugImportError.invalidAIJSON }
-        guard let data = trimmed.data(using: .utf8), let info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
+        let data = try DeepSeekJSONSanitizer.normalizedCardData(from: jsonString)
+        guard var info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
+        info.doseRegimens = info.doseRegimens?.filter { !$0.indication.trimmed.isEmpty }
         return info
     }
 
     private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
         ImportedIdentity(scientificName: identity.scientificName, tradeNames: identity.tradeNames, system: identity.system, class: imported.class.trimmed, dosageForm: identity.dosageForm, strength: identity.strength, route: identity.route)
+    }
+
+    private static func ensureLearningContent(_ info: inout ImportedDrugInfo) {
+        let name = info.identity.scientificName.trimmed
+        let trade = info.identity.tradeNames.first?.trimmed ?? ""
+        let facts = [
+            !trade.isEmpty && !name.isEmpty ? "\(trade) = \(name)" : name,
+            info.identity.class.trimmed,
+            info.usesMechanism.mainUses.first?.trimmed ?? "",
+            info.safety.warnings.items.first?.trimmed ?? "",
+            info.counseling.simplePatientSentenceArabic.trimmed
+        ].filter { !$0.isEmpty }
+        for fact in facts where info.memorization.mustKnow.count < 3 && !info.memorization.mustKnow.contains(fact) {
+            info.memorization.mustKnow.append(fact)
+        }
+        if info.memorization.flashcards.isEmpty {
+            if !name.isEmpty { info.memorization.flashcards.append(Flashcard(question: "Scientific name?", answer: name)) }
+            if !trade.isEmpty { info.memorization.flashcards.append(Flashcard(question: "Trade name?", answer: trade)) }
+            if !info.identity.class.trimmed.isEmpty { info.memorization.flashcards.append(Flashcard(question: "Drug class?", answer: info.identity.class.trimmed)) }
+        }
+        info.memorization.reviewQuestions = LocalReviewQuestionBuilder.questions(for: info)
+    }
+}
+
+enum DeepSeekJSONSanitizer {
+    private static let optionalNumberKeys: Set<String> = [
+        "timesPerDay", "minimumAgeMonths", "maximumAgeMonths", "minimumWeightKG", "maximumWeightKG",
+        "fixedDoseMG", "amountPerKG", "amountPerSquareMeter", "dividedDoses", "intervalHours",
+        "maximumSingleDoseMG", "maximumDailyDoseMG", "percentage"
+    ]
+    private static let integerKeys: Set<String> = ["timesPerDay", "minimumAgeMonths", "maximumAgeMonths", "dividedDoses"]
+    private static let stringArrayKeys: Set<String> = [
+        "tradeNames", "mainUses", "mechanismKeywords", "items", "whatPatientMayFeelArabic", "whenToSeekHelpArabic",
+        "common", "serious", "mustKnow", "choices", "sourceIDs", "metabolismEnzymes", "missingImportantFields"
+    ]
+
+    static func objectData(from content: String) throws -> Data {
+        let bytes = Array(content.utf8)
+        var start: Int?
+        var depth = 0
+        var isInsideString = false
+        var isEscaped = false
+        for (index, byte) in bytes.enumerated() {
+            if start == nil {
+                guard byte == 123 else { continue }
+                start = index
+                depth = 1
+                continue
+            }
+            if isInsideString {
+                if isEscaped { isEscaped = false }
+                else if byte == 92 { isEscaped = true }
+                else if byte == 34 { isInsideString = false }
+                continue
+            }
+            if byte == 34 { isInsideString = true }
+            else if byte == 123 { depth += 1 }
+            else if byte == 125 {
+                depth -= 1
+                if depth == 0, let start { return Data(bytes[start...index]) }
+            }
+        }
+        throw DrugImportError.invalidAIJSON
+    }
+
+    static func normalizedCardData(from content: String) throws -> Data {
+        let object = try JSONSerialization.jsonObject(with: objectData(from: content))
+        guard var actual = object as? [String: Any],
+              let templateData = PromptBuilder.cardJSONSchema.data(using: .utf8),
+              let template = try JSONSerialization.jsonObject(with: templateData) as? [String: Any] else {
+            throw DrugImportError.invalidAIJSON
+        }
+        if var memorization = actual["memorization"] as? [String: Any] {
+            memorization["reviewQuestions"] = []
+            actual["memorization"] = memorization
+        }
+        let normalized = normalize(template: template, actual: actual, key: "")
+        return try JSONSerialization.data(withJSONObject: normalized)
+    }
+
+    private static func normalize(template: Any, actual: Any, key: String) -> Any {
+        if let template = template as? [String: Any] {
+            let actual = actual as? [String: Any] ?? [:]
+            var result = actual
+            for (childKey, defaultValue) in template {
+                guard let supplied = actual[childKey], !(supplied is NSNull) else {
+                    result[childKey] = defaultValue is [Any] ? [] : defaultValue
+                    continue
+                }
+                result[childKey] = normalize(template: defaultValue, actual: supplied, key: childKey)
+            }
+            return result
+        }
+        if let template = template as? [Any] {
+            guard let actual = actual as? [Any] else { return [] }
+            if stringArrayKeys.contains(key) {
+                return actual.compactMap { stringValue($0) }.map(\.trimmed).filter { !$0.isEmpty }
+            }
+            guard let sample = template.first else { return actual }
+            return actual.map { normalize(template: sample, actual: $0, key: key) }
+        }
+        if template is NSNull {
+            if optionalNumberKeys.contains(key) { return numberValue(actual, integer: integerKeys.contains(key)) ?? NSNull() }
+            if key == "sexRestriction" {
+                guard let value = stringValue(actual), !value.trimmed.isEmpty else { return NSNull() }
+                return normalizedEnum(value, key: key)
+            }
+            return actual
+        }
+        if template is Bool {
+            if let value = actual as? Bool { return value }
+            return (stringValue(actual)?.lowercased() == "true")
+        }
+        if template is NSNumber { return numberValue(actual, integer: integerKeys.contains(key)) ?? template }
+        if template is String { return normalizedEnum(stringValue(actual) ?? "", key: key) }
+        return actual
+    }
+
+    private static func stringValue(_ value: Any) -> String? {
+        if let value = value as? String { return value }
+        if let value = value as? NSNumber { return value.stringValue }
+        return nil
+    }
+
+    private static func numberValue(_ value: Any, integer: Bool) -> NSNumber? {
+        if let value = value as? NSNumber { return integer ? NSNumber(value: value.intValue) : NSNumber(value: value.doubleValue) }
+        guard let text = value as? String, let number = Double(text.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        return integer ? NSNumber(value: Int(number)) : NSNumber(value: number)
+    }
+
+    private static func normalizedEnum(_ value: String, key: String) -> String {
+        let compact = value.trimmed.lowercased().replacingOccurrences(of: "_", with: " ")
+        switch key {
+        case "population":
+            if compact.contains("child") || compact.contains("pediatric") { return DosePopulation.pediatric.rawValue }
+            if compact.contains("older") || compact.contains("geriatric") { return DosePopulation.geriatric.rawValue }
+            if compact.contains("special") { return DosePopulation.special.rawValue }
+            return DosePopulation.adult.rawValue
+        case "formula":
+            if compact.contains("kg/day") { return DoseFormulaKind.mgPerKgPerDay.rawValue }
+            if compact.contains("kg") { return DoseFormulaKind.mgPerKgPerDose.rawValue }
+            if compact.contains("m2") || compact.contains("m²") || compact.contains("square") { return DoseFormulaKind.mgPerSquareMeter.rawValue }
+            return DoseFormulaKind.fixed.rawValue
+        case "sexRestriction":
+            return compact.hasPrefix("f") ? PatientSexAtBirth.female.rawValue : PatientSexAtBirth.male.rawValue
+        case "classification":
+            if compact.contains("not a prodrug") || compact.contains("active drug") { return ProdrugClassification.activeDrug.rawValue }
+            if compact.contains("prodrug") { return ProdrugClassification.prodrug.rawValue }
+            if compact.contains("active") { return ProdrugClassification.activeDrug.rawValue }
+            return ProdrugClassification.unknown.rawValue
+        case "pathway", "dominantPathway":
+            if compact.contains("kidney") || compact.contains("renal") || compact.contains("urine") { return EliminationPathway.renalUrine.rawValue }
+            if compact.contains("bile") || compact.contains("fec") || compact.contains("hepatic") { return EliminationPathway.biliaryFecal.rawValue }
+            if compact.contains("lung") || compact.contains("exhal") { return EliminationPathway.pulmonary.rawValue }
+            if compact.contains("mixed") || compact.contains("multiple") { return EliminationPathway.mixed.rawValue }
+            if compact == "other" { return EliminationPathway.other.rawValue }
+            return EliminationPathway.unknown.rawValue
+        default:
+            return value
+        }
+    }
+}
+
+private enum LocalReviewQuestionBuilder {
+    static func questions(for info: ImportedDrugInfo) -> [GeneratedReviewQuestionDTO] {
+        let name = info.identity.scientificName.trimmed.isEmpty ? "this medicine" : info.identity.scientificName.trimmed
+        let trade = info.identity.tradeNames.first?.trimmed ?? ""
+        var result: [GeneratedReviewQuestionDTO] = []
+        func typed(_ prompt: String, _ answer: String, type: QuestionType, field: String) {
+            guard !answer.trimmed.isEmpty else { return }
+            result.append(.init(prompt: prompt, choices: [], correctAnswer: answer, explanation: answer, questionType: type.rawValue, relatedField: field, difficulty: "medium"))
+        }
+        func truth(_ statement: String, explanation: String, type: QuestionType, field: String) {
+            guard !explanation.trimmed.isEmpty else { return }
+            result.append(.init(prompt: "True or false: \(statement)", choices: ["True", "False"], correctAnswer: "True", explanation: explanation, questionType: type.rawValue, relatedField: field, difficulty: "medium"))
+        }
+        typed("What is the scientific name of \(trade.isEmpty ? "this product" : trade)?", name == "this medicine" ? "" : name, type: .scientificName, field: "identity")
+        typed("Name one trade product for \(name).", trade, type: .tradeName, field: "tradeNames")
+        truth("\(name) belongs to \(info.identity.class).", explanation: info.identity.class, type: .drugClass, field: "class")
+        if let use = info.usesMechanism.mainUses.first { truth("A recorded use of \(name) is \(use).", explanation: use, type: .use, field: "indications") }
+        truth("The recorded mechanism for \(name) is: \(info.usesMechanism.simpleMechanismArabic)", explanation: info.usesMechanism.simpleMechanismArabic, type: .use, field: "mechanism")
+        truth("The recorded half-life of \(name) is \(info.pharmacokinetics.halfLifeDisplay).", explanation: info.pharmacokinetics.halfLifeDisplay, type: .use, field: "halfLife")
+        if let warning = info.safety.warnings.items.first { truth("An important warning for \(name) is \(warning).", explanation: warning, type: .warning, field: "warnings") }
+        truth("Patient counseling for \(name) includes: \(info.counseling.simplePatientSentenceArabic)", explanation: info.counseling.simplePatientSentenceArabic, type: .counseling, field: "counseling")
+        truth("The elimination summary for \(name) is: \(info.eliminationInfo?.summary ?? "")", explanation: info.eliminationInfo?.summary ?? "", type: .warning, field: "elimination")
+        truth("The prodrug note for \(name) is: \(info.prodrugInfo?.explanation ?? "")", explanation: info.prodrugInfo?.explanation ?? "", type: .use, field: "prodrug")
+        if result.isEmpty { return [] }
+        let base = result
+        var index = 0
+        while result.count < 8 {
+            var copy = base[index % base.count]
+            copy.prompt = "Review: " + copy.prompt
+            result.append(copy)
+            index += 1
+        }
+        return Array(result.prefix(8))
     }
 }
 

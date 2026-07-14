@@ -60,10 +60,10 @@ struct DrugImportView: View {
     @State private var importedInfo: ImportedDrugInfo?
     @State private var selection = ImportSelection(sections: Set(ImportSection.allCases))
     @State private var isLoading = false
+    @State private var loadingMessage = ""
     @State private var message: String?
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
-    @State private var retryCount = 0
     @State private var resolvedIdentity: ResolvedDrugIdentity?
     @State private var importMode: ImportMode = .trusted
     private let identityResolver: any DrugIdentityResolving = DeepSeekIdentityResolver()
@@ -128,8 +128,9 @@ struct DrugImportView: View {
             if isLoading {
                 VStack(spacing: 10) {
                     ProgressView()
-                    Text(startsInAIMode ? "Building your complete learning card..." : "Working from trusted source text...")
+                    Text(loadingMessage.isEmpty ? (startsInAIMode ? "Building your complete learning card..." : "Working from trusted source text...") : loadingMessage)
                         .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
                 }
                 .padding()
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -379,6 +380,7 @@ struct DrugImportView: View {
         selectedProviderName = result.sourceName
         guard let provider = providers.first(where: { $0.sourceName == result.sourceName }) else { return }
         isLoading = true
+        loadingMessage = "Reading the selected source, then formatting one compact card..."
         Task {
             do {
                 let packet = try await provider.fetchDrugDetails(id: result.id)
@@ -397,19 +399,12 @@ struct DrugImportView: View {
     }
 
     private func formatWithRetry(packet: TrustedDrugSourcePacket) async throws -> ImportedDrugInfo {
-        do { return try await aiService.format(packet: packet, identity: identity) }
-        catch DrugImportError.invalidAIJSON where retryCount == 0 {
-            retryCount += 1
-            return try await aiService.format(packet: packet, identity: identity)
-        } catch DrugImportError.aiReturnedEmpty where retryCount == 0 {
-            retryCount += 1
-            return try await aiService.format(packet: packet, identity: identity)
-        }
+        try await aiService.format(packet: packet, identity: identity)
     }
 
     private func retryAI() {
         isLoading = true
-        retryCount = 0
+        loadingMessage = "Retrying one compact AI request..."
         Task {
             do {
                 let info: ImportedDrugInfo
@@ -430,11 +425,16 @@ struct DrugImportView: View {
     private func fastGather() {
         guard identity.isComplete else { message = "Confirm the drug name before creating an AI draft."; return }
         isLoading = true
-        retryCount = 0
+        loadingMessage = "Checking trusted sources in parallel (maximum 8 seconds)..."
         importMode = .aiDraft
         Task {
             do {
                 let packets = await gatherTrustedPackets()
+                await MainActor.run {
+                    loadingMessage = packets.isEmpty
+                        ? "Generating a compact card from the confirmed drug..."
+                        : "Generating a compact card from trusted evidence..."
+                }
                 let packet = mergedPacket(packets, leafletText: detectedText)
                 let info = packets.isEmpty
                     ? try await fastGatherService.gather(identity: identity, packageText: detectedText)
@@ -455,20 +455,51 @@ struct DrugImportView: View {
 
     private func gatherTrustedPackets() async -> [TrustedDrugSourcePacket] {
         let queries = ([identity.scientificName] + identity.tradeNames).filter { !$0.trimmed.isEmpty }
-        var packets: [TrustedDrugSourcePacket] = []
-        for provider in providers {
-            var selected: DrugSearchResult?
-            for query in queries where selected == nil {
-                selected = (try? await provider.searchDrug(query: query))?.first
+        let packets = await withTaskGroup(of: TrustedDrugSourcePacket?.self, returning: [TrustedDrugSourcePacket].self) { group in
+            for provider in providers {
+                group.addTask { await Self.firstPacket(from: provider, queries: queries) }
             }
-            if let selected, let packet = try? await provider.fetchDrugDetails(id: selected.id) { packets.append(packet) }
+            var values: [TrustedDrugSourcePacket] = []
+            for await packet in group {
+                if let packet { values.append(packet) }
+            }
+            return values
         }
-        return packets
+        let priority = ["Altibbi": 0, "DailyMed": 1, "RxNorm": 2, "openFDA": 3]
+        return packets.sorted { priority[$0.sourceName, default: 9] < priority[$1.sourceName, default: 9] }
+    }
+
+    private static func firstPacket(from provider: any DrugSourceProvider, queries: [String]) async -> TrustedDrugSourcePacket? {
+        await withTaskGroup(of: TrustedDrugSourcePacket?.self, returning: TrustedDrugSourcePacket?.self) { group in
+            group.addTask {
+                for query in queries {
+                    guard !Task.isCancelled else { return nil }
+                    if let results = try? await provider.searchDrug(query: query),
+                       let result = results.first,
+                       let packet = try? await provider.fetchDrugDetails(id: result.id) {
+                        return packet
+                    }
+                }
+                return nil
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(8))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     private func mergedPacket(_ packets: [TrustedDrugSourcePacket], leafletText: String) -> TrustedDrugSourcePacket {
         func joined(_ value: (TrustedDrugSourcePacket) -> String) -> String {
-            packets.map(value).filter { !$0.trimmed.isEmpty }.joined(separator: "\n\n---\n\n")
+            let sourced = packets.compactMap { packet -> String? in
+                let text = value(packet).trimmed
+                guard !text.isEmpty else { return nil }
+                return "[\(packet.sourceName)] \(text)"
+            }.joined(separator: "\n\n")
+            return TrustedDrugSourcePacketExtractor.compact(sourced, limit: 2_800)
         }
         let primary = packets.first(where: { $0.sourceName == "Altibbi" }) ?? packets.first
         return TrustedDrugSourcePacket(
@@ -477,7 +508,7 @@ struct DrugImportView: View {
             warningsText: joined(\.warningsText), adverseReactionsText: joined(\.adverseReactionsText), interactionsText: joined(\.interactionsText),
             pharmacokineticsText: joined(\.pharmacokineticsText), pregnancyText: joined(\.pregnancyText), dosageFormsText: joined(\.dosageFormsText),
             routeText: joined(\.routeText), activeIngredientText: joined(\.activeIngredientText), lastUpdatedText: nil,
-            isTruncated: packets.contains(where: \.isTruncated), leafletText: String(leafletText.prefix(8_000))
+            isTruncated: packets.contains(where: \.isTruncated), leafletText: String(leafletText.prefix(4_000))
         )
     }
 

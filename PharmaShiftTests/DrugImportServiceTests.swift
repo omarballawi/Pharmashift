@@ -240,6 +240,14 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(object["note"] as? String, "use {carefully}")
     }
 
+    func testJSONSanitizerRepairsTruncatedObject() throws {
+        let truncated = "{\"identity\":{\"class\":\"ACE inhibitor\"},\"usesMechanism\":{\"mainUses\":[\"Hypertension\"]},\"note\":\"cut off"
+        let data = try DeepSeekJSONSanitizer.objectData(from: truncated)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((object["identity"] as? [String: Any])?["class"] as? String, "ACE inhibitor")
+        XCTAssertEqual(object["note"] as? String, "cut off")
+    }
+
     func testImportApplierSavesSelectedSectionsAndIdentityOverride() throws {
         let drug = Drug(scientificName: "Existing")
         let info = try DrugImportValidator.parse(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packet: mockPacket())

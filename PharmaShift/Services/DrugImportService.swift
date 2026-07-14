@@ -1281,7 +1281,66 @@ enum DeepSeekJSONSanitizer {
                 if depth == 0, let start { return Data(bytes[start...index]) }
             }
         }
+        if let start, let repaired = repairedObjectData(from: Array(bytes[start...])) { return repaired }
         throw DrugImportError.invalidAIJSON
+    }
+
+    private static func repairedObjectData(from bytes: [UInt8]) -> Data? {
+        var safeCommas: [Int] = []
+        var isInsideString = false
+        var isEscaped = false
+        for (index, byte) in bytes.enumerated() {
+            if isInsideString {
+                if isEscaped { isEscaped = false }
+                else if byte == 92 { isEscaped = true }
+                else if byte == 34 { isInsideString = false }
+            } else if byte == 34 {
+                isInsideString = true
+            } else if byte == 44 {
+                safeCommas.append(index)
+            }
+        }
+        let cutPoints = [bytes.count] + Array(safeCommas.reversed())
+        for cut in cutPoints {
+            guard cut > 0, let candidate = closedJSON(Array(bytes[..<cut])) else { continue }
+            guard let object = try? JSONSerialization.jsonObject(with: candidate),
+                  let dictionary = object as? [String: Any], !dictionary.isEmpty else { continue }
+            return candidate
+        }
+        return nil
+    }
+
+    private static func closedJSON(_ prefix: [UInt8]) -> Data? {
+        var json = prefix
+        var stack: [UInt8] = []
+        var isInsideString = false
+        var isEscaped = false
+        for byte in json {
+            if isInsideString {
+                if isEscaped { isEscaped = false }
+                else if byte == 92 { isEscaped = true }
+                else if byte == 34 { isInsideString = false }
+                continue
+            }
+            if byte == 34 { isInsideString = true }
+            else if byte == 123 || byte == 91 { stack.append(byte) }
+            else if byte == 125 {
+                guard stack.last == 123 else { return nil }
+                stack.removeLast()
+            } else if byte == 93 {
+                guard stack.last == 91 else { return nil }
+                stack.removeLast()
+            }
+        }
+        if isInsideString {
+            if isEscaped, json.last == 92 { json.removeLast() }
+            json.append(34)
+        }
+        while json.last == 9 || json.last == 10 || json.last == 13 || json.last == 32 { json.removeLast() }
+        if json.last == 58 { return nil }
+        if json.last == 44 { json.removeLast() }
+        for opener in stack.reversed() { json.append(opener == 123 ? 125 : 93) }
+        return Data(json)
     }
 
     static func normalizedCardData(from content: String) throws -> Data {

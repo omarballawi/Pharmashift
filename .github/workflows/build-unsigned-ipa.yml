@@ -127,7 +127,7 @@ jobs:
           APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/Renlyst.app'
           test -d "$APP_PATH"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.renlyst.app'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.7.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.7.1'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '11'
           mkdir Payload
           ditto "$APP_PATH" 'Payload/Renlyst.app'

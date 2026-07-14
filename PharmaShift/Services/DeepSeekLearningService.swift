@@ -46,6 +46,8 @@ enum AIPracticePackStore {
 }
 
 actor DeepSeekPracticeService {
+    private var allowsAIRequests = true
+
     func makePack(from drugs: [Drug]) async throws -> AIPracticePack {
         let candidates = drugs.filter { !$0.isUnknown }
             .sorted {
@@ -64,30 +66,41 @@ actor DeepSeekPracticeService {
         {"questions":[{"sourceDrugID":"UUID","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
         Library:\n\(snapshots)
         """
-        let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_100)
-        let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
         let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id.uuidString, $0) })
-        let questions = try payload.questions.map { item -> PracticeQuestion in
-            guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { throw DrugImportError.invalidAIJSON }
-            let questionType = QuestionType(rawValue: item.questionType) ?? .use
-            var choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
-            let interaction: PracticeInteraction
-            var prompt = item.prompt.trimmed
-            var answer = item.answer.trimmed
-            if questionType == .scientificName || questionType == .tradeName {
-                choices = []
-                interaction = .textEntry
-            } else if choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) {
-                interaction = Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) ? .trueFalse : .multipleChoice
-            } else {
-                prompt = "True or false: \(answer)"
-                answer = "True"
-                choices = ["True", "False"]
-                interaction = .trueFalse
+        var questions: [PracticeQuestion] = []
+        if allowsAIRequests {
+            do {
+                let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_100)
+                let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
+                questions = payload.questions.compactMap { item -> PracticeQuestion? in
+                    guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { return nil }
+                    let questionType = QuestionType(rawValue: item.questionType) ?? .use
+                    var choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
+                    let interaction: PracticeInteraction
+                    var prompt = item.prompt.trimmed
+                    var answer = item.answer.trimmed
+                    if questionType == .scientificName || questionType == .tradeName {
+                        choices = []
+                        interaction = .textEntry
+                    } else if choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) {
+                        interaction = Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) ? .trueFalse : .multipleChoice
+                    } else {
+                        prompt = "True or false: \(answer)"
+                        answer = "True"
+                        choices = ["True", "False"]
+                        interaction = .trueFalse
+                    }
+                    return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: prompt, correctAnswer: answer, choices: choices, explanation: item.explanation?.trimmed, questionType: questionType, interaction: interaction)
+                }
+            } catch {
+                allowsAIRequests = false
             }
-            return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: prompt, correctAnswer: answer, choices: choices, explanation: item.explanation?.trimmed, questionType: questionType, interaction: interaction)
         }
-        guard questions.count == 5 else { throw DrugImportError.invalidAIJSON }
+        let local = PracticeGenerator.generate(mode: .smartSession, drugs: Array(candidates))
+        appendUnique(local, to: &questions, limit: 5)
+        guard !questions.isEmpty else { throw DrugImportError.invalidAIJSON }
+        while questions.count < 5 { questions.append(questions[0]) }
+        questions = Array(questions.prefix(5))
         let fingerprint = candidates.map { "\($0.id.uuidString):\($0.dateAdded.timeIntervalSince1970)" }.joined(separator: "|")
         return AIPracticePack(generatedAt: .now, libraryFingerprint: fingerprint, questions: questions)
     }
@@ -99,21 +112,67 @@ actor DeepSeekPracticeService {
         {"questions":[{"sourceDrugID":"\(drug.id.uuidString)","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
         Card: \(snapshot)
         """
-        let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_800)
-        let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
-        guard payload.questions.count == 8 else { throw DrugImportError.invalidAIJSON }
-        return try payload.questions.map { item in
-            guard !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { throw DrugImportError.invalidAIJSON }
-            let type = QuestionType(rawValue: item.questionType) ?? .use
-            var choices = unique(item.choices ?? [])
-            let interaction: PracticeInteraction
-            if type == .scientificName || type == .tradeName { choices = []; interaction = .textEntry }
-            else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) { interaction = .trueFalse }
-            else {
-                guard choices.count == 4, choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) else { throw DrugImportError.invalidAIJSON }
-                interaction = .multipleChoice
+        var questions: [GeneratedReviewQuestion] = []
+        if allowsAIRequests {
+            do {
+                let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_800)
+                let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
+                questions = payload.questions.compactMap { item -> GeneratedReviewQuestion? in
+                    guard !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { return nil }
+                    let type = QuestionType(rawValue: item.questionType) ?? .use
+                    var choices = unique(item.choices ?? [])
+                    let interaction: PracticeInteraction
+                    if type == .scientificName || type == .tradeName { choices = []; interaction = .textEntry }
+                    else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) { interaction = .trueFalse }
+                    else if choices.count >= 2, choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) {
+                        choices = Array(choices.prefix(4))
+                        interaction = .multipleChoice
+                    } else {
+                        choices = ["True", "False"]
+                        interaction = .trueFalse
+                    }
+                    let answer = interaction == .trueFalse && !choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) ? "True" : item.answer.trimmed
+                    let prompt = answer == "True" && !item.prompt.lowercased().contains("true or false") ? "True or false: \(item.answer.trimmed)" : item.prompt.trimmed
+                    return GeneratedReviewQuestion(prompt: prompt, choices: choices, correctAnswer: answer, explanation: item.explanation?.trimmed ?? item.answer.trimmed, questionType: type, interaction: interaction, relatedField: type.rawValue, difficulty: "medium")
+                }
+            } catch {
+                allowsAIRequests = false
             }
-            return GeneratedReviewQuestion(prompt: item.prompt.trimmed, choices: choices, correctAnswer: item.answer.trimmed, explanation: item.explanation?.trimmed ?? "", questionType: type, interaction: interaction, relatedField: type.rawValue, difficulty: "medium")
+        }
+        let fallback = fallbackQuestionSet(for: drug)
+        for item in fallback where questions.count < 8 && !questions.contains(where: { $0.prompt.localizedCaseInsensitiveCompare(item.prompt) == .orderedSame }) {
+            questions.append(item)
+        }
+        while questions.count < 8, let item = fallback.first ?? questions.first {
+            var copy = item
+            copy.id = UUID()
+            copy.prompt = "Review: " + copy.prompt
+            questions.append(copy)
+        }
+        guard !questions.isEmpty else { throw DrugImportError.invalidAIJSON }
+        return Array(questions.prefix(8))
+    }
+
+    private func appendUnique(_ incoming: [PracticeQuestion], to questions: inout [PracticeQuestion], limit: Int) {
+        for item in incoming where questions.count < limit && !questions.contains(where: { $0.prompt.localizedCaseInsensitiveCompare(item.prompt) == .orderedSame }) {
+            questions.append(item)
+        }
+    }
+
+    private func fallbackQuestionSet(for drug: Drug) -> [GeneratedReviewQuestion] {
+        let modes: [PracticeMode] = [.tradeToScientific, .scientificToTrade, .classExamples, .drugUse, .drugWarning, .counseling, .smartSession, .dueReview]
+        return modes.compactMap { mode in
+            guard let item = PracticeGenerator.generate(mode: mode, drugs: [drug]).first else { return nil }
+            return GeneratedReviewQuestion(
+                prompt: item.prompt,
+                choices: item.choices,
+                correctAnswer: item.correctAnswer,
+                explanation: item.explanation ?? item.correctAnswer,
+                questionType: item.questionType,
+                interaction: item.interaction,
+                relatedField: item.questionType.rawValue,
+                difficulty: "medium"
+            )
         }
     }
 
@@ -124,26 +183,60 @@ actor DeepSeekPracticeService {
     }
 }
 
-private struct AIPracticePayload: Decodable { var questions: [AIPracticeQuestion] }
-private struct AIPracticeQuestion: Decodable { var sourceDrugID: String; var prompt: String; var answer: String; var choices: [String]?; var explanation: String?; var questionType: String }
+private struct AIPracticePayload: Decodable {
+    var questions: [AIPracticeQuestion]
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        questions = (try? container.decodeIfPresent([AIPracticeQuestion].self, forKey: .questions)) ?? []
+    }
+    private enum CodingKeys: String, CodingKey { case questions }
+}
+
+private struct AIPracticeQuestion: Decodable {
+    var sourceDrugID: String
+    var prompt: String
+    var answer: String
+    var choices: [String]?
+    var explanation: String?
+    var questionType: String
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceDrugID = (try? container.decodeIfPresent(String.self, forKey: .sourceDrugID)) ?? ""
+        prompt = (try? container.decodeIfPresent(String.self, forKey: .prompt)) ?? ""
+        answer = (try? container.decodeIfPresent(String.self, forKey: .answer)) ?? ""
+        choices = try? container.decodeIfPresent([String].self, forKey: .choices)
+        explanation = try? container.decodeIfPresent(String.self, forKey: .explanation)
+        questionType = (try? container.decodeIfPresent(String.self, forKey: .questionType)) ?? QuestionType.use.rawValue
+    }
+
+    private enum CodingKeys: String, CodingKey { case sourceDrugID, prompt, answer, choices, explanation, questionType }
+}
 
 private enum DeepSeekJSONClient {
     static func complete(prompt: String, maxTokens: Int) async throws -> Data {
         guard let key = DeepSeekKeyStore.shared.apiKey(), !key.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
         var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": "deepseek-v4-flash", "messages": [["role": "system", "content": "Return valid JSON only."], ["role": "user", "content": prompt]], "thinking": ["type": "disabled"], "response_format": ["type": "json_object"], "temperature": 0, "max_tokens": maxTokens, "stream": false])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
         let responseBody = try JSONDecoder().decode(DeepSeekContentResponse.self, from: data)
-        guard let content = responseBody.choices.first?.message.content, let contentData = content.data(using: .utf8) else { throw DrugImportError.aiReturnedEmpty }
-        return contentData
+        guard let content = responseBody.choices.first?.message.content, !content.trimmed.isEmpty else { throw DrugImportError.aiReturnedEmpty }
+        do { return try DeepSeekJSONSanitizer.objectData(from: content) }
+        catch DrugImportError.invalidAIJSON where responseBody.choices.first?.finishReason == "length" { throw DrugImportError.aiResponseTruncated }
     }
 }
 
 private struct DeepSeekContentResponse: Decodable {
-    struct Choice: Decodable { struct Message: Decodable { var content: String? }; var message: Message }
+    struct Choice: Decodable {
+        struct Message: Decodable { var content: String? }
+        var message: Message
+        var finishReason: String?
+        enum CodingKeys: String, CodingKey { case message; case finishReason = "finish_reason" }
+    }
     var choices: [Choice]
 }

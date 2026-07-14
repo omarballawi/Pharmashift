@@ -194,8 +194,58 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(DrugSearchRanker.ranked(results, identity: identity).first?.id, "capsule")
     }
 
-    func testValidatorRejectsMarkdownWrappedJSON() {
-        XCTAssertThrowsError(try DrugImportValidator.parse(jsonString: "```json\n{}\n```", confirmedIdentity: confirmedIdentity(), packet: mockPacket()))
+    func testValidatorAcceptsMarkdownWrappedJSON() throws {
+        let wrapped = "DeepSeek result:\n```json\n\(validJSON())\n```"
+        let info = try DrugImportValidator.parse(jsonString: wrapped, confirmedIdentity: confirmedIdentity(), packet: mockPacket())
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
+        XCTAssertEqual(info.memorization.reviewQuestions?.count, 8)
+    }
+
+    func testValidatorRepairsIncompleteCardAndNormalizesDoseTypes() throws {
+        let partial = """
+        Here is the compact result:
+        ```json
+        {
+          "identity": {"class": "ACE inhibitor"},
+          "usesMechanism": {"mainUses": ["Hypertension"]},
+          "doseRegimens": [{
+            "indication": "Hypertension",
+            "population": "pediatric",
+            "formula": "mg per kg per day",
+            "amountPerKG": "2.5",
+            "dividedDoses": "2",
+            "requiresMeasuredWeight": "true"
+          }],
+          "prodrugInfo": {"classification": "active drug", "explanation": "Administered compound is active."},
+          "eliminationInfo": {"dominantPathway": "renal", "summary": "Eliminated mainly in urine."}
+        }
+        ```
+        """
+        let info = try DrugImportValidator.parseAIDraft(jsonString: partial, confirmedIdentity: confirmedIdentity(), packageText: "")
+        XCTAssertEqual(info.identity.class, "ACE inhibitor")
+        XCTAssertEqual(info.usesMechanism.mainUses, ["Hypertension"])
+        XCTAssertEqual(info.doseRegimens?.first?.population, .pediatric)
+        XCTAssertEqual(info.doseRegimens?.first?.formula, .mgPerKgPerDay)
+        XCTAssertEqual(info.doseRegimens?.first?.amountPerKG, 2.5)
+        XCTAssertEqual(info.doseRegimens?.first?.dividedDoses, 2)
+        XCTAssertEqual(info.doseRegimens?.first?.requiresMeasuredWeight, true)
+        XCTAssertEqual(info.prodrugInfo?.classification, .activeDrug)
+        XCTAssertEqual(info.eliminationInfo?.dominantPathway, .renalUrine)
+        XCTAssertEqual(info.memorization.reviewQuestions?.count, 8)
+    }
+
+    func testJSONSanitizerHandlesBracesInsideStrings() throws {
+        let data = try DeepSeekJSONSanitizer.objectData(from: "prefix {\"note\":\"use {carefully}\",\"ok\":true} suffix")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["note"] as? String, "use {carefully}")
+    }
+
+    func testJSONSanitizerRepairsTruncatedObject() throws {
+        let truncated = "{\"identity\":{\"class\":\"ACE inhibitor\"},\"usesMechanism\":{\"mainUses\":[\"Hypertension\"]},\"note\":\"cut off"
+        let data = try DeepSeekJSONSanitizer.objectData(from: truncated)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((object["identity"] as? [String: Any])?["class"] as? String, "ACE inhibitor")
+        XCTAssertEqual(object["note"] as? String, "cut off")
     }
 
     func testImportApplierSavesSelectedSectionsAndIdentityOverride() throws {
@@ -206,7 +256,8 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(drug.tradeNames, ["Coversyl"])
         XCTAssertEqual(drug.warnings, ["Main warning"])
         XCTAssertEqual(drug.warningSeverityRaw, SafetySeverity.high.rawValue)
-        XCTAssertEqual(drug.mustKnow, ["Coversyl = Perindopril"])
+        XCTAssertTrue(drug.mustKnow.contains("Coversyl = Perindopril"))
+        XCTAssertEqual(drug.mustKnow.count, 3)
         XCTAssertEqual(drug.flashcards, ["Scientific?\tPerindopril arginine"])
         XCTAssertEqual(drug.importedSourceName, "DailyMed")
         XCTAssertTrue(drug.mechanism.isEmpty)

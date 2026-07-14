@@ -83,7 +83,7 @@ struct DrugImportView: View {
         self.fastGatherService = fastGatherService
         self.startsInAIMode = startsInAIMode
         let skipsPhotoInTests = ProcessInfo.processInfo.arguments.contains("-mockDrugImportSkipPhoto")
-        _stage = State(initialValue: skipsPhotoInTests ? .confirm : .photo)
+        _stage = State(initialValue: startsInAIMode || skipsPhotoInTests ? .confirm : .photo)
         _importMode = State(initialValue: startsInAIMode ? .aiDraft : .trusted)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)
@@ -163,7 +163,9 @@ struct DrugImportView: View {
             canContinue: identity.isComplete,
             actionTitle: startsInAIMode ? "Generate complete card" : "Search trusted sources",
             actionIcon: startsInAIMode ? "sparkles.rectangle.stack.fill" : "checkmark.seal.fill",
-            isAIMode: startsInAIMode
+            isAIMode: startsInAIMode,
+            hasImages: !currentImages.isEmpty,
+            onAddPhoto: { stage = .photo }
         ) {
             if startsInAIMode {
                 fastGather()
@@ -563,6 +565,8 @@ private struct ConfirmDrugIdentityView: View {
     let actionTitle: String
     let actionIcon: String
     let isAIMode: Bool
+    let hasImages: Bool
+    let onAddPhoto: () -> Void
     let onContinue: () -> Void
 
     private var tradeNamesText: Binding<String> {
@@ -590,6 +594,14 @@ private struct ConfirmDrugIdentityView: View {
                 Text(isAIMode
                      ? "Enter a scientific or trade name. No source is required; AI will build the complete card and you choose what to save."
                      : "Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
+            }
+            if isAIMode {
+                Section("Package image (optional)") {
+                    Button(action: onAddPhoto) {
+                        Label(hasImages ? "Change package photos" : "Add a package photo", systemImage: hasImages ? "photo.stack.fill" : "camera.fill")
+                    }
+                    if hasImages { Label("Photo attached to this trade product", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+                }
             }
             Section {
                 Button(action: onContinue) {

@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import ImageIO
 import Security
 import SwiftData
@@ -1327,7 +1328,7 @@ enum DeepSeekJSONSanitizer {
             }
             return actual
         }
-        if template is Bool {
+        if isBoolean(template) {
             if let value = actual as? Bool { return value }
             return (stringValue(actual)?.lowercased() == "true")
         }
@@ -1340,6 +1341,11 @@ enum DeepSeekJSONSanitizer {
         if let value = value as? String { return value }
         if let value = value as? NSNumber { return value.stringValue }
         return nil
+    }
+
+    private static func isBoolean(_ value: Any) -> Bool {
+        guard let number = value as? NSNumber else { return value is Bool }
+        return CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
     private static func numberValue(_ value: Any, integer: Bool) -> NSNumber? {

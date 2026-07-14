@@ -1357,7 +1357,7 @@ enum DeepSeekJSONSanitizer {
             if compact.contains("special") { return DosePopulation.special.rawValue }
             return DosePopulation.adult.rawValue
         case "formula":
-            if compact.contains("kg/day") { return DoseFormulaKind.mgPerKgPerDay.rawValue }
+            if compact.contains("kg/day") || compact.contains("kg per day") || compact.contains("per kg per day") { return DoseFormulaKind.mgPerKgPerDay.rawValue }
             if compact.contains("kg") { return DoseFormulaKind.mgPerKgPerDose.rawValue }
             if compact.contains("m2") || compact.contains("m²") || compact.contains("square") { return DoseFormulaKind.mgPerSquareMeter.rawValue }
             return DoseFormulaKind.fixed.rawValue

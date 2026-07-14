@@ -48,6 +48,7 @@ final class AppNavigation {
 }
 
 struct AppShell: View {
+    @Environment(\.modelContext) private var context
     @Environment(AppTheme.self) private var theme
     @State private var navigation = AppNavigation()
 
@@ -76,6 +77,9 @@ struct AppShell: View {
         }
         .tint(theme.tint)
         .environment(navigation)
+        .task {
+            try? DrugLibraryMigrationService.runIfNeeded(context: context)
+        }
     }
 }
 

@@ -28,6 +28,7 @@ struct LibraryView: View {
     @State private var message: String?
     @State private var asksVerification = false
     @State private var section: LibrarySection = .cards
+    @State private var isRefreshingLinks = false
 
     private var filteredDrugs: [Drug] {
         let filter = DrugFilter(
@@ -81,6 +82,10 @@ struct LibraryView: View {
         .onChange(of: navigation.libraryChapter) { _, _ in applyRequestedChapter() }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { refreshLinks() } label: {
+                    Label(isRefreshingLinks ? "Refreshing links" : "Refresh drug links", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(isRefreshingLinks || drugs.count < 2)
                 Button { showsFilters = true } label: {
                     Label("Filters", systemImage: activeFilterCount == 0 ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                 }
@@ -114,7 +119,7 @@ struct LibraryView: View {
             Button("A pharmacist verified the starter pack") { markVerified() }
             Button("Cancel", role: .cancel) {}
         }
-        .alert("Starter pack", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert("Library", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
     }
@@ -135,6 +140,18 @@ struct LibraryView: View {
             try StarterContent.markImportedContentVerified(in: context)
             message = "Imported examples are now marked pharmacist verified."
         } catch { message = error.localizedDescription }
+    }
+
+    private func refreshLinks() {
+        isRefreshingLinks = true
+        Task {
+            do {
+                let count = try await DrugRelationshipRefreshService.refresh(drugs: drugs, context: context)
+                await MainActor.run { message = count == 0 ? "No sourced interactions between saved ingredients were found." : "Updated \(count) sourced drug link(s)."; isRefreshingLinks = false }
+            } catch {
+                await MainActor.run { message = error.localizedDescription; isRefreshingLinks = false }
+            }
+        }
     }
 
     private func applyRequestedChapter() {

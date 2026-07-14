@@ -91,6 +91,37 @@ actor DeepSeekPracticeService {
         let fingerprint = candidates.map { "\($0.id.uuidString):\($0.dateAdded.timeIntervalSince1970)" }.joined(separator: "|")
         return AIPracticePack(generatedAt: .now, libraryFingerprint: fingerprint, questions: questions)
     }
+
+    func makeQuestionSet(for drug: Drug) async throws -> [GeneratedReviewQuestion] {
+        let snapshot = "name=\(drug.displayName); trade=\(drug.effectiveTradeNames.joined(separator: ",")); class=\(drug.drugClass); uses=\(drug.indications.joined(separator: " | ")); mechanism=\(drug.mechanism); dose=\(drug.doseRegimens.map { "\($0.indication):\($0.formula.rawValue)" }.joined(separator: " | ")); PK=\(drug.halfLifeText),\(drug.prodrugInfo.explanation),\(drug.eliminationInfo.summary); warnings=\(drug.warnings.joined(separator: " | ")); interactions=\(drug.interactions.joined(separator: " | ")); counseling=\(drug.counselingSentence)"
+        let prompt = """
+        Return JSON only. Create exactly 8 concise pharmacy learning questions using only the supplied card. Cover identity, class/mechanism, use, standard dose concepts when present, PK, safety/interactions, and counseling. Scientific name and Trade name require typed spelling and no choices. Every other item must be True/False or four-option MCQ with one exact answer and plausible distractors. Do not invent missing facts.
+        {"questions":[{"sourceDrugID":"\(drug.id.uuidString)","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
+        Card: \(snapshot)
+        """
+        let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_800)
+        let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
+        guard payload.questions.count == 8 else { throw DrugImportError.invalidAIJSON }
+        return try payload.questions.map { item in
+            guard !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { throw DrugImportError.invalidAIJSON }
+            let type = QuestionType(rawValue: item.questionType) ?? .use
+            var choices = unique(item.choices ?? [])
+            let interaction: PracticeInteraction
+            if type == .scientificName || type == .tradeName { choices = []; interaction = .textEntry }
+            else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) { interaction = .trueFalse }
+            else {
+                guard choices.count == 4, choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) else { throw DrugImportError.invalidAIJSON }
+                interaction = .multipleChoice
+            }
+            return GeneratedReviewQuestion(prompt: item.prompt.trimmed, choices: choices, correctAnswer: item.answer.trimmed, explanation: item.explanation?.trimmed ?? "", questionType: type, interaction: interaction, relatedField: type.rawValue, difficulty: "medium")
+        }
+    }
+
+    private func unique(_ values: [String]) -> [String] {
+        values.map(\.trimmed).filter { !$0.isEmpty }.reduce(into: []) { result, value in
+            if !result.contains(where: { $0.localizedCaseInsensitiveCompare(value) == .orderedSame }) { result.append(value) }
+        }
+    }
 }
 
 private struct AIPracticePayload: Decodable { var questions: [AIPracticeQuestion] }

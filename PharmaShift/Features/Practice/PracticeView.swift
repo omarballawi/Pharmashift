@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 struct PracticeView: View {
+    @Environment(\.modelContext) private var context
     @Environment(ReviewScheduler.self) private var scheduler
     @Environment(AppNavigation.self) private var navigation
     @Query(sort: \Drug.nextReviewDate) private var drugs: [Drug]
@@ -14,6 +15,7 @@ struct PracticeView: View {
     @State private var isRefreshingAIPack = false
     @State private var aiPackMessage: String?
     @State private var showsAllModes = false
+    @State private var refreshProgress = ""
 
     private var available: [Drug] { drugs.filter { !$0.isUnknown } }
     private var due: [Drug] { available.filter { scheduler.isDue($0) } }
@@ -172,6 +174,15 @@ struct PracticeView: View {
             }
             .buttonStyle(.bordered)
             .disabled(isRefreshingAIPack || available.isEmpty)
+            Button {
+                refreshAllQuestions()
+            } label: {
+                Label(isRefreshingAIPack ? "Refreshing library questions" : "Refresh all questions + Smart 5", systemImage: "arrow.triangle.2.circlepath")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isRefreshingAIPack || available.isEmpty)
+            if !refreshProgress.isEmpty { Text(refreshProgress).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
             if let aiPackMessage { Text(aiPackMessage).font(.caption).foregroundStyle(.secondary) }
         }
         .padding(14)
@@ -189,6 +200,43 @@ struct PracticeView: View {
                 await MainActor.run { aiPack = pack; aiPackMessage = "Five questions saved for offline practice."; isRefreshingAIPack = false }
             } catch {
                 await MainActor.run { aiPackMessage = error.localizedDescription; isRefreshingAIPack = false }
+            }
+        }
+    }
+
+    private func refreshAllQuestions() {
+        isRefreshingAIPack = true
+        aiPackMessage = nil
+        refreshProgress = "0 / \(available.count) ingredient profiles"
+        Task {
+            let service = DeepSeekPracticeService()
+            var completed = 0
+            var failed: [String] = []
+            for drug in available {
+                do {
+                    let questions = try await service.makeQuestionSet(for: drug)
+                    await MainActor.run {
+                        drug.generatedReviewQuestions = questions
+                        drug.reviewQuestionsNeedRegeneration = false
+                        completed += 1
+                        refreshProgress = "\(completed) / \(available.count) ingredient profiles"
+                        try? context.save()
+                    }
+                } catch {
+                    failed.append(drug.displayName)
+                    await MainActor.run { refreshProgress = "\(completed) / \(available.count) complete • retrying failures later" }
+                }
+            }
+            do {
+                let pack = try await service.makePack(from: available)
+                AIPracticePackStore.save(pack)
+                await MainActor.run {
+                    aiPack = pack
+                    aiPackMessage = failed.isEmpty ? "Refreshed 8 questions per ingredient and rebuilt Smart 5." : "Updated \(completed) profiles. Retry failed: \(failed.joined(separator: ", ")). Smart 5 was rebuilt."
+                    isRefreshingAIPack = false
+                }
+            } catch {
+                await MainActor.run { aiPackMessage = "Updated \(completed) profiles, but Smart 5 failed: \(error.localizedDescription)"; isRefreshingAIPack = false }
             }
         }
     }

@@ -76,7 +76,7 @@ final class PracticeEngineTests: XCTestCase {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self,
+        try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 }

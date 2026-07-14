@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import Security
+import SwiftData
 import UIKit
 import Vision
 
@@ -36,6 +37,7 @@ struct TrustedDrugSourcePacket: Codable, Equatable, Sendable {
     var activeIngredientText: String
     var lastUpdatedText: String?
     var isTruncated: Bool
+    var leafletText: String = ""
 
     static let empty = TrustedDrugSourcePacket(
         sourceName: "", sourceURL: "", indicationsText: "", dosageText: "", contraindicationsText: "",
@@ -93,6 +95,9 @@ struct ImportedDrugInfo: Codable, Equatable, Sendable {
     var adverseEffects: ImportedAdverseEffects
     var memorization: ImportedMemorization
     var sourceQuality: SourceQuality
+    var doseRegimens: [DoseRegimen]? = nil
+    var prodrugInfo: ProdrugInfo? = nil
+    var eliminationInfo: EliminationInfo? = nil
 }
 
 struct ImportedIdentity: Codable, Equatable, Sendable {
@@ -260,7 +265,7 @@ enum DrugSourceProviderFactory {
         if ProcessInfo.processInfo.arguments.contains("-mockDrugImport") {
             return [MockDrugSourceProvider()]
         }
-        return [RxNormProvider(), DailyMedProvider(), OpenFDALabelProvider()]
+        return [AltibbiProvider(), RxNormProvider(), DailyMedProvider(), OpenFDALabelProvider()]
     }
 
     static func aiDefault() -> any DrugImportFormattingService {
@@ -268,6 +273,49 @@ enum DrugSourceProviderFactory {
             return MockDeepSeekDrugImportService()
         }
         return DeepSeekDrugImportService()
+    }
+}
+
+@MainActor
+enum DrugRelationshipRefreshService {
+    static func refresh(drugs: [Drug], context: ModelContext, providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault()) async throws -> Int {
+        guard drugs.count > 1 else { return 0 }
+        let preferred = providers.filter { $0.sourceName == "Altibbi" || $0.sourceName == "DailyMed" || $0.sourceName == "openFDA" }
+        var found: [String: (Drug, Drug, String, String)] = [:]
+        for drug in drugs where !drug.scientificName.trimmed.isEmpty {
+            var packets: [TrustedDrugSourcePacket] = []
+            for provider in preferred {
+                guard let matches = try? await provider.searchDrug(query: drug.scientificName),
+                      let match = matches.first,
+                      let packet = try? await provider.fetchDrugDetails(id: match.id),
+                      !packet.interactionsText.trimmed.isEmpty else { continue }
+                packets.append(packet)
+            }
+            for packet in packets {
+                let searchable = IngredientIdentity.normalize(packet.interactionsText)
+                for other in drugs where other.id != drug.id {
+                    let names = other.ingredientNames + other.effectiveTradeNames
+                    guard names.contains(where: { name in
+                        let needle = IngredientIdentity.normalize(name)
+                        return needle.count >= 4 && searchable.contains(needle)
+                    }) else { continue }
+                    let ids = [drug.id.uuidString, other.id.uuidString].sorted()
+                    let key = ids.joined(separator: "|") + "|interaction"
+                    found[key] = (drug, other, TrustedDrugSourcePacketExtractor.compact(packet.interactionsText, limit: 700), packet.sourceURL)
+                }
+            }
+            drug.lastKnowledgeRefreshAt = .now
+        }
+        let existing = try context.fetch(FetchDescriptor<DrugRelationship>())
+        for (key, value) in found {
+            if let relationship = existing.first(where: { $0.relationshipKey == key }) {
+                relationship.summary = value.2; relationship.sourceURLs = [value.3]; relationship.checkedAt = .now
+            } else {
+                context.insert(DrugRelationship(relationshipKey: key, kind: .interaction, severity: .medium, summary: value.2, managementNote: "Review the linked source and ask a pharmacist before combining or changing therapy.", sourceURLs: [value.3], sourceDrug: value.0, targetDrug: value.1))
+            }
+        }
+        try context.save()
+        return found.count
     }
 }
 
@@ -295,8 +343,112 @@ enum DrugSearchRanker {
         if !trade.isEmpty && name.contains(trade) { value += 60 }
         if !form.isEmpty && (result.dosageForm ?? "").lowercased().contains(form) { value += 15 }
         if !route.isEmpty && name.contains(route) { value += 5 }
+        if result.sourceName == "Altibbi" { value += 8 }
         if result.sourceName == "DailyMed" { value += 3 }
         return value
+    }
+}
+
+actor AltibbiProvider: DrugSourceProvider {
+    let sourceName = "Altibbi"
+    private static let sitemapURL = URL(string: "https://altibbi.com/sitemap/full/drugs_1.xml")!
+    private let session: URLSession
+    private var cachedURLs: [URL]?
+
+    init(session: URLSession? = nil) {
+        if let session { self.session = session }
+        else {
+            let configuration = URLSessionConfiguration.default
+            configuration.urlCache = URLCache(memoryCapacity: 12_000_000, diskCapacity: 55_000_000)
+            configuration.requestCachePolicy = .returnCacheDataElseLoad
+            configuration.timeoutIntervalForRequest = 25
+            self.session = URLSession(configuration: configuration)
+        }
+    }
+
+    func searchDrug(query: String) async throws -> [DrugSearchResult] {
+        let query = query.trimmed
+        guard !query.isEmpty else { throw DrugImportError.invalidQuery }
+        if let direct = URL(string: query), direct.host?.localizedCaseInsensitiveContains("altibbi.com") == true {
+            return [result(for: direct)]
+        }
+        let needle = IngredientIdentity.normalize(query)
+        let urls = try await drugURLs()
+        return urls.filter { url in
+            IngredientIdentity.normalize(url.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "-علمي", with: "")).contains(needle)
+        }.prefix(12).map(result(for:))
+    }
+
+    func fetchDrugDetails(id: String) async throws -> TrustedDrugSourcePacket {
+        guard let url = URL(string: id) else { throw DrugImportError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.setValue("Renlyst/1.7 educational drug-library reader", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await session.data(for: request)
+        try validate(response)
+        guard let html = String(data: data, encoding: .utf8) else { throw DrugImportError.parsingFailed }
+        let sections: [String: String] = [
+            "indications": article(id: "termText0", html: html),
+            "contraindications": article(id: "termText1", html: html),
+            "adverse": article(id: "termText2", html: html),
+            "warnings": article(id: "termText3", html: html),
+            "interactions": article(id: "termText4", html: html),
+            "dosage": article(id: "termText6", html: html)
+        ]
+        let title = firstMatch(#"<title>(.*?)</title>"#, in: html)
+        let ingredient = title.components(separatedBy: ["،", ","]).first?.trimmed ?? url.lastPathComponent.replacingOccurrences(of: "-علمي", with: "")
+        return TrustedDrugSourcePacketExtractor.packet(
+            sourceName: sourceName,
+            sourceURL: url.absoluteString,
+            sections: sections,
+            dosageForms: [article(id: "termText7", html: html)].filter { !$0.isEmpty },
+            activeIngredients: [ingredient]
+        )
+    }
+
+    private func drugURLs() async throws -> [URL] {
+        if let cachedURLs { return cachedURLs }
+        let (data, response) = try await session.data(from: Self.sitemapURL)
+        try validate(response)
+        guard let xml = String(data: data, encoding: .utf8) else { throw DrugImportError.parsingFailed }
+        let urls = matches(#"<loc>(.*?)</loc>"#, in: xml).compactMap { URL(string: $0.replacingOccurrences(of: "&amp;", with: "&")) }
+        cachedURLs = urls
+        return urls
+    }
+
+    private func result(for url: URL) -> DrugSearchResult {
+        let slug = url.lastPathComponent.replacingOccurrences(of: "-علمي", with: "").replacingOccurrences(of: "-", with: " ")
+        return DrugSearchResult(id: url.absoluteString, displayName: slug, activeIngredient: slug, dosageForm: nil, sourceName: sourceName)
+    }
+
+    private func article(id: String, html: String) -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: id)
+        let raw = firstMatch(#"<article[^>]*id=[\"']"# + escaped + #"[\"'][^>]*>([\s\S]*?)</article>"#, in: html)
+        return Self.plainText(raw)
+    }
+
+    private func firstMatch(_ pattern: String, in text: String) -> String {
+        matches(pattern, in: text).first ?? ""
+    }
+
+    private func matches(_ pattern: String, in text: String) -> [String] {
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        return expression.matches(in: text, range: range).compactMap { match in
+            guard match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range])
+        }
+    }
+
+    private static func plainText(_ html: String) -> String {
+        let withoutScripts = html.replacingOccurrences(of: #"<(script|style)[^>]*>[\s\S]*?</\1>"#, with: " ", options: [.regularExpression, .caseInsensitive])
+        let withBreaks = withoutScripts.replacingOccurrences(of: #"</?(p|li|tr|h[1-6]|br|td)[^>]*>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
+        let stripped = withBreaks.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+        let decoded = stripped.replacingOccurrences(of: "&nbsp;", with: " ").replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&#39;", with: "'")
+        return decoded.replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression).replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression).trimmed
+    }
+
+    private func validate(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
     }
 }
 
@@ -925,6 +1077,17 @@ enum PromptBuilder {
         Active ingredient:
         \(packet.activeIngredientText)
 
+        Product leaflet pasted by the user:
+        \(packet.leafletText)
+
+        Product leaflet facts override general product-form assumptions when they clearly refer to the confirmed package. Keep general population/indication dosing separate from the captured package strength.
+
+        Detailed extraction requirements:
+        - doseRegimens: capture each sourced indication/population separately. Use Adult, Child, Older adult, or Special population and only encode numeric dose math when the source states it.
+        - prodrugInfo: say whether the administered compound is already active or is converted to a named active compound, including activation site/pathway when sourced.
+        - eliminationInfo: identify the organ/pathway that removes the drug. Use Kidneys / urine, Bile / feces, Lungs / exhalation, Mixed pathways, Other, or Unknown. Add percentages only when stated.
+        - Never infer a numeric dose from package strength alone.
+
         Task:
         Fill my app sections using Arabic explanations with English medical terms.
 
@@ -943,21 +1106,24 @@ enum PromptBuilder {
           "arabicExplanation": {"shortExplanation": "", "memoryStory": "", "importantNote": ""},
           "adverseEffects": {"common": [], "serious": []},
           "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": "", "reviewQuestions": [{"prompt": "", "choices": ["", "", "", ""], "correctAnswer": "", "explanation": "", "questionType": "Use", "relatedField": "indications", "difficulty": "medium"}]},
+          "doseRegimens": [{"indication": "", "population": "Adult", "formula": "Fixed dose", "route": "", "minimumAgeMonths": null, "maximumAgeMonths": null, "minimumWeightKG": null, "maximumWeightKG": null, "sexRestriction": null, "fixedDoseMG": null, "amountPerKG": null, "amountPerSquareMeter": null, "dividedDoses": 1, "intervalHours": null, "maximumSingleDoseMG": null, "maximumDailyDoseMG": null, "durationText": "", "renalAdjustment": "", "hepaticAdjustment": "", "requiresMeasuredWeight": false, "sourceIDs": []}],
+          "prodrugInfo": {"classification": "Unknown", "administeredCompound": "", "activeCompound": "", "activationSite": "", "activationPathway": "", "explanation": "", "sourceIDs": []},
+          "eliminationInfo": {"metabolismSite": "", "metabolismEnzymes": [], "routes": [{"pathway": "Unknown", "percentage": null, "detail": ""}], "dominantPathway": "Unknown", "summary": "", "sourceIDs": []},
           "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": true, "missingImportantFields": [], "notes": ""}
         }
         """
     }
 private enum FastGatherPromptBuilder {
     static let systemPrompt = """
-    You create complete, practical pharmacy learning cards from a confirmed medicine identity.
-    Use your medical knowledge to fill every relevant field: identity, class, uses, mechanism, pharmacokinetics, dosing frequency, prodrug status, metabolism/excretion, adverse effects, safety, and counseling. Use "unknown" only when a fact genuinely cannot be established for the confirmed medicine or varies by formulation. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+    You create complete, practical pharmacy learning cards from a confirmed medicine identity and supplied package or leaflet text.
+    Fill every relevant field: identity, class, uses, mechanism, indication- and population-specific dose regimens, pharmacokinetics, dosing frequency, precise active-drug/prodrug status, organ/pathway of elimination, adverse effects, safety, and counseling. Never treat package strength as a standard dose. Use "unknown" only when a fact genuinely cannot be established. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
 
     Also create 8 high-quality review questions. Except for Scientific name and Trade name spelling questions, every question must be either four-option multiple choice or True/False. Each MCQ must have one unambiguously correct answer, three plausible distractors, and a short explanation. Do not reveal the answer in the prompt.
     """
 
     static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
         """
-        Create a complete, compact pharmacy learning card draft. This path deliberately does not use RxNorm, DailyMed, or openFDA.
+        Create a complete, compact pharmacy learning card draft. Trusted source lookup did not return a usable page, so mark unsupported facts for verification.
 
         Confirmed fields:
         Scientific name: \(identity.scientificName)
@@ -1061,6 +1227,8 @@ enum DrugImportApplier {
             if selection.includes("pk.prodrug") { drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus }
             if selection.includes("pk.excretion") { drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute; drug.excretionNotes = [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionNotes].compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n") }
             if selection.includes("pk.memory") { drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic }
+            if let prodrugInfo = info.prodrugInfo { drug.prodrugInfo = prodrugInfo }
+            if let eliminationInfo = info.eliminationInfo { drug.eliminationInfo = eliminationInfo }
         }
         if selection.contains(.safety) {
             if selection.includes("safety.contraindications") { drug.contraindications = info.safety.contraindications.items; drug.contraindicationSeverityRaw = info.safety.contraindications.severity.drugSeverity.rawValue }
@@ -1129,16 +1297,26 @@ enum DrugImportApplier {
             if selection.includes("memory.summary") { drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic }
             if selection.includes("memory.flashcards") { drug.patientQuestions = info.memorization.flashcards.map(\.question) }
         }
+        if let regimens = info.doseRegimens, !regimens.isEmpty { drug.doseRegimens = regimens }
         if selection.contains(.sourceQuality) || !selection.sections.isEmpty {
             drug.importedSourceName = info.sourceQuality.sourceName
             drug.sourceURL = info.sourceQuality.sourceURL
             drug.sourceNeedsReview = info.sourceQuality.needsReview
             drug.sourceMissingFields = info.sourceQuality.missingImportantFields
             drug.sourceQualityNotes = info.sourceQuality.notes
+            drug.sourceUpdatedAt = .now
+            let quality: DrugEvidenceQuality = info.sourceQuality.sourceName.localizedCaseInsensitiveContains("Altibbi") ? .altibbi : (info.sourceQuality.sourceName == "Generated with AI" ? .aiUnverified : .officialLabel)
+            let sourceID = IngredientIdentity.normalize(info.sourceQuality.sourceURL.isEmpty ? info.sourceQuality.sourceName : info.sourceQuality.sourceURL)
+            let values: [(String, String)] = [("identity", drug.scientificName), ("doses", drug.doseRegimensJSON), ("prodrug", drug.prodrugInfoJSON), ("elimination", drug.eliminationInfoJSON), ("safety", drug.warnings.joined(separator: "|"))]
+            drug.fieldEvidence = values.filter { !$0.1.trimmed.isEmpty }.map { field, value in
+                DrugFieldEvidence(fieldKey: field, sourceID: sourceID, sourceName: info.sourceQuality.sourceName, sourceURL: info.sourceQuality.sourceURL, quality: quality, retrievedAt: .now, valueFingerprint: String(value.hashValue))
+            }
         }
         if let imageData { drug.imageData = imageData }
         if let thumbnailData { drug.thumbnailData = thumbnailData }
         DrugDataConsistencyNormalizer.normalize(drug)
+        drug.activeIngredients = [drug.scientificName].filter { !$0.trimmed.isEmpty }
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients, rxNormIDs: drug.rxNormConceptIDs)
         drug.recalculateConfidence()
     }
 }

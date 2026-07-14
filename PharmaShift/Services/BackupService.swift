@@ -29,7 +29,7 @@ struct BackupRecordCounts: Codable, Equatable {
 }
 
 struct PharmaShiftBackup: Codable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     var schemaVersion: Int
     var exportedAt: Date
@@ -42,6 +42,8 @@ struct PharmaShiftBackup: Codable {
     var reports: [TrainingReportBackupDTO]
     var learningProfiles: [LearningProfileBackupDTO]?
     var dailyActivities: [DailyActivityBackupDTO]?
+    var products: [DrugProductBackupDTO]? = nil
+    var relationships: [DrugRelationshipBackupDTO]? = nil
 }
 
 struct DrugBackupDTO: Codable {
@@ -142,6 +144,14 @@ struct DrugBackupDTO: Codable {
     var memoryItemsJSON: String = ""
     var atomicNotesJSON: String = ""
     var reviewQuestionsNeedRegeneration: Bool = false
+    var canonicalIngredientKey: String?
+    var activeIngredients: [String]?
+    var rxNormConceptIDs: [String]?
+    var doseRegimensJSON: String?
+    var prodrugInfoJSON: String?
+    var eliminationInfoJSON: String?
+    var fieldEvidenceJSON: String?
+    var lastKnowledgeRefreshAt: Date?
 
     init(_ drug: Drug, includesImages: Bool) {
         id = drug.id
@@ -241,6 +251,14 @@ struct DrugBackupDTO: Codable {
         memoryItemsJSON = drug.memoryItemsJSON
         atomicNotesJSON = drug.atomicNotesJSON
         reviewQuestionsNeedRegeneration = drug.reviewQuestionsNeedRegeneration
+        canonicalIngredientKey = drug.canonicalIngredientKey
+        activeIngredients = drug.activeIngredients
+        rxNormConceptIDs = drug.rxNormConceptIDs
+        doseRegimensJSON = drug.doseRegimensJSON
+        prodrugInfoJSON = drug.prodrugInfoJSON
+        eliminationInfoJSON = drug.eliminationInfoJSON
+        fieldEvidenceJSON = drug.fieldEvidenceJSON
+        lastKnowledgeRefreshAt = drug.lastKnowledgeRefreshAt
     }
 
     func makeModel() -> Drug {
@@ -348,6 +366,68 @@ struct DrugBackupDTO: Codable {
         drug.memoryItemsJSON = memoryItemsJSON
         drug.atomicNotesJSON = atomicNotesJSON
         drug.reviewQuestionsNeedRegeneration = reviewQuestionsNeedRegeneration
+        drug.canonicalIngredientKey = canonicalIngredientKey ?? IngredientIdentity.canonicalKey(names: [scientificName])
+        drug.activeIngredients = activeIngredients ?? [scientificName].filter { !$0.trimmed.isEmpty }
+        drug.rxNormConceptIDs = rxNormConceptIDs ?? []
+        drug.doseRegimensJSON = doseRegimensJSON ?? ""
+        drug.prodrugInfoJSON = prodrugInfoJSON ?? ""
+        drug.eliminationInfoJSON = eliminationInfoJSON ?? ""
+        drug.fieldEvidenceJSON = fieldEvidenceJSON ?? ""
+        drug.lastKnowledgeRefreshAt = lastKnowledgeRefreshAt
+    }
+}
+
+struct DrugProductBackupDTO: Codable {
+    var id: UUID
+    var profileID: UUID?
+    var productKey: String
+    var tradeName: String
+    var manufacturer: String
+    var strength: String
+    var dosageForm: String
+    var route: String
+    var country: String
+    var shelfLocation: String
+    var imageData: Data?
+    var additionalImageData: [Data]
+    var thumbnailData: Data?
+    var additionalThumbnailData: [Data]
+    var leafletText: String
+    var leafletUpdatedAt: Date?
+    var sourceName: String
+    var sourceURL: String
+    var dateAdded: Date
+
+    init(_ model: DrugProduct, includesImages: Bool) {
+        id = model.id; profileID = model.profile?.id; productKey = model.productKey; tradeName = model.tradeName
+        manufacturer = model.manufacturer; strength = model.strength; dosageForm = model.dosageForm; route = model.route
+        country = model.country; shelfLocation = model.shelfLocation
+        imageData = includesImages ? model.imageData : nil; additionalImageData = includesImages ? model.additionalImageData : []
+        thumbnailData = includesImages ? model.thumbnailData : nil; additionalThumbnailData = includesImages ? model.additionalThumbnailData : []
+        leafletText = model.leafletText; leafletUpdatedAt = model.leafletUpdatedAt; sourceName = model.sourceName; sourceURL = model.sourceURL; dateAdded = model.dateAdded
+    }
+
+    func makeModel(profile: Drug?, includesImages: Bool) -> DrugProduct {
+        DrugProduct(id: id, productKey: productKey, tradeName: tradeName, manufacturer: manufacturer, strength: strength, dosageForm: dosageForm, route: route, country: country, shelfLocation: shelfLocation, imageData: includesImages ? imageData : nil, additionalImageData: includesImages ? additionalImageData : [], thumbnailData: includesImages ? thumbnailData : nil, additionalThumbnailData: includesImages ? additionalThumbnailData : [], leafletText: leafletText, leafletUpdatedAt: leafletUpdatedAt, sourceName: sourceName, sourceURL: sourceURL, dateAdded: dateAdded, profile: profile)
+    }
+}
+
+struct DrugRelationshipBackupDTO: Codable {
+    var id: UUID
+    var relationshipKey: String
+    var kindRaw: String
+    var severityRaw: String
+    var summary: String
+    var managementNote: String
+    var sourceURLs: [String]
+    var checkedAt: Date
+    var sourceDrugID: UUID?
+    var targetDrugID: UUID?
+
+    init(_ model: DrugRelationship) {
+        id = model.id; relationshipKey = model.relationshipKey; kindRaw = model.kindRaw; severityRaw = model.severityRaw
+        summary = model.summary; managementNote = model.managementNote; sourceURLs = model.sourceURLs; checkedAt = model.checkedAt
+        sourceDrugID = model.sourceDrug?.id; targetDrugID = model.targetDrug?.id
     }
 }
 
@@ -502,13 +582,15 @@ enum BackupService {
         let reports = try context.fetch(FetchDescriptor<TrainingReport>()).map(TrainingReportBackupDTO.init)
         let profiles = try context.fetch(FetchDescriptor<LearningProfile>()).map(LearningProfileBackupDTO.init)
         let activities = try context.fetch(FetchDescriptor<DailyActivity>()).map(DailyActivityBackupDTO.init)
+        let products = try context.fetch(FetchDescriptor<DrugProduct>()).map { DrugProductBackupDTO($0, includesImages: includesImages) }
+        let relationships = try context.fetch(FetchDescriptor<DrugRelationship>()).map(DrugRelationshipBackupDTO.init)
         return PharmaShiftBackup(
             schemaVersion: PharmaShiftBackup.currentSchemaVersion,
             exportedAt: exportedAt,
             counts: .init(drugs: drugs.count, reviews: reviews.count, shifts: shifts.count, encounters: encounters.count, reports: reports.count, learningProfiles: profiles.count, dailyActivities: activities.count),
             includesImages: includesImages,
             drugs: drugs, reviews: reviews, shifts: shifts, encounters: encounters, reports: reports,
-            learningProfiles: profiles, dailyActivities: activities
+            learningProfiles: profiles, dailyActivities: activities, products: products, relationships: relationships
         )
     }
 
@@ -533,6 +615,8 @@ enum BackupService {
         guard backup.counts == actual else { throw BackupError.invalidCounts }
         let groups: [[UUID]] = [backup.drugs.map(\.id), backup.reviews.map(\.id), backup.shifts.map(\.id), backup.encounters.map(\.id), backup.reports.map(\.id), backup.learningProfiles?.map(\.id) ?? [], backup.dailyActivities?.map(\.id) ?? []]
         guard groups.allSatisfy({ Set($0).count == $0.count }) else { throw BackupError.duplicateIdentifiers }
+        guard Set((backup.products ?? []).map(\.id)).count == (backup.products ?? []).count,
+              Set((backup.relationships ?? []).map(\.id)).count == (backup.relationships ?? []).count else { throw BackupError.duplicateIdentifiers }
     }
 
     static func restore(_ backup: PharmaShiftBackup, mode: BackupRestoreMode, context: ModelContext) throws -> BackupRestoreSummary {
@@ -544,6 +628,21 @@ enum BackupService {
                 let model = drugsByID[dto.id] ?? dto.makeModel()
                 dto.apply(to: model, includeImages: backup.includesImages || mode == .replace)
                 if drugsByID[dto.id] == nil { context.insert(model); drugsByID[dto.id] = model }
+            }
+
+            var productsByID = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<DrugProduct>()).map { ($0.id, $0) })
+            for dto in backup.products ?? [] where productsByID[dto.id] == nil {
+                let model = dto.makeModel(profile: dto.profileID.flatMap { drugsByID[$0] }, includesImages: backup.includesImages || mode == .replace)
+                context.insert(model); productsByID[dto.id] = model
+            }
+
+            var relationshipsByID = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<DrugRelationship>()).map { ($0.id, $0) })
+            for dto in backup.relationships ?? [] {
+                let model = relationshipsByID[dto.id] ?? DrugRelationship(id: dto.id, relationshipKey: dto.relationshipKey, kind: DrugRelationshipKind(rawValue: dto.kindRaw) ?? .interaction, severity: SafetySeverity(rawValue: dto.severityRaw) ?? .unknown, summary: dto.summary)
+                model.relationshipKey = dto.relationshipKey; model.kindRaw = dto.kindRaw; model.severityRaw = dto.severityRaw; model.summary = dto.summary
+                model.managementNote = dto.managementNote; model.sourceURLs = dto.sourceURLs; model.checkedAt = dto.checkedAt
+                model.sourceDrug = dto.sourceDrugID.flatMap { drugsByID[$0] }; model.targetDrug = dto.targetDrugID.flatMap { drugsByID[$0] }
+                if relationshipsByID[dto.id] == nil { context.insert(model); relationshipsByID[dto.id] = model }
             }
 
             var reviewsByID = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<ReviewLog>()).map { ($0.id, $0) })
@@ -657,6 +756,8 @@ enum BackupService {
     }
 
     private static func deleteAll(context: ModelContext) throws {
+        for model in try context.fetch(FetchDescriptor<DrugRelationship>()) { context.delete(model) }
+        for model in try context.fetch(FetchDescriptor<DrugProduct>()) { context.delete(model) }
         for model in try context.fetch(FetchDescriptor<ReviewLog>()) { context.delete(model) }
         for model in try context.fetch(FetchDescriptor<EncounterNote>()) { context.delete(model) }
         for model in try context.fetch(FetchDescriptor<ShiftLog>()) { context.delete(model) }

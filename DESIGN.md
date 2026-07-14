@@ -50,12 +50,14 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 ## Core component inventory
 
 - Focus card: one primary action, current metrics, no competing CTA.
-- Drug Card: five short pages — Overview, Learn, Safety, Counsel, and Notes & Links — with generated review actions at the end of the learning loop.
+- Drug Card: seven horizontally swipeable book pages — Overview, Brands, Doses, Learn, Safety, Counsel, and Notes & Links — with compact page chips and generated review actions at the end of the learning loop.
+- Brands page: the active ingredient is the stable profile identity; package image, trade name, company, strength, form, shelf, and leaflet remain product-specific.
+- Doses page: separates standard sourced regimens from the captured package strength. Calculator results always show the equation, estimate status, maximum caps, and cautions; entered person variables are never persisted.
 - Pharmacology logarithmic meter/timeline and a knowledge-completeness map. Clinical cautions use labeled cards, never a pseudo-quantitative risk radar.
 - Smart Session: one recommended mixed session; individual modes live under Quick practice and Choose a mode.
 - Practice questions default to MCQ, True/False, matching/sorting, and short selection interactions. Text entry is reserved for scientific/trade-name spelling.
 - AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
-- Standalone AI card generation: no user source required, complete structured output, field-by-field inclusion, editable review questions, and `Unknown` instead of invented values.
+- AI card generation: optional package photo/OCR, Altibbi-first trusted aggregation with RxNorm/DailyMed/openFDA support, leaflet override, complete structured output, field-by-field inclusion, editable review questions, and `Not found` instead of silent gaps.
 - System paths: class lessons advance through Recognize, Understand, Safety, Counsel, and Apply, then a system checkpoint.
 - Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, atomic linked notes, mechanism builder, PK timeline, safety sort, counseling builder, and voice counseling simulator.
 - Crystal facets reflect repeated recall/application; they do not reward raw data entry or punish decay.
@@ -80,6 +82,8 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 - Text equivalents remain visible under every visual pharmacology shorthand.
 
 ## Last updated
+
+2026-07-14 — ingredient-centered profiles and product variants, seven-page swipeable Drug Card, Altibbi-first source aggregation, product leaflet updates, structured standard regimens and dose calculator, WHO pediatric median estimates through age 10, detailed prodrug/elimination, library relationship refresh, and full question refresh.
 
 2026-07-13 — crystal learning system, Today mission, Smart Session, five-page Drug Card, field memory scheduling, AI complete-card generation/review, graph/compare, interactive lessons, atomic notes, quests, accessibility, and native generated art.
 

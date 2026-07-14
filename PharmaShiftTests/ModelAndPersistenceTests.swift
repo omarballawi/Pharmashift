@@ -51,7 +51,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testStarterImportIsIdempotent() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let first = try StarterContent.importIfNeeded(into: container.mainContext)
         let second = try StarterContent.importIfNeeded(into: container.mainContext)
         XCTAssertEqual(first, 12)
@@ -150,7 +150,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testFutureReadyFieldsPersist() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let drug = Drug(scientificName: "Ramipril", chapter: .cardiovascular)
         drug.mechanism = "ACE inhibition"
         drug.halfLifeBand = .long
@@ -191,7 +191,7 @@ final class ModelAndPersistenceTests: XCTestCase {
 
     func testIncompleteShiftRestoresAndDeletedDrugLeavesReviewSnapshot() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
         let context = container.mainContext
         let drug = Drug(scientificName: "Test Drug")
         let log = ReviewLog(drug: drug, drugNameSnapshot: drug.displayName, questionType: .use, rating: .correct, scoreBefore: 0, scoreAfter: 1)
@@ -206,5 +206,29 @@ final class ModelAndPersistenceTests: XCTestCase {
         let retainedLog = try XCTUnwrap(verificationContext.fetch(FetchDescriptor<ReviewLog>()).first)
         XCTAssertEqual(retainedLog.drugNameSnapshot, "Test Drug")
         XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<Drug>()), 0)
+    }
+
+    func testIngredientIdentityDeduplicatesBrandAndCaseButKeepsCombinationsDistinct() {
+        XCTAssertEqual(IngredientIdentity.canonicalKey(names: ["Omeprazole"]), IngredientIdentity.canonicalKey(names: ["  OMEPRAZOLE "]))
+        XCTAssertNotEqual(IngredientIdentity.canonicalKey(names: ["Amoxicillin"]), IngredientIdentity.canonicalKey(names: ["Amoxicillin", "Clavulanate"]))
+        XCTAssertEqual(IngredientIdentity.canonicalKey(names: ["anything"], rxNormIDs: ["7646"]), "rxcui:7646")
+    }
+
+    func testWHOWeightReferenceStopsAfterTenAndDoseCalculatorShowsEquation() throws {
+        XCTAssertEqual(try XCTUnwrap(PediatricWeightReference.medianWeightKG(ageMonths: 60, sex: .female)), 18.2193, accuracy: 0.0001)
+        XCTAssertNil(PediatricWeightReference.medianWeightKG(ageMonths: 121, sex: .male))
+        let regimen = DoseRegimen(indication: "Example infection", population: .pediatric, formula: .mgPerKgPerDay, amountPerKG: 30, dividedDoses: 3, maximumDailyDoseMG: 1_000)
+        let input = DosePatientInput(ageMonths: 60, sexAtBirth: .female, measuredWeightKG: nil, estimatedWeightKG: 18.2193, heightCM: nil, renalFunction: "Normal", hepaticFunction: "Normal", isPregnant: false)
+        let result = try DoseCalculator.calculate(regimen: regimen, input: input)
+        XCTAssertEqual(result.dosePerAdministrationMG, 182.193, accuracy: 0.001)
+        XCTAssertEqual(result.totalDailyDoseMG, 546.579, accuracy: 0.001)
+        XCTAssertTrue(result.equation.contains("30 mg/kg/day"))
+        XCTAssertTrue(result.usedEstimatedWeight)
+    }
+
+    func testDoseCalculatorRequiresMeasuredWeightWhenRegimenSaysSo() {
+        let regimen = DoseRegimen(indication: "Narrow therapeutic index", population: .pediatric, formula: .mgPerKgPerDose, amountPerKG: 2, requiresMeasuredWeight: true)
+        let input = DosePatientInput(ageMonths: 24, sexAtBirth: .male, measuredWeightKG: nil, estimatedWeightKG: 12, heightCM: nil, renalFunction: "Normal", hepaticFunction: "Normal", isPregnant: false)
+        XCTAssertThrowsError(try DoseCalculator.calculate(regimen: regimen, input: input)) { XCTAssertEqual($0 as? DoseCalculatorError, .weightRequired) }
     }
 }

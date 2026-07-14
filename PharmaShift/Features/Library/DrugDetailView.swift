@@ -32,6 +32,8 @@ private enum DrugDetailSheet: String, Identifiable {
 
 private enum DrugCardPage: String, CaseIterable, Identifiable {
     case overview = "Overview"
+    case brands = "Brands"
+    case doses = "Doses"
     case learn = "Learn"
     case safety = "Safety"
     case counsel = "Counsel"
@@ -41,6 +43,8 @@ private enum DrugCardPage: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: "sparkles"
+        case .brands: "shippingbox.fill"
+        case .doses: "function"
         case .learn: "book.pages.fill"
         case .safety: "shield.fill"
         case .counsel: "quote.bubble.fill"
@@ -54,6 +58,7 @@ struct DrugDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppTheme.self) private var theme
     @Environment(ReviewScheduler.self) private var scheduler
+    @Query private var relationships: [DrugRelationship]
     let drug: Drug
     @State private var sheet: DrugDetailSheet?
     @State private var expandedFields: Set<String> = []
@@ -62,13 +67,19 @@ struct DrugDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             pagePicker
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    pageContent
+            TabView(selection: $selectedPage) {
+                ForEach(DrugCardPage.allCases) { page in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            pageContent(page)
+                        }
+                        .padding()
+                    }
+                    .background(theme.background)
+                    .tag(page)
                 }
-                .padding()
             }
-            .background(theme.background)
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationTitle("Drug Card")
         .navigationBarTitleDisplayMode(.inline)
@@ -111,14 +122,18 @@ struct DrugDetailView: View {
         .accessibilityLabel("Drug Card pages")
     }
 
-    @ViewBuilder private var pageContent: some View {
-        switch selectedPage {
+    @ViewBuilder private func pageContent(_ page: DrugCardPage) -> some View {
+        switch page {
         case .overview:
             hero
             mustKnowCard
             identityCard.accessibilityIdentifier("drugCard.identity")
             masteryCard
             actions
+        case .brands:
+            brandsCard
+        case .doses:
+            DoseRegimensView(drug: drug)
         case .learn:
             usesCard
             pharmacologyCard.accessibilityIdentifier("drugCard.pharmacology")
@@ -137,7 +152,65 @@ struct DrugDetailView: View {
             notesCard
             interactiveLessonButton("Add a linked note", icon: "note.text.badge.plus", destination: .atomicNotes)
             connectedKnowledgeCard
+            relationshipCard
             provenanceDetails
+        }
+    }
+
+    private var brandsCard: some View {
+        card("Active ingredient & products", icon: "shippingbox.fill") {
+            value("Canonical ingredient", drug.ingredientNames.joined(separator: " + "))
+            if drug.products.isEmpty {
+                Text("No product variants saved yet.").foregroundStyle(.secondary)
+                Button { sheet = .regenerateReview } label: { Label("Add a brand or package", systemImage: "plus") }
+            } else {
+                ForEach(drug.products.sorted(by: { $0.tradeName < $1.tradeName })) { product in
+                    NavigationLink {
+                        ProductLeafletEditorView(product: product, drug: drug)
+                    } label: {
+                        HStack(spacing: 12) {
+                            if let data = product.thumbnailData ?? product.imageData, let image = UIImage(data: data) {
+                                Image(uiImage: image).resizable().scaledToFill().frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 12))
+                            } else {
+                                Image(systemName: "pills.fill").frame(width: 58, height: 58).background(theme.softTint, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
+                                Text([product.manufacturer, product.strength, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary)
+                                Text(product.leafletText.trimmed.isEmpty ? "Leaflet not added" : "Leaflet saved").font(.caption2).foregroundStyle(product.leafletText.trimmed.isEmpty ? .orange : .green)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.secondary)
+                        }
+                        .padding(10).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var relationshipCard: some View {
+        card("Library interactions", icon: "link.badge.plus") {
+            let linked = relationships.filter { $0.sourceDrug?.id == drug.id || $0.targetDrug?.id == drug.id }
+            if linked.isEmpty {
+                Text("No sourced library relationship has been found yet. Use Refresh links in the Library.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(linked) { relationship in
+                    if let target = relationship.sourceDrug?.id == drug.id ? relationship.targetDrug : relationship.sourceDrug {
+                        NavigationLink {
+                            DrugDetailView(drug: target)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack { Text(target.displayName).font(.headline); Spacer(); Text(relationship.severity.rawValue).font(.caption.bold()) }
+                                Text(relationship.summary).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            .padding(11).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 
@@ -291,8 +364,8 @@ struct DrugDetailView: View {
             PharmacologyMeter(title: "Onset", icon: "hare.fill", scale: .onset, value: drug.onsetMinutes, fallback: drug.onsetBand.rawValue, detail: drug.onsetText)
             PharmacologyMeter(title: "Duration", icon: "timer", scale: .duration, value: drug.durationHours, fallback: drug.durationBand.rawValue, detail: drug.durationText)
             DosingFrequencyMeter(frequency: drug.dosingFrequency, timesPerDay: drug.timesPerDay)
-            PharmacologyStatusCard(title: "Prodrug", value: drug.prodrugStatus.rawValue, detail: "", icon: "arrow.triangle.2.circlepath")
-            PharmacologyStatusCard(title: "Excretion", value: drug.excretionRoute.rawValue, detail: drug.excretionNotes, icon: "drop.triangle.fill")
+            PharmacologyStatusCard(title: "Tablet/capsule status", value: drug.prodrugInfo.classification.rawValue, detail: [drug.prodrugInfo.administeredCompound, drug.prodrugInfo.activeCompound.trimmed.isEmpty ? "" : "Becomes: \(drug.prodrugInfo.activeCompound)", drug.prodrugInfo.activationPathway, drug.prodrugInfo.explanation].filter { !$0.trimmed.isEmpty }.joined(separator: "\n"), icon: "arrow.triangle.2.circlepath")
+            PharmacologyStatusCard(title: "How the body removes it", value: drug.eliminationInfo.dominantPathway.rawValue, detail: [drug.eliminationInfo.summary, drug.eliminationInfo.routes.map { [$0.pathway.rawValue, $0.percentage.map { "\($0.formatted())%" } ?? "", $0.detail].filter { !$0.trimmed.isEmpty }.joined(separator: " — ") }.joined(separator: "\n")].filter { !$0.trimmed.isEmpty }.joined(separator: "\n"), icon: "drop.triangle.fill")
             arabicValue("PK memory line", drug.pkMemoryLineArabic)
         }
     }
@@ -478,16 +551,18 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func value(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Text(text).frame(maxWidth: .infinity, alignment: .leading)
-            }
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if text.trimmed.isEmpty {
+                HStack { Text("Not found").foregroundStyle(.secondary); Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) }
+            } else { Text(text).frame(maxWidth: .infinity, alignment: .leading) }
         }
     }
 
     @ViewBuilder private func expandableValue(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
+        if text.trimmed.isEmpty {
+            HStack { VStack(alignment: .leading) { Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary); Text("Not found").foregroundStyle(.secondary) }; Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) }
+        } else {
             let isExpanded = expandedFields.contains(label)
             VStack(alignment: .leading, spacing: 5) {
                 Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -505,7 +580,9 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func arabicValue(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
+        if text.trimmed.isEmpty {
+            HStack { Text("Not found").foregroundStyle(.secondary); Spacer(); Text(label).font(.caption.weight(.semibold)); Button("Search") { sheet = .regenerateReview }.font(.caption.bold()) }
+        } else {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Text(text).frame(maxWidth: .infinity, alignment: .trailing)
@@ -515,18 +592,17 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func safetyValue(_ title: String, text: String, severity: String) -> some View {
-        if !text.trimmed.isEmpty || severity != SafetySeverity.unknown.rawValue {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text(title).font(.subheadline.bold())
-                    Spacer()
-                    Text(severity).font(.caption2.bold()).padding(.horizontal, 7).padding(.vertical, 4)
-                        .background(severityColor(severity).opacity(0.16), in: Capsule()).foregroundStyle(severityColor(severity))
-                }
-                if !text.trimmed.isEmpty { Text(text).font(.subheadline) }
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(title).font(.subheadline.bold())
+                Spacer()
+                Text(severity).font(.caption2.bold()).padding(.horizontal, 7).padding(.vertical, 4)
+                    .background(severityColor(severity).opacity(0.16), in: Capsule()).foregroundStyle(severityColor(severity))
             }
-            .padding(11).background(severityColor(severity).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+            if text.trimmed.isEmpty { HStack { Text("Not found").font(.subheadline).foregroundStyle(.secondary); Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) } }
+            else { Text(text).font(.subheadline) }
         }
+        .padding(11).background(severityColor(severity).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func severity(_ rawValue: String) -> SafetySeverity { SafetySeverity(rawValue: rawValue) ?? .unknown }
@@ -535,6 +611,137 @@ struct DrugDetailView: View {
     }
     private func severityColor(_ rawValue: String) -> Color {
         switch severity(rawValue) { case .low: .green; case .medium: .orange; case .high: .red; case .unknown: .secondary }
+    }
+}
+
+private struct DoseRegimensView: View {
+    @Environment(AppTheme.self) private var theme
+    let drug: Drug
+    @State private var selectedRegimenID = ""
+    @State private var ageYears = 5
+    @State private var ageExtraMonths = 0
+    @State private var sex: PatientSexAtBirth = .female
+    @State private var measuredWeight = ""
+    @State private var height = ""
+    @State private var renalFunction = "Normal"
+    @State private var hepaticFunction = "Normal"
+    @State private var isPregnant = false
+    @State private var result: DoseCalculationResult?
+    @State private var errorMessage = ""
+
+    private var selectedRegimen: DoseRegimen? {
+        drug.doseRegimens.first(where: { $0.id == selectedRegimenID }) ?? drug.doseRegimens.first
+    }
+    private var ageMonths: Int { ageYears * 12 + ageExtraMonths }
+    private var estimatedWeight: Double? { PediatricWeightReference.medianWeightKG(ageMonths: ageMonths, sex: sex) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Standard regimens", systemImage: "list.bullet.clipboard.fill").font(.title3.bold()).foregroundStyle(theme.tint)
+                if drug.doseRegimens.isEmpty {
+                    Text("Not found").foregroundStyle(.secondary)
+                    Text("Refresh this card from Altibbi, an official label, or a pasted product leaflet to add indication- and age-specific regimens.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(drug.doseRegimens) { regimen in
+                        Button { selectedRegimenID = regimen.id; result = nil } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack { Text(regimen.indication).font(.headline); Spacer(); Text(regimen.population.rawValue).font(.caption.bold()) }
+                                Text(regimenSummary(regimen)).font(.subheadline).foregroundStyle(.secondary)
+                                if !regimen.durationText.trimmed.isEmpty { Text(regimen.durationText).font(.caption).foregroundStyle(.secondary) }
+                            }
+                            .padding(11).background(selectedRegimen?.id == regimen.id ? theme.softTint : Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20))
+
+            VStack(alignment: .leading, spacing: 13) {
+                Label("Educational dose calculator", systemImage: "function").font(.title3.bold()).foregroundStyle(theme.tint)
+                Text("No patient details are saved. Always verify the current clinical reference and product.").font(.caption).foregroundStyle(.secondary)
+                Stepper("Age: \(ageYears) years", value: $ageYears, in: 0...120)
+                Stepper("Extra months: \(ageExtraMonths)", value: $ageExtraMonths, in: 0...11)
+                Picker("Sex at birth", selection: $sex) { ForEach(PatientSexAtBirth.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                TextField("Measured weight kg (optional through age 10)", text: $measuredWeight).keyboardType(.decimalPad)
+                if measuredWeight.trimmed.isEmpty {
+                    if let estimatedWeight {
+                        LabeledContent("WHO median estimate", value: "\(estimatedWeight.formatted(.number.precision(.fractionLength(1)))) kg")
+                        Link("WHO weight-for-age source", destination: URL(string: PediatricWeightReference.sourceURL)!).font(.caption)
+                    } else {
+                        Label("Enter a measured weight. WHO weight-for-age estimates stop after age 10.", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    }
+                }
+                if selectedRegimen?.formula == .mgPerSquareMeter { TextField("Height cm", text: $height).keyboardType(.decimalPad) }
+                Picker("Kidney function", selection: $renalFunction) { Text("Normal").tag("Normal"); Text("Reduced / unknown").tag("Reduced / unknown") }
+                Picker("Liver function", selection: $hepaticFunction) { Text("Normal").tag("Normal"); Text("Reduced / unknown").tag("Reduced / unknown") }
+                Toggle("Pregnant", isOn: $isPregnant).disabled(sex == .male)
+                Button { calculate() } label: { Label("Calculate from selected regimen", systemImage: "equal.circle.fill").frame(maxWidth: .infinity, minHeight: 48) }
+                    .buttonStyle(.borderedProminent).disabled(selectedRegimen == nil)
+                if !errorMessage.isEmpty { Text(errorMessage).font(.subheadline).foregroundStyle(.orange) }
+                if let result {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("\(result.dosePerAdministrationMG.formatted(.number.precision(.fractionLength(0...2)))) mg per administration").font(.title3.bold())
+                        Text("\(result.totalDailyDoseMG.formatted(.number.precision(.fractionLength(0...2)))) mg/day in \(result.administrationsPerDay) dose(s)").font(.headline)
+                        Text(result.equation).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        if result.appliedMaximum { Label("Maximum dose cap applied", systemImage: "arrow.down.to.line.compact").foregroundStyle(.orange) }
+                        ForEach(result.cautions, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
+                    }.padding(12).background(theme.softTint, in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+            .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20))
+        }
+    }
+
+    private func calculate() {
+        guard let regimen = selectedRegimen else { return }
+        let measured = Double(measuredWeight.replacingOccurrences(of: ",", with: "."))
+        let input = DosePatientInput(ageMonths: ageMonths, sexAtBirth: sex, measuredWeightKG: measured, estimatedWeightKG: measured == nil ? estimatedWeight : nil, heightCM: Double(height.replacingOccurrences(of: ",", with: ".")), renalFunction: renalFunction, hepaticFunction: hepaticFunction, isPregnant: isPregnant)
+        do { result = try DoseCalculator.calculate(regimen: regimen, input: input); errorMessage = "" }
+        catch { result = nil; errorMessage = error.localizedDescription }
+    }
+
+    private func regimenSummary(_ regimen: DoseRegimen) -> String {
+        switch regimen.formula {
+        case .fixed: return "\(regimen.fixedDoseMG?.formatted() ?? "—") mg • \(regimen.route)"
+        case .mgPerKgPerDose: return "\(regimen.amountPerKG?.formatted() ?? "—") mg/kg/dose • \(regimen.dividedDoses ?? 1)× daily"
+        case .mgPerKgPerDay: return "\(regimen.amountPerKG?.formatted() ?? "—") mg/kg/day ÷ \(regimen.dividedDoses ?? 1)"
+        case .mgPerSquareMeter: return "\(regimen.amountPerSquareMeter?.formatted() ?? "—") mg/m²/dose"
+        }
+    }
+}
+
+private struct ProductLeafletEditorView: View {
+    @Environment(\.modelContext) private var context
+    let product: DrugProduct
+    let drug: Drug
+    @State private var leafletText: String
+
+    init(product: DrugProduct, drug: Drug) {
+        self.product = product; self.drug = drug
+        _leafletText = State(initialValue: product.leafletText)
+    }
+
+    var body: some View {
+        Form {
+            Section("Product") {
+                LabeledContent("Trade name", value: product.tradeName)
+                LabeledContent("Ingredient", value: drug.ingredientNames.joined(separator: " + "))
+                if !product.strength.trimmed.isEmpty { LabeledContent("Strength", value: product.strength) }
+                if !product.dosageForm.trimmed.isEmpty { LabeledContent("Form", value: product.dosageForm) }
+            }
+            Section("Paste leaflet") {
+                TextEditor(text: $leafletText).frame(minHeight: 260)
+                Button("Save leaflet") { product.leafletText = leafletText; product.leafletUpdatedAt = .now; try? context.save() }.buttonStyle(.borderedProminent)
+            }
+            Section {
+                NavigationLink { DrugImportView(drug: drug, startsInAIMode: true, initialLeafletText: leafletText) } label: {
+                    Label("Update ingredient profile with this leaflet", systemImage: "sparkles")
+                }
+            } footer: { Text("The leaflet is product-specific. You review every proposed profile change before saving.") }
+        }
+        .navigationTitle(product.tradeName)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -11,6 +11,6 @@ struct PharmaShiftApp: App {
                 .environment(theme)
                 .environment(ReviewScheduler())
         }
-        .modelContainer(for: [Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self])
+        .modelContainer(for: [Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self])
     }
 }

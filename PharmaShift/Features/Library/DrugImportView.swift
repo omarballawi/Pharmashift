@@ -74,7 +74,8 @@ struct DrugImportView: View {
         providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
         aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault(),
         fastGatherService: any FastDrugGatheringService = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockFastDrugGatherService() : DeepSeekFastDrugGatherService(),
-        startsInAIMode: Bool = false
+        startsInAIMode: Bool = false,
+        initialLeafletText: String = ""
     ) {
         self.drug = drug
         self.providers = providers
@@ -82,12 +83,13 @@ struct DrugImportView: View {
         self.fastGatherService = fastGatherService
         self.startsInAIMode = startsInAIMode
         let skipsPhotoInTests = ProcessInfo.processInfo.arguments.contains("-mockDrugImportSkipPhoto")
-        _stage = State(initialValue: startsInAIMode || skipsPhotoInTests ? .confirm : .photo)
+        _stage = State(initialValue: skipsPhotoInTests ? .confirm : .photo)
         _importMode = State(initialValue: startsInAIMode ? .aiDraft : .trusted)
         _imageData = State(initialValue: drug?.imageData)
         _thumbnailData = State(initialValue: drug?.thumbnailData)
         _additionalImageData = State(initialValue: drug?.additionalImageData ?? [])
         _additionalThumbnailData = State(initialValue: drug?.additionalThumbnailData ?? [])
+        _detectedText = State(initialValue: initialLeafletText)
         _identity = State(initialValue: UserConfirmedDrugIdentity(
             scientificName: drug?.scientificName ?? "",
             tradeNames: drug?.tradeNames ?? [],
@@ -214,7 +216,7 @@ struct DrugImportView: View {
     }
 
     private var visibleStages: [ImportStage] {
-        startsInAIMode ? [.confirm, .preview, .challenge] : ImportStage.allCases
+        startsInAIMode ? [.photo, .confirm, .preview, .challenge] : ImportStage.allCases
     }
 
     private var cameraPresentation: Binding<Bool> {
@@ -430,11 +432,16 @@ struct DrugImportView: View {
         importMode = .aiDraft
         Task {
             do {
-                let info = try await fastGatherService.gather(identity: identity, packageText: detectedText)
+                let packets = await gatherTrustedPackets()
+                let packet = mergedPacket(packets, leafletText: detectedText)
+                let info = packets.isEmpty
+                    ? try await fastGatherService.gather(identity: identity, packageText: detectedText)
+                    : try await formatWithRetry(packet: packet)
                 await MainActor.run {
-                    trustedPacket = nil
+                    trustedPacket = packets.isEmpty ? nil : packet
                     importedInfo = info
                     selection = DrugImportApplier.defaultSelection(info: info, drug: drug)
+                    importMode = packets.isEmpty ? .aiDraft : .trusted
                     stage = .preview
                     isLoading = false
                 }
@@ -444,14 +451,51 @@ struct DrugImportView: View {
         }
     }
 
+    private func gatherTrustedPackets() async -> [TrustedDrugSourcePacket] {
+        let queries = ([identity.scientificName] + identity.tradeNames).filter { !$0.trimmed.isEmpty }
+        var packets: [TrustedDrugSourcePacket] = []
+        for provider in providers {
+            var selected: DrugSearchResult?
+            for query in queries where selected == nil {
+                selected = (try? await provider.searchDrug(query: query))?.first
+            }
+            if let selected, let packet = try? await provider.fetchDrugDetails(id: selected.id) { packets.append(packet) }
+        }
+        return packets
+    }
+
+    private func mergedPacket(_ packets: [TrustedDrugSourcePacket], leafletText: String) -> TrustedDrugSourcePacket {
+        func joined(_ value: (TrustedDrugSourcePacket) -> String) -> String {
+            packets.map(value).filter { !$0.trimmed.isEmpty }.joined(separator: "\n\n---\n\n")
+        }
+        let primary = packets.first(where: { $0.sourceName == "Altibbi" }) ?? packets.first
+        return TrustedDrugSourcePacket(
+            sourceName: packets.map(\.sourceName).joined(separator: " + "), sourceURL: primary?.sourceURL ?? "",
+            indicationsText: joined(\.indicationsText), dosageText: joined(\.dosageText), contraindicationsText: joined(\.contraindicationsText),
+            warningsText: joined(\.warningsText), adverseReactionsText: joined(\.adverseReactionsText), interactionsText: joined(\.interactionsText),
+            pharmacokineticsText: joined(\.pharmacokineticsText), pregnancyText: joined(\.pregnancyText), dosageFormsText: joined(\.dosageFormsText),
+            routeText: joined(\.routeText), activeIngredientText: joined(\.activeIngredientText), lastUpdatedText: nil,
+            isTruncated: packets.contains(where: \.isTruncated), leafletText: String(leafletText.prefix(8_000))
+        )
+    }
+
     private func saveImport() {
         guard let importedInfo else { return }
-        let target = drug ?? Drug(dateAdded: .now, nextReviewDate: .now)
-        if drug == nil { context.insert(target) }
+        let ingredientKey = IngredientIdentity.canonicalKey(names: [importedInfo.identity.scientificName])
+        let existing = (try? context.fetch(FetchDescriptor<Drug>()))?.first { $0.canonicalIngredientKey == ingredientKey || IngredientIdentity.canonicalKey(names: $0.ingredientNames) == ingredientKey }
+        let target = drug ?? existing ?? Drug(dateAdded: .now, nextReviewDate: .now)
+        if drug == nil && existing == nil { context.insert(target) }
         DrugImportApplier.apply(importedInfo, selection: selection, to: target, imageData: imageData, thumbnailData: thumbnailData)
         target.additionalImageData = additionalImageData
         target.additionalThumbnailData = additionalThumbnailData
         target.trustedSourceWasTruncated = importMode == .trusted && trustedPacket?.isTruncated == true
+        let tradeName = importedInfo.identity.tradeNames.first ?? target.firstTradeName
+        let productKey = IngredientIdentity.productKey(tradeName: tradeName, manufacturer: "", strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, ingredientKey: target.canonicalIngredientKey)
+        if !target.products.contains(where: { $0.productKey == productKey }) {
+            let product = DrugProduct(productKey: productKey, tradeName: tradeName, strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, route: importedInfo.identity.route, imageData: imageData, additionalImageData: additionalImageData, thumbnailData: thumbnailData, additionalThumbnailData: additionalThumbnailData, leafletText: detectedText, leafletUpdatedAt: detectedText.trimmed.isEmpty ? nil : .now, sourceName: importedInfo.sourceQuality.sourceName, sourceURL: importedInfo.sourceQuality.sourceURL, profile: target)
+            context.insert(product)
+            target.products.append(product)
+        }
         do {
             try context.save()
             savedDrug = target

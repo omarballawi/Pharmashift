@@ -73,14 +73,23 @@ jobs:
       - name: Run UI journey
         run: |
           set -euo pipefail
-          xcodebuild \
-            -project PharmaShift.xcodeproj \
-            -scheme PharmaShift \
-            -configuration Debug \
-            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-            -derivedDataPath build/UITestDerivedData \
-            -only-testing:PharmaShiftUITests/PharmaShiftUITests/${{ matrix.test }} \
-            test
+          run_ui_test() {
+            xcodebuild \
+              -project PharmaShift.xcodeproj \
+              -scheme PharmaShift \
+              -configuration Debug \
+              -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+              -derivedDataPath build/UITestDerivedData \
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/${{ matrix.test }} \
+              test
+          }
+          if ! run_ui_test; then
+            echo "First UI attempt failed; rebooting the simulator and retrying once."
+            xcrun simctl shutdown "$SIMULATOR_ID" || true
+            xcrun simctl boot "$SIMULATOR_ID"
+            xcrun simctl bootstatus "$SIMULATOR_ID" -b
+            run_ui_test
+          fi
 
   build:
     name: Build IPA for Windows sideloading

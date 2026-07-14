@@ -48,6 +48,7 @@ final class AppNavigation {
 }
 
 struct AppShell: View {
+    @Environment(\.modelContext) private var context
     @Environment(AppTheme.self) private var theme
     @State private var navigation = AppNavigation()
 
@@ -76,6 +77,9 @@ struct AppShell: View {
         }
         .tint(theme.tint)
         .environment(navigation)
+        .task {
+            try? DrugLibraryMigrationService.runIfNeeded(context: context)
+        }
     }
 }
 
@@ -91,6 +95,9 @@ private struct MoreView: View {
                 }
             }
             Section("App") {
+                NavigationLink { CommandPaletteView() } label: {
+                    Label("Quick search", systemImage: "command.circle.fill")
+                }
                 NavigationLink { BackupDataView() } label: {
                     Label("Backup & Data", systemImage: "externaldrive.fill")
                 }
@@ -103,6 +110,34 @@ private struct MoreView: View {
             }
         }
         .navigationTitle("More / المزيد")
+        .accessibilityIdentifier("more.dashboard")
+    }
+}
+
+private struct CommandPaletteView: View {
+    @Environment(AppNavigation.self) private var navigation
+    @Query(sort: \Drug.scientificName) private var drugs: [Drug]
+    @State private var query = ""
+
+    private var results: [Drug] {
+        guard !query.trimmed.isEmpty else { return Array(drugs.prefix(8)) }
+        return drugs.filter { [$0.displayName, $0.tradeNames.joined(separator: " "), $0.drugClass, $0.chapterRaw, $0.notes, $0.arabicExplanation].joined(separator: " ").localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        List {
+            Section("Actions") {
+                Button { navigation.openCapture() } label: { Label("Capture a drug", systemImage: "camera.fill") }
+                Button { navigation.startReview(mode: .smartSession) } label: { Label("Start Smart Session", systemImage: "sparkles") }
+                Button { navigation.openLibrary() } label: { Label("Open Library", systemImage: "books.vertical.fill") }
+            }
+            Section(query.trimmed.isEmpty ? "Recent cards" : "Results") {
+                ForEach(results) { drug in NavigationLink { DrugDetailView(drug: drug) } label: { VStack(alignment: .leading) { Text(drug.displayName); Text([drug.firstTradeName, drug.drugClass].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) } } }
+                if results.isEmpty { Text("No matching drug or note.").foregroundStyle(.secondary) }
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Drug, class, system, note, Arabic")
+        .navigationTitle("Quick Search")
     }
 }
 
@@ -110,7 +145,9 @@ private struct LearningSettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
-    @State private var keyStatus = DeepSeekKeyStore.shared.apiKey()?.trimmed.isEmpty == false ? "DeepSeek key saved" : "No DeepSeek key saved"
+    @State private var keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+    @State private var checkingConnection = false
+    @State private var showsKeyStatus = false
 
     var body: some View {
         Form {
@@ -118,21 +155,46 @@ private struct LearningSettingsView: View {
                 SecureField("DeepSeek API key", text: $deepSeekKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                HStack {
-                    Button { saveDeepSeekKey() } label: { Label("Save key", systemImage: "key.fill") }
-                    Spacer()
-                    Button(role: .destructive) { clearDeepSeekKey() } label: { Label("Clear", systemImage: "trash") }
+                    .textContentType(.password)
+                    .accessibilityIdentifier("deepSeek.keyField")
+                PasteButton(payloadType: String.self) { strings in
+                    deepSeekKey = strings.first?.normalizedAPIKey ?? ""
                 }
+                .buttonStyle(.bordered)
+                Button { saveDeepSeekKey() } label: {
+                    Label("Save key", systemImage: "key.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(deepSeekKey.normalizedAPIKey.isEmpty)
+                .accessibilityIdentifier("deepSeek.saveKey")
+                Button(role: .destructive) { clearDeepSeekKey() } label: {
+                    Label("Clear saved key", systemImage: "trash")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("deepSeek.clearKey")
+                Button {
+                    checkConnection()
+                } label: {
+                    Label(checkingConnection ? "Checking connection" : "Check connection", systemImage: "network")
+                }
+                .disabled(checkingConnection)
+                .accessibilityIdentifier("deepSeek.checkConnection")
                 Text(keyStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("DeepSeek receives only compact trusted source text and your confirmed identity fields. Drug photos stay on device.")
+                    .accessibilityIdentifier("deepSeek.keyStatus")
+                LabeledContent("App build", value: appBuild)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("For standalone generation, DeepSeek receives the drug identity and optional package text you entered. Trusted import sends compact source text, and AI practice sends compact saved facts. Drug photos stay on device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Section("In-app reminders") {
                 Toggle("Show weak-drug reminders", isOn: reminderBinding)
-                Text("This reminder appears only inside PharmaShift and never requests notification permission.")
+                Text("This reminder appears only inside Renlyst and never requests notification permission.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let profile = profiles.first {
@@ -144,15 +206,24 @@ private struct LearningSettingsView: View {
             }
         }
         .navigationTitle("Practice Preferences")
+        .accessibilityIdentifier("deepSeek.settings")
+        .onAppear { refreshKeyStatus() }
+        .alert("DeepSeek key", isPresented: $showsKeyStatus) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(keyStatus)
+        }
     }
 
     private func saveDeepSeekKey() {
         do {
-            try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey.trimmed)
-            deepSeekKey = ""
-            keyStatus = "DeepSeek key saved"
+            let location = try DeepSeekKeyStore.shared.save(apiKey: deepSeekKey)
+            guard DeepSeekKeyStore.shared.apiKey() == deepSeekKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
+            keyStatus = "Saved key ••••\(deepSeekKey.normalizedAPIKey.suffix(4)) via \(location.label)"
+            showsKeyStatus = true
         } catch {
-            keyStatus = "Could not save key"
+            keyStatus = "Could not save key: \(error.localizedDescription)"
+            showsKeyStatus = true
         }
     }
 
@@ -160,6 +231,29 @@ private struct LearningSettingsView: View {
         DeepSeekKeyStore.shared.delete()
         deepSeekKey = ""
         keyStatus = "No DeepSeek key saved"
+        showsKeyStatus = true
+    }
+
+    private func checkConnection() {
+        checkingConnection = true
+        Task {
+            do {
+                let status = try await DeepSeekKeyStore.shared.testConnection()
+                await MainActor.run { keyStatus = status; checkingConnection = false; showsKeyStatus = true }
+            } catch {
+                await MainActor.run { keyStatus = "Connection check failed: \(error.localizedDescription)"; checkingConnection = false; showsKeyStatus = true }
+            }
+        }
+    }
+
+    private func refreshKeyStatus() {
+        keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+    }
+
+    private var appBuild: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build))"
     }
 
     private var reminderBinding: Binding<Bool> {
@@ -183,8 +277,8 @@ private struct AboutView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Private, offline training companion", systemImage: "lock.shield.fill")
                         .font(.headline)
-                    Text("PharmaShift is for personal pharmacy learning. Confirm clinical decisions and dispensing with your supervising pharmacist.")
-                    Text("PharmaShift للتعلّم الشخصي أثناء التدريب. أكّد القرارات السريرية وصرف الأدوية مع الصيدلي المشرف.")
+                    Text("Renlyst is for personal pharmacy learning. Confirm clinical decisions and dispensing with your supervising pharmacist.")
+                    Text("Renlyst للتعلّم الشخصي أثناء التدريب. أكّد القرارات السريرية وصرف الأدوية مع الصيدلي المشرف.")
                         .environment(\.layoutDirection, .rightToLeft)
                 }
                 .font(.subheadline)

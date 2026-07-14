@@ -21,10 +21,10 @@ private enum BackupExportKind: String, Identifiable {
     var filename: String {
         let day = Date.now.formatted(.iso8601.year().month().day())
         return switch self {
-        case .lightweight: "PharmaShift-Lightweight-\(day).json"
-        case .complete: "PharmaShift-Complete-\(day).json"
-        case .csv: "PharmaShift-Drug-Library-\(day).csv"
-        case .report: "PharmaShift-Training-Report-\(day).txt"
+        case .lightweight: "Renlyst-Lightweight-\(day).json"
+        case .complete: "Renlyst-Complete-\(day).json"
+        case .csv: "Renlyst-Drug-Library-\(day).csv"
+        case .report: "Renlyst-Training-Report-\(day).txt"
         }
     }
     var contentType: UTType {
@@ -47,12 +47,21 @@ struct BackupDataView: View {
     @State private var importPreview: BackupImportPreview?
     @State private var message: String?
     @State private var errorMessage: String?
+    @AppStorage("backup.lastExportAt") private var lastExportAt: Double = 0
+    @AppStorage("backup.lastExportKind") private var lastExportKind = ""
+    @AppStorage("backup.lastRestoreAt") private var lastRestoreAt: Double = 0
 
     var body: some View {
         List {
             Section {
-                Label("Backups are created locally and never uploaded by PharmaShift.", systemImage: "lock.shield.fill")
+                Label("Backups are created locally and never uploaded by Renlyst.", systemImage: "lock.shield.fill")
                     .font(.subheadline).foregroundStyle(.secondary)
+            }
+            if lastExportAt > 0 || lastRestoreAt > 0 {
+                Section("Local history") {
+                    if lastExportAt > 0 { LabeledContent("Last export", value: "\(lastExportKind) • \(Date(timeIntervalSince1970: lastExportAt).formatted(date: .abbreviated, time: .shortened))") }
+                    if lastRestoreAt > 0 { LabeledContent("Last restore", value: Date(timeIntervalSince1970: lastRestoreAt).formatted(date: .abbreviated, time: .shortened)) }
+                }
             }
             Section("Backup") {
                 actionRow("Lightweight JSON", subtitle: "All records without images", icon: "doc.text") { prepareExport(.lightweight) }
@@ -80,13 +89,17 @@ struct BackupDataView: View {
         .disabled(isWorking)
         .overlay { if isWorking { ProgressView("Preparing…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
         .fileExporter(isPresented: $showsExporter, document: exportDocument, contentType: exportKind.contentType, defaultFilename: exportKind.filename) { result in
-            if case .failure(let error) = result { errorMessage = error.localizedDescription }
+            switch result {
+            case .success: lastExportAt = Date.now.timeIntervalSince1970; lastExportKind = exportKind.rawValue.capitalized
+            case .failure(let error): errorMessage = error.localizedDescription
+            }
         }
         .fileImporter(isPresented: $showsImporter, allowedContentTypes: [.json]) { result in handleImport(result) }
         .sheet(item: $importPreview) { preview in
             NavigationStack {
                 BackupImportPreviewView(backup: preview.backup) { summary in
                     message = "Restored \(summary.counts.total) records by \(summary.mode == .merge ? "merging UUIDs" : "replacing existing data")."
+                    lastRestoreAt = Date.now.timeIntervalSince1970
                 }
             }
         }
@@ -188,7 +201,7 @@ private struct BackupImportPreviewView: View {
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         .disabled(isRestoring)
         .overlay { if isRestoring { ProgressView("Restoring…") } }
-        .confirmationDialog("Replace all current PharmaShift data?", isPresented: $asksToReplace, titleVisibility: .visible) {
+        .confirmationDialog("Replace all current Renlyst data?", isPresented: $asksToReplace, titleVisibility: .visible) {
             Button("Replace all data", role: .destructive) { restore(.replace) }
             Button("Cancel", role: .cancel) {}
         } message: { Text("This cannot be undone unless you have another backup.") }

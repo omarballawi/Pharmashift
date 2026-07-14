@@ -15,6 +15,15 @@ final class BackupServiceTests: XCTestCase {
         drug.notes = "ملاحظة شخصية"
         drug.halfLifeHours = 6.2
         drug.masteryScientificName = true
+        drug.generatedReviewQuestions = [
+            GeneratedReviewQuestion(prompt: "What class is metformin?", choices: ["Biguanide", "Sulfonylurea", "DPP-4 inhibitor", "GLP-1 agonist"], correctAnswer: "Biguanide", explanation: "Metformin is a biguanide.", questionType: .drugClass, relatedField: "class")
+        ]
+        drug.atomicNotes = [AtomicDrugNote(kindRaw: AtomicNoteKind.memoryTrick.rawValue, text: "Remember the biguanide link", linkedField: "Class")]
+        drug.reviewQuestionsNeedRegeneration = true
+        drug.activeIngredients = ["Metformin"]
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients)
+        drug.doseRegimens = [DoseRegimen(indication: "Type 2 diabetes", population: .adult, formula: .fixed, fixedDoseMG: 500, dividedDoses: 2)]
+        let product = DrugProduct(productKey: "metformin|glucophage|500", tradeName: "Glucophage", manufacturer: "Merck", strength: "500 mg", dosageForm: "Tablet", imageData: Data([21]), leafletText: "Product leaflet", profile: drug)
         let review = ReviewLog(drug: drug, drugNameSnapshot: drug.displayName, questionType: .use, rating: .correct, scoreBefore: 1, scoreAfter: 2)
         let shift = ShiftLog(chapterFocus: .endocrine)
         shift.whatILearned = "تعلمت اليوم"
@@ -23,7 +32,7 @@ final class BackupServiceTests: XCTestCase {
         report.trainingSummary = "ملخص التدريب"
         let profile = LearningProfile(currentStreak: 3, longestStreak: 5, completedSessions: 7, badges: ["First Five"])
         let activity = DailyActivity(day: .now, sessionsCompleted: 1, questionsAnswered: 5, correctAnswers: 4, missionCompleted: true)
-        context.insert(drug); context.insert(review); context.insert(shift); context.insert(encounter); context.insert(report); context.insert(profile); context.insert(activity)
+        context.insert(drug); context.insert(product); context.insert(review); context.insert(shift); context.insert(encounter); context.insert(report); context.insert(profile); context.insert(activity)
         try context.save()
 
         let encoded = try BackupService.encode(BackupService.makeBackup(context: context, includesImages: true))
@@ -43,6 +52,14 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertEqual(restoredDrug.notes, "ملاحظة شخصية")
         XCTAssertEqual(restoredDrug.halfLifeHours, 6.2)
         XCTAssertTrue(restoredDrug.masteryScientificName)
+        XCTAssertEqual(restoredDrug.generatedReviewQuestions, drug.generatedReviewQuestions)
+        XCTAssertEqual(restoredDrug.atomicNotes, drug.atomicNotes)
+        XCTAssertTrue(restoredDrug.reviewQuestionsNeedRegeneration)
+        XCTAssertEqual(restoredDrug.doseRegimens.first?.fixedDoseMG, 500)
+        let restoredProduct = try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<DrugProduct>()).first)
+        XCTAssertEqual(restoredProduct.tradeName, "Glucophage")
+        XCTAssertEqual(restoredProduct.leafletText, "Product leaflet")
+        XCTAssertEqual(restoredProduct.profile?.id, restoredDrug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<ReviewLog>()).first).drug?.id, drug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<EncounterNote>()).first).relatedDrug?.id, drug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<ShiftLog>()).first).whatILearned, "تعلمت اليوم")
@@ -113,7 +130,7 @@ final class BackupServiceTests: XCTestCase {
 
     private func makeContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Drug.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self,
+            for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }

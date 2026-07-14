@@ -9,6 +9,21 @@ final class AppTheme {
     let background = Color(uiColor: .systemGroupedBackground)
     let card = Color(uiColor: .secondarySystemGroupedBackground)
     let warning = Color.red
+    let crystalCyan = Color(red: 0.30, green: 0.91, blue: 0.90)
+    let crystalViolet = Color(red: 0.51, green: 0.30, blue: 0.95)
+    let crystalInk = Color(red: 0.035, green: 0.055, blue: 0.095)
+
+    var crystalGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.04, green: 0.30, blue: 0.34),
+                Color(red: 0.20, green: 0.13, blue: 0.43),
+                crystalInk
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     func colors(for chapter: Chapter) -> [Color] {
         switch chapter {

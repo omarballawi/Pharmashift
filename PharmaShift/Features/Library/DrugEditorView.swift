@@ -25,7 +25,8 @@ struct DrugEditorView: View {
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var errorMessage: String?
-    @State private var opensImport = false
+    @State private var showsImport = false
+    @State private var initialReviewFingerprint = ""
 
     init(
         drug: Drug,
@@ -49,6 +50,7 @@ struct DrugEditorView: View {
             ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
         }
         .task(id: photoItemsLoadID) { await loadPhotos() }
+        .onAppear { if initialReviewFingerprint.isEmpty { initialReviewFingerprint = drug.reviewContentFingerprint } }
         .photosPicker(isPresented: libraryPresentation, selection: $photoItems, maxSelectionCount: 8, matching: .images)
         .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
             CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }.ignoresSafeArea()
@@ -59,8 +61,8 @@ struct DrugEditorView: View {
             }
             .interactiveDismissDisabled()
         }
-        .navigationDestination(isPresented: $opensImport) {
-            DrugImportView(drug: drug, providers: providers, aiService: aiService)
+        .sheet(isPresented: $showsImport) {
+            NavigationStack { DrugImportView(drug: drug, providers: providers, aiService: aiService) }
         }
         .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -123,7 +125,7 @@ struct DrugEditorView: View {
                 }
             }
             Section("Identity / الهوية") {
-                Button { opensImport = true } label: {
+                Button { showsImport = true } label: {
                     Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
                 }
                 .accessibilityIdentifier("drugEditor.import")
@@ -428,6 +430,9 @@ struct DrugEditorView: View {
         }
         if !drug.scientificName.trimmed.isEmpty || !drug.tradeNames.isEmpty { drug.isUnknown = false }
         drug.recalculateConfidence()
+        if !drug.generatedReviewQuestions.isEmpty && drug.reviewContentFingerprint != initialReviewFingerprint {
+            drug.reviewQuestionsNeedRegeneration = true
+        }
         do { try context.save(); dismiss() } catch { errorMessage = error.localizedDescription }
     }
 }

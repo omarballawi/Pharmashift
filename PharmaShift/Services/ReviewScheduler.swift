@@ -37,8 +37,7 @@ final class ReviewScheduler {
         }
 
         drug.lastReviewed = now
-        let start = calendar.startOfDay(for: now)
-        drug.nextReviewDate = calendar.date(byAdding: .day, value: days, to: start) ?? now
+        updateMemoryItem(for: questionType, rating: rating, drug: drug, now: now, fallbackDays: days, calendar: calendar)
         lastIntervalDays = days
 
         return ReviewLog(
@@ -53,7 +52,62 @@ final class ReviewScheduler {
         )
     }
 
+    private func updateMemoryItem(for field: QuestionType, rating: ReviewRating, drug: Drug, now: Date, fallbackDays: Int, calendar: Calendar) {
+        var items = drug.memoryItems
+        guard let index = items.firstIndex(where: { $0.field == field }) else { return }
+        var item = items[index]
+        let elapsedDays = max(0, item.lastReviewed.map { now.timeIntervalSince($0) / 86_400 } ?? 0)
+        item.retrievability = exp(-elapsedDays / max(item.stabilityDays, 0.1))
+        item.lastReviewed = now
+        switch rating {
+        case .wrong:
+            item.lapses += 1
+            item.repetitions = 0
+            item.difficulty = min(10, item.difficulty + 0.8)
+            item.stabilityDays = max(0.25, item.stabilityDays * 0.45)
+        case .partlyCorrect:
+            item.repetitions += 1
+            item.difficulty = min(10, item.difficulty + 0.15)
+            item.stabilityDays = max(1, item.stabilityDays * 1.35)
+        case .correct:
+            item.repetitions += 1
+            item.difficulty = max(1, item.difficulty - 0.2)
+            let growth = 2.2 + (10 - item.difficulty) * 0.08
+            item.stabilityDays = max(Double(fallbackDays), item.stabilityDays * growth)
+        }
+        item.retrievability = 1
+        let interval = max(1, Int(item.stabilityDays.rounded()))
+        item.dueDate = calendar.date(byAdding: .day, value: interval, to: calendar.startOfDay(for: now)) ?? now
+        items[index] = item
+        drug.memoryItems = items
+        drug.nextReviewDate = item.dueDate
+    }
+
     func isDue(_ drug: Drug, now: Date = .now, calendar: Calendar = .current) -> Bool {
         drug.nextReviewDate < calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
+    }
+
+    func adjust(field: QuestionType, grade: MemoryReviewGrade, for drug: Drug, now: Date = .now, calendar: Calendar = .current) {
+        var items = drug.memoryItems
+        guard let index = items.firstIndex(where: { $0.field == field }) else { return }
+        var item = items[index]
+        let interval: Int
+        switch grade {
+        case .again:
+            item.stabilityDays = max(0.25, item.stabilityDays * 0.45); item.difficulty = min(10, item.difficulty + 0.8); item.lapses += 1; interval = 1
+        case .hard:
+            item.stabilityDays = max(2, item.stabilityDays * 0.75); item.difficulty = min(10, item.difficulty + 0.15); interval = max(2, Int(item.stabilityDays.rounded()))
+        case .good:
+            interval = max(3, Int(item.stabilityDays.rounded()))
+        case .easy:
+            item.stabilityDays = max(7, item.stabilityDays * 1.55); item.difficulty = max(1, item.difficulty - 0.3); interval = max(7, Int(item.stabilityDays.rounded()))
+        }
+        item.dueDate = calendar.date(byAdding: .day, value: interval, to: calendar.startOfDay(for: now)) ?? now
+        item.retrievability = 1
+        item.lastReviewed = now
+        items[index] = item
+        drug.memoryItems = items
+        drug.nextReviewDate = item.dueDate
+        lastIntervalDays = interval
     }
 }

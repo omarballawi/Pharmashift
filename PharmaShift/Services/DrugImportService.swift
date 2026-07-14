@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import Security
+import SwiftData
 import UIKit
 import Vision
 
@@ -36,6 +37,7 @@ struct TrustedDrugSourcePacket: Codable, Equatable, Sendable {
     var activeIngredientText: String
     var lastUpdatedText: String?
     var isTruncated: Bool
+    var leafletText: String = ""
 
     static let empty = TrustedDrugSourcePacket(
         sourceName: "", sourceURL: "", indicationsText: "", dosageText: "", contraindicationsText: "",
@@ -55,8 +57,7 @@ struct UserConfirmedDrugIdentity: Codable, Equatable, Sendable {
     var drugClass: String
 
     var isComplete: Bool {
-        !scientificName.trimmed.isEmpty && !tradeNames.joined().trimmed.isEmpty && !strength.trimmed.isEmpty
-            && !dosageForm.trimmed.isEmpty && !route.trimmed.isEmpty && !system.trimmed.isEmpty && !drugClass.trimmed.isEmpty
+        !scientificName.trimmed.isEmpty || !tradeNames.joined().trimmed.isEmpty
     }
 }
 
@@ -94,6 +95,9 @@ struct ImportedDrugInfo: Codable, Equatable, Sendable {
     var adverseEffects: ImportedAdverseEffects
     var memorization: ImportedMemorization
     var sourceQuality: SourceQuality
+    var doseRegimens: [DoseRegimen]? = nil
+    var prodrugInfo: ProdrugInfo? = nil
+    var eliminationInfo: EliminationInfo? = nil
 }
 
 struct ImportedIdentity: Codable, Equatable, Sendable {
@@ -123,6 +127,9 @@ struct ImportedPK: Codable, Equatable, Sendable {
     var prodrugStatus: ImportedProdrugStatus
     var excretionRoute: ImportedExcretionRoute
     var pkMemoryLineArabic: String
+    var timesPerDay: Int? = nil
+    var metabolism: String? = nil
+    var excretionNotes: String? = nil
 }
 
 struct ImportedSafety: Codable, Equatable, Sendable {
@@ -174,6 +181,17 @@ struct ImportedMemorization: Codable, Equatable, Sendable {
     var mustKnow: [String]
     var flashcards: [Flashcard]
     var oneLineSummaryArabic: String
+    var reviewQuestions: [GeneratedReviewQuestionDTO]? = nil
+}
+
+struct GeneratedReviewQuestionDTO: Codable, Equatable, Sendable {
+    var prompt: String
+    var choices: [String]
+    var correctAnswer: String
+    var explanation: String
+    var questionType: String
+    var relatedField: String
+    var difficulty: String
 }
 
 struct Flashcard: Codable, Equatable, Sendable, Identifiable {
@@ -206,7 +224,10 @@ enum ImportSection: String, Codable, CaseIterable, Identifiable, Sendable {
 
 struct ImportSelection: Equatable, Sendable {
     var sections: Set<ImportSection>
+    var reviewQuestionPrompts: Set<String>? = nil
+    var excludedFieldKeys: Set<String> = []
     func contains(_ section: ImportSection) -> Bool { sections.contains(section) }
+    func includes(_ fieldKey: String) -> Bool { !excludedFieldKeys.contains(fieldKey) }
 }
 
 enum DrugImportError: LocalizedError, Equatable {
@@ -216,6 +237,8 @@ enum DrugImportError: LocalizedError, Equatable {
     case missingDeepSeekKey
     case invalidAIJSON
     case aiReturnedEmpty
+    case unresolvedLocalBrand
+    case deepSeekHTTPStatus(Int)
 
     var errorDescription: String? {
         switch self {
@@ -223,8 +246,10 @@ enum DrugImportError: LocalizedError, Equatable {
         case .invalidResponse: "The trusted source returned an unexpected response. Please try again."
         case .parsingFailed: "The trusted source label could not be read."
         case .missingDeepSeekKey: "Add your DeepSeek API key in Settings before using AI formatting."
-        case .invalidAIJSON: "DeepSeek did not return valid JSON. Retry formatting from the same trusted source packet."
-        case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry formatting from the same trusted source packet."
+        case .invalidAIJSON: "DeepSeek did not return a complete valid card. Retry generation."
+        case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry generation."
+        case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
+        case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
         }
     }
 }
@@ -240,7 +265,7 @@ enum DrugSourceProviderFactory {
         if ProcessInfo.processInfo.arguments.contains("-mockDrugImport") {
             return [MockDrugSourceProvider()]
         }
-        return [RxNormProvider(), DailyMedProvider(), OpenFDALabelProvider()]
+        return [AltibbiProvider(), RxNormProvider(), DailyMedProvider(), OpenFDALabelProvider()]
     }
 
     static func aiDefault() -> any DrugImportFormattingService {
@@ -248,6 +273,182 @@ enum DrugSourceProviderFactory {
             return MockDeepSeekDrugImportService()
         }
         return DeepSeekDrugImportService()
+    }
+}
+
+@MainActor
+enum DrugRelationshipRefreshService {
+    static func refresh(drugs: [Drug], context: ModelContext, providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault()) async throws -> Int {
+        guard drugs.count > 1 else { return 0 }
+        let preferred = providers.filter { $0.sourceName == "Altibbi" || $0.sourceName == "DailyMed" || $0.sourceName == "openFDA" }
+        var found: [String: (Drug, Drug, String, String)] = [:]
+        for drug in drugs where !drug.scientificName.trimmed.isEmpty {
+            var packets: [TrustedDrugSourcePacket] = []
+            for provider in preferred {
+                guard let matches = try? await provider.searchDrug(query: drug.scientificName),
+                      let match = matches.first,
+                      let packet = try? await provider.fetchDrugDetails(id: match.id),
+                      !packet.interactionsText.trimmed.isEmpty else { continue }
+                packets.append(packet)
+            }
+            for packet in packets {
+                let searchable = IngredientIdentity.normalize(packet.interactionsText)
+                for other in drugs where other.id != drug.id {
+                    let names = other.ingredientNames + other.effectiveTradeNames
+                    guard names.contains(where: { name in
+                        let needle = IngredientIdentity.normalize(name)
+                        return needle.count >= 4 && searchable.contains(needle)
+                    }) else { continue }
+                    let ids = [drug.id.uuidString, other.id.uuidString].sorted()
+                    let key = ids.joined(separator: "|") + "|interaction"
+                    found[key] = (drug, other, TrustedDrugSourcePacketExtractor.compact(packet.interactionsText, limit: 700), packet.sourceURL)
+                }
+            }
+            drug.lastKnowledgeRefreshAt = .now
+        }
+        let existing = try context.fetch(FetchDescriptor<DrugRelationship>())
+        for (key, value) in found {
+            if let relationship = existing.first(where: { $0.relationshipKey == key }) {
+                relationship.summary = value.2; relationship.sourceURLs = [value.3]; relationship.checkedAt = .now
+            } else {
+                context.insert(DrugRelationship(relationshipKey: key, kind: .interaction, severity: .medium, summary: value.2, managementNote: "Review the linked source and ask a pharmacist before combining or changing therapy.", sourceURLs: [value.3], sourceDrug: value.0, targetDrug: value.1))
+            }
+        }
+        try context.save()
+        return found.count
+    }
+}
+
+enum DrugSearchRanker {
+    static func ranked(_ values: [DrugSearchResult], identity: UserConfirmedDrugIdentity) -> [DrugSearchResult] {
+        let ingredient = identity.scientificName.trimmed.lowercased()
+        let trade = identity.tradeNames.joined(separator: " ").trimmed.lowercased()
+        let form = identity.dosageForm.trimmed.lowercased()
+        let route = identity.route.trimmed.lowercased()
+        var unique: [String: DrugSearchResult] = [:]
+        for value in values {
+            let key = [value.activeIngredient ?? value.displayName, value.dosageForm ?? "", value.sourceName]
+                .joined(separator: "|").lowercased()
+            if unique[key] == nil { unique[key] = value }
+        }
+        return unique.values.sorted { score($0, ingredient: ingredient, trade: trade, form: form, route: route) > score($1, ingredient: ingredient, trade: trade, form: form, route: route) }
+    }
+
+    private static func score(_ result: DrugSearchResult, ingredient: String, trade: String, form: String, route: String) -> Int {
+        let activeIngredient = result.activeIngredient ?? ""
+        let name = "\(result.displayName) \(activeIngredient)".lowercased()
+        var value = 0
+        if !ingredient.isEmpty && name == ingredient { value += 100 }
+        else if !ingredient.isEmpty && name.contains(ingredient) { value += 80 }
+        if !trade.isEmpty && name.contains(trade) { value += 60 }
+        if !form.isEmpty && (result.dosageForm ?? "").lowercased().contains(form) { value += 15 }
+        if !route.isEmpty && name.contains(route) { value += 5 }
+        if result.sourceName == "Altibbi" { value += 8 }
+        if result.sourceName == "DailyMed" { value += 3 }
+        return value
+    }
+}
+
+actor AltibbiProvider: DrugSourceProvider {
+    let sourceName = "Altibbi"
+    private static let sitemapURL = URL(string: "https://altibbi.com/sitemap/full/drugs_1.xml")!
+    private let session: URLSession
+    private var cachedURLs: [URL]?
+
+    init(session: URLSession? = nil) {
+        if let session { self.session = session }
+        else {
+            let configuration = URLSessionConfiguration.default
+            configuration.urlCache = URLCache(memoryCapacity: 12_000_000, diskCapacity: 55_000_000)
+            configuration.requestCachePolicy = .returnCacheDataElseLoad
+            configuration.timeoutIntervalForRequest = 25
+            self.session = URLSession(configuration: configuration)
+        }
+    }
+
+    func searchDrug(query: String) async throws -> [DrugSearchResult] {
+        let query = query.trimmed
+        guard !query.isEmpty else { throw DrugImportError.invalidQuery }
+        if let direct = URL(string: query), direct.host?.localizedCaseInsensitiveContains("altibbi.com") == true {
+            return [result(for: direct)]
+        }
+        let needle = IngredientIdentity.normalize(query)
+        let urls = try await drugURLs()
+        return urls.filter { url in
+            IngredientIdentity.normalize(url.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "-علمي", with: "")).contains(needle)
+        }.prefix(12).map(result(for:))
+    }
+
+    func fetchDrugDetails(id: String) async throws -> TrustedDrugSourcePacket {
+        guard let url = URL(string: id) else { throw DrugImportError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.setValue("Renlyst/1.7 educational drug-library reader", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await session.data(for: request)
+        try validate(response)
+        guard let html = String(data: data, encoding: .utf8) else { throw DrugImportError.parsingFailed }
+        let sections: [String: String] = [
+            "indications": article(id: "termText0", html: html),
+            "contraindications": article(id: "termText1", html: html),
+            "adverse": article(id: "termText2", html: html),
+            "warnings": article(id: "termText3", html: html),
+            "interactions": article(id: "termText4", html: html),
+            "dosage": article(id: "termText6", html: html)
+        ]
+        let title = firstMatch(#"<title>(.*?)</title>"#, in: html)
+        let ingredient = title.components(separatedBy: ["،", ","]).first?.trimmed ?? url.lastPathComponent.replacingOccurrences(of: "-علمي", with: "")
+        return TrustedDrugSourcePacketExtractor.packet(
+            sourceName: sourceName,
+            sourceURL: url.absoluteString,
+            sections: sections,
+            dosageForms: [article(id: "termText7", html: html)].filter { !$0.isEmpty },
+            activeIngredients: [ingredient]
+        )
+    }
+
+    private func drugURLs() async throws -> [URL] {
+        if let cachedURLs { return cachedURLs }
+        let (data, response) = try await session.data(from: Self.sitemapURL)
+        try validate(response)
+        guard let xml = String(data: data, encoding: .utf8) else { throw DrugImportError.parsingFailed }
+        let urls = matches(#"<loc>(.*?)</loc>"#, in: xml).compactMap { URL(string: $0.replacingOccurrences(of: "&amp;", with: "&")) }
+        cachedURLs = urls
+        return urls
+    }
+
+    private func result(for url: URL) -> DrugSearchResult {
+        let slug = url.lastPathComponent.replacingOccurrences(of: "-علمي", with: "").replacingOccurrences(of: "-", with: " ")
+        return DrugSearchResult(id: url.absoluteString, displayName: slug, activeIngredient: slug, dosageForm: nil, sourceName: sourceName)
+    }
+
+    private func article(id: String, html: String) -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: id)
+        let raw = firstMatch(#"<article[^>]*id=[\"']"# + escaped + #"[\"'][^>]*>([\s\S]*?)</article>"#, in: html)
+        return Self.plainText(raw)
+    }
+
+    private func firstMatch(_ pattern: String, in text: String) -> String {
+        matches(pattern, in: text).first ?? ""
+    }
+
+    private func matches(_ pattern: String, in text: String) -> [String] {
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        return expression.matches(in: text, range: range).compactMap { match in
+            guard match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range])
+        }
+    }
+
+    private static func plainText(_ html: String) -> String {
+        let withoutScripts = html.replacingOccurrences(of: #"<(script|style)[^>]*>[\s\S]*?</\1>"#, with: " ", options: [.regularExpression, .caseInsensitive])
+        let withBreaks = withoutScripts.replacingOccurrences(of: #"</?(p|li|tr|h[1-6]|br|td)[^>]*>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
+        let stripped = withBreaks.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+        let decoded = stripped.replacingOccurrences(of: "&nbsp;", with: " ").replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&#39;", with: "'")
+        return decoded.replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression).replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression).trimmed
+    }
+
+    private func validate(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw DrugImportError.invalidResponse }
     }
 }
 
@@ -708,6 +909,59 @@ actor DeepSeekDrugImportService: DrugImportFormattingService {
     }
 }
 
+protocol FastDrugGatheringService: Sendable {
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo
+}
+
+actor MockFastDrugGatherService: FastDrugGatheringService {
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
+        var info = try await MockDeepSeekDrugImportService().format(packet: .empty, identity: identity)
+        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: false, missingImportantFields: [], notes: "Mock standalone AI card")
+        return info
+    }
+}
+
+actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
+    private let session: URLSession
+    private let keyStore: DeepSeekKeyStore
+
+    init(session: URLSession = .shared, keyStore: DeepSeekKeyStore = .shared) {
+        self.session = session
+        self.keyStore = keyStore
+    }
+
+    func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
+        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        let request = try Self.makeRequest(apiKey: apiKey, identity: identity, packageText: packageText)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.deepSeekHTTPStatus(http.statusCode) }
+        let payload = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
+        guard let content = payload.choices.first?.message.content, !content.trimmed.isEmpty else { throw DrugImportError.aiReturnedEmpty }
+        return try DrugImportValidator.parseAIDraft(jsonString: content, confirmedIdentity: identity, packageText: packageText)
+    }
+
+    static func makeRequest(apiKey: String, identity: UserConfirmedDrugIdentity, packageText: String) throws -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(DeepSeekRequest(
+            model: DeepSeekDrugImportService.model,
+            messages: [
+                .init(role: "system", content: FastGatherPromptBuilder.systemPrompt),
+                .init(role: "user", content: FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText))
+            ],
+            thinking: .init(type: "disabled"),
+            responseFormat: .init(type: "json_object"),
+            temperature: 0,
+            maxTokens: 4_500,
+            stream: false
+        ))
+        return request
+    }
+}
+
 private struct DeepSeekRequest: Encodable {
     struct Message: Encodable { var role: String; var content: String }
     struct Thinking: Encodable { var type: String }
@@ -784,7 +1038,7 @@ enum PromptBuilder {
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
         System/chapter: \(identity.system)
-        Class: \(identity.drugClass)
+        Class: derive from the active ingredient and trusted source when confident; otherwise leave it empty and mark source quality for review.
 
         Trusted source packet:
         Source name: \(packet.sourceName)
@@ -823,42 +1077,77 @@ enum PromptBuilder {
         Active ingredient:
         \(packet.activeIngredientText)
 
+        Product leaflet pasted by the user:
+        \(packet.leafletText)
+
+        Product leaflet facts override general product-form assumptions when they clearly refer to the confirmed package. Keep general population/indication dosing separate from the captured package strength.
+
+        Detailed extraction requirements:
+        - doseRegimens: capture each sourced indication/population separately. Use Adult, Child, Older adult, or Special population and only encode numeric dose math when the source states it.
+        - prodrugInfo: say whether the administered compound is already active or is converted to a named active compound, including activation site/pathway when sourced.
+        - eliminationInfo: identify the organ/pathway that removes the drug. Use Kidneys / urine, Bile / feces, Lungs / exhalation, Mixed pathways, Other, or Unknown. Add percentages only when stated.
+        - Never infer a numeric dose from package strength alone.
+
         Task:
         Fill my app sections using Arabic explanations with English medical terms.
 
         Output JSON only using this exact structure:
+        \(cardJSONSchema)
+        """
+    }
+
+    static let cardJSONSchema = """
         {
           "identity": {"scientificName": "", "tradeNames": [], "system": "", "class": "", "dosageForm": "", "strength": "", "route": ""},
           "usesMechanism": {"mainUses": [], "simpleMechanismArabic": "", "mechanismKeywords": []},
-          "pharmacokinetics": {"halfLifeDisplay": "", "halfLifeBand": "unknown", "onsetDisplay": "", "onsetBand": "unknown", "durationDisplay": "", "durationBand": "unknown", "dosingFrequency": "unknown", "prodrugStatus": "unknown", "excretionRoute": "unknown", "pkMemoryLineArabic": ""},
+          "pharmacokinetics": {"halfLifeDisplay": "", "halfLifeBand": "unknown", "onsetDisplay": "", "onsetBand": "unknown", "durationDisplay": "", "durationBand": "unknown", "dosingFrequency": "unknown", "timesPerDay": null, "prodrugStatus": "unknown", "metabolism": "", "excretionRoute": "unknown", "excretionNotes": "", "pkMemoryLineArabic": ""},
           "safety": {"contraindications": {"severity": "unknown", "items": []}, "toxicity": {"severity": "unknown", "items": []}, "warnings": {"severity": "unknown", "items": []}, "interactions": {"severity": "unknown", "items": []}, "renalCaution": {"severity": "unknown", "note": ""}, "hepaticCaution": {"severity": "unknown", "note": ""}, "pregnancyCaution": {"severity": "unknown", "simpleNoteArabic": ""}},
           "counseling": {"howToTakeArabic": "", "foodInstructionArabic": "", "simplePatientSentenceArabic": "", "whatPatientMayFeelArabic": [], "whenToSeekHelpArabic": [], "missedDoseArabic": ""},
           "arabicExplanation": {"shortExplanation": "", "memoryStory": "", "importantNote": ""},
           "adverseEffects": {"common": [], "serious": []},
-          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": ""},
+          "memorization": {"mustKnow": [], "flashcards": [{"question": "", "answer": ""}], "oneLineSummaryArabic": "", "reviewQuestions": [{"prompt": "", "choices": ["", "", "", ""], "correctAnswer": "", "explanation": "", "questionType": "Use", "relatedField": "indications", "difficulty": "medium"}]},
+          "doseRegimens": [{"indication": "", "population": "Adult", "formula": "Fixed dose", "route": "", "minimumAgeMonths": null, "maximumAgeMonths": null, "minimumWeightKG": null, "maximumWeightKG": null, "sexRestriction": null, "fixedDoseMG": null, "amountPerKG": null, "amountPerSquareMeter": null, "dividedDoses": 1, "intervalHours": null, "maximumSingleDoseMG": null, "maximumDailyDoseMG": null, "durationText": "", "renalAdjustment": "", "hepaticAdjustment": "", "requiresMeasuredWeight": false, "sourceIDs": []}],
+          "prodrugInfo": {"classification": "Unknown", "administeredCompound": "", "activeCompound": "", "activationSite": "", "activationPathway": "", "explanation": "", "sourceIDs": []},
+          "eliminationInfo": {"metabolismSite": "", "metabolismEnzymes": [], "routes": [{"pathway": "Unknown", "percentage": null, "detail": ""}], "dominantPathway": "Unknown", "summary": "", "sourceIDs": []},
           "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": true, "missingImportantFields": [], "notes": ""}
         }
+        """
+    }
+private enum FastGatherPromptBuilder {
+    static let systemPrompt = """
+    You create complete, practical pharmacy learning cards from a confirmed medicine identity and supplied package or leaflet text.
+    Fill every relevant field: identity, class, uses, mechanism, indication- and population-specific dose regimens, pharmacokinetics, dosing frequency, precise active-drug/prodrug status, organ/pathway of elimination, adverse effects, safety, and counseling. Never treat package strength as a standard dose. Use "unknown" only when a fact genuinely cannot be established. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+
+    Also create 8 high-quality review questions. Except for Scientific name and Trade name spelling questions, every question must be either four-option multiple choice or True/False. Each MCQ must have one unambiguously correct answer, three plausible distractors, and a short explanation. Do not reveal the answer in the prompt.
+    """
+
+    static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
+        """
+        Create a complete, compact pharmacy learning card draft. Trusted source lookup did not return a usable page, so mark unsupported facts for verification.
+
+        Confirmed fields:
+        Scientific name: \(identity.scientificName)
+        Trade name(s): \(identity.tradeNames.joined(separator: ", "))
+        Strength: \(identity.strength)
+        Dosage form: \(identity.dosageForm)
+        Route: \(identity.route)
+        System/chapter: \(identity.system)
+
+        Optional OCR or pasted package details:
+        \(packageText.prefix(2_000))
+
+        Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and eight review questions spanning identity, class, use, mechanism, PK, safety, and counseling.
+
+        Output JSON only using this exact structure:
+        \(PromptBuilder.cardJSONSchema)
         """
     }
 }
 
 enum DrugImportValidator {
     static func parse(jsonString: String, confirmedIdentity: UserConfirmedDrugIdentity, packet: TrustedDrugSourcePacket) throws -> ImportedDrugInfo {
-        let trimmed = jsonString.trimmed
-        guard trimmed.first == "{", trimmed.last == "}" else { throw DrugImportError.invalidAIJSON }
-        guard let data = trimmed.data(using: .utf8) else { throw DrugImportError.invalidAIJSON }
-        var info: ImportedDrugInfo
-        do { info = try JSONDecoder().decode(ImportedDrugInfo.self, from: data) }
-        catch { throw DrugImportError.invalidAIJSON }
-        info.identity = ImportedIdentity(
-            scientificName: confirmedIdentity.scientificName,
-            tradeNames: confirmedIdentity.tradeNames,
-            system: confirmedIdentity.system,
-            class: confirmedIdentity.drugClass,
-            dosageForm: confirmedIdentity.dosageForm,
-            strength: confirmedIdentity.strength,
-            route: confirmedIdentity.route
-        )
+        var info = try decodedInfo(jsonString)
+        info.identity = applyingConfirmedIdentity(to: info.identity, confirmedIdentity: confirmedIdentity)
         info.sourceQuality.sourceName = packet.sourceName
         info.sourceQuality.sourceURL = packet.sourceURL
         var missing = info.sourceQuality.missingImportantFields
@@ -867,10 +1156,35 @@ enum DrugImportValidator {
             ("adverse reactions", packet.adverseReactionsText), ("pharmacokinetics", packet.pharmacokineticsText)
         ]
         for check in checks where check.1.trimmed.isEmpty && !missing.contains(check.0) { missing.append(check.0) }
+        if info.identity.class.isEmpty && !missing.contains("drug class") { missing.append("drug class") }
         if packet.isTruncated { info.sourceQuality.needsReview = true; info.sourceQuality.notes = [info.sourceQuality.notes, "Trusted source packet was trimmed before AI formatting."].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
         info.sourceQuality.missingImportantFields = missing
         if !missing.isEmpty { info.sourceQuality.needsReview = true }
         return info
+    }
+
+    static func parseAIDraft(jsonString: String, confirmedIdentity: UserConfirmedDrugIdentity, packageText: String) throws -> ImportedDrugInfo {
+        var info = try decodedInfo(jsonString)
+        info.identity = applyingConfirmedIdentity(to: info.identity, confirmedIdentity: confirmedIdentity)
+        info.sourceQuality = SourceQuality(
+            sourceName: "Generated with AI",
+            sourceURL: "",
+            needsReview: false,
+            missingImportantFields: info.sourceQuality.missingImportantFields,
+            notes: "Generated from the confirmed drug identity. Every section remains editable before saving."
+        )
+        return info
+    }
+
+    private static func decodedInfo(_ jsonString: String) throws -> ImportedDrugInfo {
+        let trimmed = jsonString.trimmed
+        guard trimmed.first == "{", trimmed.last == "}" else { throw DrugImportError.invalidAIJSON }
+        guard let data = trimmed.data(using: .utf8), let info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
+        return info
+    }
+
+    private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
+        ImportedIdentity(scientificName: identity.scientificName, tradeNames: identity.tradeNames, system: identity.system, class: imported.class.trimmed, dosageForm: identity.dosageForm, strength: identity.strength, route: identity.route)
     }
 }
 
@@ -892,85 +1206,162 @@ enum DrugImportApplier {
 
     static func apply(_ info: ImportedDrugInfo, selection: ImportSelection, to drug: Drug, imageData: Data? = nil, thumbnailData: Data? = nil) {
         if selection.contains(.identity) {
-            drug.scientificName = info.identity.scientificName
-            drug.tradeNames = info.identity.tradeNames
-            drug.chapterRaw = info.identity.system
-            drug.drugClass = info.identity.class
-            drug.dosageForms = [info.identity.dosageForm].filter { !$0.trimmed.isEmpty }
-            drug.strengths = [info.identity.strength].filter { !$0.trimmed.isEmpty }
-            drug.routes = [info.identity.route].filter { !$0.trimmed.isEmpty }
+            if selection.includes("identity.scientific") { drug.scientificName = info.identity.scientificName }
+            if selection.includes("identity.trade") { drug.tradeNames = info.identity.tradeNames }
+            if selection.includes("identity.system") { drug.chapterRaw = info.identity.system }
+            if selection.includes("identity.class") { drug.drugClass = info.identity.class }
+            if selection.includes("identity.form") { drug.dosageForms = [info.identity.dosageForm].filter { !$0.trimmed.isEmpty } }
+            if selection.includes("identity.strength") { drug.strengths = [info.identity.strength].filter { !$0.trimmed.isEmpty } }
+            if selection.includes("identity.route") { drug.routes = [info.identity.route].filter { !$0.trimmed.isEmpty } }
             drug.isUnknown = false
         }
         if selection.contains(.usesMechanism) {
-            drug.indications = info.usesMechanism.mainUses
-            drug.mechanism = info.usesMechanism.simpleMechanismArabic
-            drug.arabicMechanism = info.usesMechanism.simpleMechanismArabic
-            drug.mechanismKeywords = info.usesMechanism.mechanismKeywords
+            if selection.includes("uses.indications") { drug.indications = info.usesMechanism.mainUses }
+            if selection.includes("uses.mechanism") { drug.mechanism = info.usesMechanism.simpleMechanismArabic; drug.arabicMechanism = info.usesMechanism.simpleMechanismArabic; drug.mechanismKeywords = info.usesMechanism.mechanismKeywords }
         }
         if selection.contains(.pharmacokinetics) {
-            drug.halfLifeText = info.pharmacokinetics.halfLifeDisplay
-            drug.halfLifeBand = info.pharmacokinetics.halfLifeBand.drugBand
-            drug.onsetText = info.pharmacokinetics.onsetDisplay
-            drug.onsetBand = info.pharmacokinetics.onsetBand.drugBand
-            drug.durationText = info.pharmacokinetics.durationDisplay
-            drug.durationBand = info.pharmacokinetics.durationBand.drugBand
-            drug.dosingFrequency = info.pharmacokinetics.dosingFrequency.drugFrequency
-            drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus
-            drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute
-            drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic
+            if selection.includes("pk.halfLife") { drug.halfLifeText = info.pharmacokinetics.halfLifeDisplay; drug.halfLifeBand = info.pharmacokinetics.halfLifeBand.drugBand }
+            if selection.includes("pk.onset") { drug.onsetText = info.pharmacokinetics.onsetDisplay; drug.onsetBand = info.pharmacokinetics.onsetBand.drugBand }
+            if selection.includes("pk.duration") { drug.durationText = info.pharmacokinetics.durationDisplay; drug.durationBand = info.pharmacokinetics.durationBand.drugBand }
+            if selection.includes("pk.dosing") { drug.dosingFrequency = info.pharmacokinetics.dosingFrequency.drugFrequency; drug.timesPerDay = info.pharmacokinetics.timesPerDay }
+            if selection.includes("pk.prodrug") { drug.prodrugStatus = info.pharmacokinetics.prodrugStatus.drugStatus }
+            if selection.includes("pk.excretion") { drug.excretionRoute = info.pharmacokinetics.excretionRoute.drugRoute; drug.excretionNotes = [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionNotes].compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n") }
+            if selection.includes("pk.memory") { drug.pkMemoryLineArabic = info.pharmacokinetics.pkMemoryLineArabic }
+            if let prodrugInfo = info.prodrugInfo { drug.prodrugInfo = prodrugInfo }
+            if let eliminationInfo = info.eliminationInfo { drug.eliminationInfo = eliminationInfo }
         }
         if selection.contains(.safety) {
-            drug.contraindications = info.safety.contraindications.items
-            drug.contraindicationSeverityRaw = info.safety.contraindications.severity.drugSeverity.rawValue
-            drug.toxicity = info.safety.toxicity.items.joined(separator: "\n")
-            drug.toxicitySeverityRaw = info.safety.toxicity.severity.drugSeverity.rawValue
-            drug.warnings = info.safety.warnings.items
-            drug.warningSeverityRaw = info.safety.warnings.severity.drugSeverity.rawValue
-            drug.interactions = info.safety.interactions.items
-            drug.interactionSeverityRaw = info.safety.interactions.severity.drugSeverity.rawValue
-            drug.renalCaution = info.safety.renalCaution.note
-            drug.renalSeverityRaw = info.safety.renalCaution.severity.drugSeverity.rawValue
-            drug.hepaticCaution = info.safety.hepaticCaution.note
-            drug.hepaticSeverityRaw = info.safety.hepaticCaution.severity.drugSeverity.rawValue
-            drug.pregnancyCaution = info.safety.pregnancyCaution.simpleNoteArabic
-            drug.pregnancySeverityRaw = info.safety.pregnancyCaution.severity.drugSeverity.rawValue
+            if selection.includes("safety.contraindications") { drug.contraindications = info.safety.contraindications.items; drug.contraindicationSeverityRaw = info.safety.contraindications.severity.drugSeverity.rawValue }
+            if selection.includes("safety.toxicity") { drug.toxicity = info.safety.toxicity.items.joined(separator: "\n"); drug.toxicitySeverityRaw = info.safety.toxicity.severity.drugSeverity.rawValue }
+            if selection.includes("safety.warnings") { drug.warnings = info.safety.warnings.items; drug.warningSeverityRaw = info.safety.warnings.severity.drugSeverity.rawValue }
+            if selection.includes("safety.interactions") { drug.interactions = info.safety.interactions.items; drug.interactionSeverityRaw = info.safety.interactions.severity.drugSeverity.rawValue }
+            if selection.includes("safety.renal") { drug.renalCaution = info.safety.renalCaution.note; drug.renalSeverityRaw = info.safety.renalCaution.severity.drugSeverity.rawValue }
+            if selection.includes("safety.hepatic") { drug.hepaticCaution = info.safety.hepaticCaution.note; drug.hepaticSeverityRaw = info.safety.hepaticCaution.severity.drugSeverity.rawValue }
+            if selection.includes("safety.pregnancy") { drug.pregnancyCaution = info.safety.pregnancyCaution.simpleNoteArabic; drug.pregnancySeverityRaw = info.safety.pregnancyCaution.severity.drugSeverity.rawValue }
         }
         if selection.contains(.counseling) {
-            drug.howToTake = info.counseling.howToTakeArabic
-            drug.foodInstruction = info.counseling.foodInstructionArabic
-            drug.counselingSentence = info.counseling.simplePatientSentenceArabic
-            drug.arabicCounseling = info.counseling.simplePatientSentenceArabic
-            drug.counselingHowToTakeArabic = info.counseling.howToTakeArabic
-            drug.counselingFoodArabic = info.counseling.foodInstructionArabic
-            drug.patientFeelingsArabic = info.counseling.whatPatientMayFeelArabic
-            drug.seekHelpArabic = info.counseling.whenToSeekHelpArabic
-            drug.missedDoseArabic = info.counseling.missedDoseArabic
+            if selection.includes("counseling.howTo") { drug.howToTake = info.counseling.howToTakeArabic; drug.counselingHowToTakeArabic = info.counseling.howToTakeArabic }
+            if selection.includes("counseling.food") { drug.foodInstruction = info.counseling.foodInstructionArabic; drug.counselingFoodArabic = info.counseling.foodInstructionArabic }
+            if selection.includes("counseling.sentence") { drug.counselingSentence = info.counseling.simplePatientSentenceArabic; drug.arabicCounseling = info.counseling.simplePatientSentenceArabic }
+            if selection.includes("counseling.feelings") { drug.patientFeelingsArabic = info.counseling.whatPatientMayFeelArabic }
+            if selection.includes("counseling.seekHelp") { drug.seekHelpArabic = info.counseling.whenToSeekHelpArabic }
+            if selection.includes("counseling.missedDose") { drug.missedDoseArabic = info.counseling.missedDoseArabic }
         }
         if selection.contains(.arabicExplanation) {
-            drug.arabicExplanation = info.arabicExplanation.shortExplanation
-            drug.arabicMemoryStory = info.arabicExplanation.memoryStory
-            drug.arabicImportantNote = info.arabicExplanation.importantNote
+            if selection.includes("arabic.explanation") { drug.arabicExplanation = info.arabicExplanation.shortExplanation }
+            if selection.includes("arabic.story") { drug.arabicMemoryStory = info.arabicExplanation.memoryStory }
+            if selection.includes("arabic.note") { drug.arabicImportantNote = info.arabicExplanation.importantNote }
         }
         if selection.contains(.adverseEffects) {
-            drug.commonSideEffects = info.adverseEffects.common
-            drug.seriousSideEffects = info.adverseEffects.serious
+            if selection.includes("effects.common") { drug.commonSideEffects = info.adverseEffects.common }
+            if selection.includes("effects.serious") { drug.seriousSideEffects = info.adverseEffects.serious }
         }
         if selection.contains(.memorization) {
-            drug.mustKnow = info.memorization.mustKnow
-            drug.flashcards = info.memorization.flashcards.map { "\($0.question)\t\($0.answer)" }
-            drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic
-            drug.patientQuestions = info.memorization.flashcards.map(\.question)
+            if selection.includes("memory.mustKnow") { drug.mustKnow = info.memorization.mustKnow }
+            if selection.includes("memory.flashcards") { drug.flashcards = info.memorization.flashcards.map { "\($0.question)\t\($0.answer)" } }
+            let reviewItems = (info.memorization.reviewQuestions ?? []).filter { item in
+                selection.reviewQuestionPrompts?.contains(item.prompt) ?? true
+            }
+            if selection.includes("memory.reviewQuestions") { drug.generatedReviewQuestions = reviewItems.compactMap { item in
+                let prompt = item.prompt.trimmed
+                let answer = item.correctAnswer.trimmed
+                guard !prompt.isEmpty, !answer.isEmpty else { return nil }
+                var choices = item.choices.map(\.trimmed).filter { !$0.isEmpty }
+                if !choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) { choices.insert(answer, at: 0) }
+                choices = choices.reduce(into: [String]()) { values, value in
+                    if !values.contains(where: { $0.localizedCaseInsensitiveCompare(value) == .orderedSame }) { values.append(value) }
+                }
+                let questionType = QuestionType(rawValue: item.questionType) ?? .use
+                let interaction: PracticeInteraction
+                if questionType == .scientificName || questionType == .tradeName {
+                    interaction = .textEntry
+                    choices = []
+                } else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) {
+                    interaction = .trueFalse
+                } else {
+                    guard choices.count >= 3 else { return nil }
+                    interaction = .multipleChoice
+                    choices = Array(choices.prefix(4))
+                }
+                return GeneratedReviewQuestion(
+                    prompt: prompt,
+                    choices: choices,
+                    correctAnswer: answer,
+                    explanation: item.explanation.trimmed,
+                    questionType: questionType,
+                    interaction: interaction,
+                    relatedField: item.relatedField.trimmed,
+                    difficulty: item.difficulty.trimmed.isEmpty ? "medium" : item.difficulty.trimmed
+                )
+            }; drug.reviewQuestionsNeedRegeneration = false }
+            if selection.includes("memory.summary") { drug.oneLineSummaryArabic = info.memorization.oneLineSummaryArabic }
+            if selection.includes("memory.flashcards") { drug.patientQuestions = info.memorization.flashcards.map(\.question) }
         }
+        if let regimens = info.doseRegimens, !regimens.isEmpty { drug.doseRegimens = regimens }
         if selection.contains(.sourceQuality) || !selection.sections.isEmpty {
             drug.importedSourceName = info.sourceQuality.sourceName
             drug.sourceURL = info.sourceQuality.sourceURL
             drug.sourceNeedsReview = info.sourceQuality.needsReview
             drug.sourceMissingFields = info.sourceQuality.missingImportantFields
             drug.sourceQualityNotes = info.sourceQuality.notes
+            drug.sourceUpdatedAt = .now
+            let quality: DrugEvidenceQuality = info.sourceQuality.sourceName.localizedCaseInsensitiveContains("Altibbi") ? .altibbi : (info.sourceQuality.sourceName == "Generated with AI" ? .aiUnverified : .officialLabel)
+            let sourceID = IngredientIdentity.normalize(info.sourceQuality.sourceURL.isEmpty ? info.sourceQuality.sourceName : info.sourceQuality.sourceURL)
+            let values: [(String, String)] = [("identity", drug.scientificName), ("doses", drug.doseRegimensJSON), ("prodrug", drug.prodrugInfoJSON), ("elimination", drug.eliminationInfoJSON), ("safety", drug.warnings.joined(separator: "|"))]
+            drug.fieldEvidence = values.filter { !$0.1.trimmed.isEmpty }.map { field, value in
+                DrugFieldEvidence(fieldKey: field, sourceID: sourceID, sourceName: info.sourceQuality.sourceName, sourceURL: info.sourceQuality.sourceURL, quality: quality, retrievedAt: .now, valueFingerprint: String(value.hashValue))
+            }
         }
         if let imageData { drug.imageData = imageData }
         if let thumbnailData { drug.thumbnailData = thumbnailData }
+        DrugDataConsistencyNormalizer.normalize(drug)
+        drug.activeIngredients = [drug.scientificName].filter { !$0.trimmed.isEmpty }
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients, rxNormIDs: drug.rxNormConceptIDs)
         drug.recalculateConfidence()
+    }
+}
+
+enum DrugDataConsistencyNormalizer {
+    static func normalize(_ drug: Drug) {
+        drug.routes = drug.routes.map { route in route.localizedCaseInsensitiveCompare("Orak") == .orderedSame ? "Oral" : route }
+        if drug.halfLifeHours == nil, let value = normalizedValue(from: drug.halfLifeText, targetUnit: .hours) { drug.halfLifeHours = value }
+        if drug.onsetMinutes == nil, let value = normalizedValue(from: drug.onsetText, targetUnit: .minutes) { drug.onsetMinutes = value }
+        if drug.durationHours == nil, let value = normalizedValue(from: drug.durationText, targetUnit: .hours) { drug.durationHours = value }
+        if let value = drug.halfLifeHours, drug.halfLifeBand == .unknown {
+            drug.halfLifeBand = value < 6 ? .short : (value < 24 ? .medium : (value < 72 ? .long : .veryLong))
+        }
+        if let value = drug.onsetMinutes, drug.onsetBand == .unknown {
+            drug.onsetBand = value <= 60 ? .fast : (value <= 240 ? .moderate : .slow)
+        }
+        if let value = drug.durationHours, drug.durationBand == .unknown {
+            drug.durationBand = value < 8 ? .short : (value <= 24 ? .medium : .long)
+        }
+        if drug.timesPerDay == nil {
+            drug.timesPerDay = switch drug.dosingFrequency { case .onceDaily: 1; case .twiceDaily: 2; case .threeTimesDaily: 3; case .fourTimesDaily: 4; default: nil }
+        }
+    }
+
+    private enum Unit { case minutes, hours }
+    private static func normalizedValue(from text: String, targetUnit: Unit) -> Double? {
+        let pattern = #"\d+(?:\.\d+)?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern), !text.trimmed.isEmpty else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        let numbers = regex.matches(in: text, range: range).compactMap { match -> Double? in
+            guard let valueRange = Range(match.range, in: text) else { return nil }
+            return Double(text[valueRange])
+        }
+        guard !numbers.isEmpty else { return nil }
+        var value = numbers.prefix(2).reduce(0, +) / Double(min(numbers.count, 2))
+        let lower = text.lowercased()
+        switch targetUnit {
+        case .minutes:
+            if lower.contains("hour") || lower.contains(" hr") { value *= 60 }
+            else if lower.contains("day") { value *= 1_440 }
+        case .hours:
+            if lower.contains("minute") || lower.contains(" min") { value /= 60 }
+            else if lower.contains("day") { value *= 24 }
+        }
+        return value
     }
 }
 
@@ -1079,10 +1470,93 @@ actor MockDeepSeekDrugImportService: DrugImportFormattingService {
 
 final class DeepSeekKeyStore: @unchecked Sendable {
     static let shared = DeepSeekKeyStore()
-    private let service = "com.pharmashift.deepseek"
-    private let account = "api-key"
+    private let service: String
+    private let account: String
+    private let fallbackDirectory: URL
+    private let allowsKeychain: Bool
+    private let allowsProtectedFile: Bool
+    private let preferences: UserDefaults
 
-    func apiKey() -> String? {
+    enum StorageLocation: String, Equatable, Sendable {
+        case keychain
+        case protectedFile
+        case appPreferences
+
+        var label: String {
+            switch self {
+            case .keychain: "iOS Keychain"
+            case .protectedFile: "protected device storage"
+            case .appPreferences: "app preferences"
+            }
+        }
+    }
+
+    enum KeyStoreError: LocalizedError, Equatable {
+        case keychain(OSStatus)
+        case readBackFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .keychain(let status):
+                let message = SecCopyErrorMessageString(status, nil) as String? ?? "unknown Keychain error"
+                return "Keychain error \(status): \(message)"
+            case .readBackFailed:
+                return "Keychain saved the key but could not read it back."
+            }
+        }
+    }
+
+    init(
+        service: String = "com.renlyst.deepseek",
+        account: String = "api-key",
+        fallbackDirectory: URL? = nil,
+        allowsKeychain: Bool = true,
+        allowsProtectedFile: Bool = true,
+        preferences: UserDefaults = .standard
+    ) {
+        self.service = service
+        self.account = account
+        self.fallbackDirectory = fallbackDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        self.allowsKeychain = allowsKeychain
+        self.allowsProtectedFile = allowsProtectedFile
+        self.preferences = preferences
+    }
+
+    func apiKey() -> String? { try? storedKey()?.value }
+
+    func savedKeyStatusDescription() -> String {
+        do {
+            guard let stored = try storedKey(), !stored.value.trimmed.isEmpty else { return "No DeepSeek key saved" }
+            return "Saved key ••••\(stored.value.suffix(4)) via \(stored.location.label)"
+        } catch {
+            return "Saved key is unavailable: \(error.localizedDescription)"
+        }
+    }
+
+    private func storedKey() throws -> (value: String, location: StorageLocation)? {
+        var keychainError: Error?
+        var protectedFileError: Error?
+        if allowsKeychain {
+            do {
+                if let key = try storedAPIKey() { return (key, .keychain) }
+            } catch {
+                keychainError = error
+            }
+        }
+        if allowsProtectedFile {
+            do {
+                if let key = try storedFallbackKey() { return (key, .protectedFile) }
+            } catch {
+                protectedFileError = error
+            }
+        }
+        if let key = storedPreferencesKey() { return (key, .appPreferences) }
+        if let keychainError { throw keychainError }
+        if let protectedFileError { throw protectedFileError }
+        return nil
+    }
+
+    private func storedAPIKey() throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1091,38 +1565,122 @@ final class DeepSeekKeyStore: @unchecked Sendable {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeyStoreError.keychain(status) }
+        guard let data = item as? Data else { throw KeyStoreError.readBackFailed }
         return String(data: data, encoding: .utf8)
     }
 
-    func save(apiKey: String) throws {
+    @discardableResult
+    func save(apiKey: String) throws -> StorageLocation {
+        let apiKey = apiKey.normalizedAPIKey
+        guard !apiKey.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        if allowsKeychain {
+            do {
+                try saveToKeychain(apiKey)
+                deleteFallback()
+                return .keychain
+            } catch {
+                // Re-signed/sideloaded applications can lack a Keychain access group.
+            }
+        }
+        if allowsProtectedFile {
+            do {
+                try saveToFallback(apiKey)
+                guard try storedFallbackKey() == apiKey else { throw KeyStoreError.readBackFailed }
+                deletePreferences()
+                return .protectedFile
+            } catch {
+                // Some sideloaded installations do not permit protected-file writes.
+            }
+        }
+        saveToPreferences(apiKey)
+        guard storedPreferencesKey() == apiKey else { throw KeyStoreError.readBackFailed }
+        return .appPreferences
+    }
+
+    private func saveToKeychain(_ apiKey: String) throws {
         let data = Data(apiKey.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let update: [String: Any] = [kSecValueData as String: data]
-        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
-        if status == errSecItemNotFound {
-            var add = query
-            add[kSecValueData as String] = data
-            let addStatus = SecItemAdd(add as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw DrugImportError.invalidResponse }
-        } else if status != errSecSuccess {
-            throw DrugImportError.invalidResponse
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(add as CFDictionary, nil)
+        if addStatus == errSecDuplicateItem {
+            let update = [kSecValueData as String: data]
+            let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+            guard updateStatus == errSecSuccess else { throw KeyStoreError.keychain(updateStatus) }
+        } else if addStatus != errSecSuccess {
+            throw KeyStoreError.keychain(addStatus)
         }
+        guard try storedAPIKey() == apiKey else { throw KeyStoreError.readBackFailed }
+    }
+
+    func maskedKeyDescription() -> String? {
+        guard let stored = try? storedKey(), !stored.value.trimmed.isEmpty else { return nil }
+        return "Saved key ••••\(stored.value.suffix(4))"
+    }
+
+    func testConnection(session: URLSession = .shared) async throws -> String {
+        guard let stored = try storedKey(), !stored.value.trimmed.isEmpty else { throw DrugImportError.missingDeepSeekKey }
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/models")!)
+        request.setValue("Bearer \(stored.value)", forHTTPHeaderField: "Authorization")
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.deepSeekHTTPStatus(http.statusCode) }
+        return "DeepSeek connection is ready (\(stored.location.label))"
     }
 
     func delete() {
+        deleteFallback()
+        deletePreferences()
+        guard allowsKeychain else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            #if DEBUG
+            print("DeepSeek key delete failed: \(status)")
+            #endif
+        }
     }
+
+    private var fallbackURL: URL { fallbackDirectory.appendingPathComponent("deepseek-api-key.bin", isDirectory: false) }
+    private var preferenceKey: String { "DeepSeekKeyStore.\(service).\(account).v1" }
+
+    private func storedFallbackKey() throws -> String? {
+        let url = fallbackURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        guard let key = String(data: try Data(contentsOf: url), encoding: .utf8) else { throw KeyStoreError.readBackFailed }
+        return key
+    }
+
+    private func saveToFallback(_ apiKey: String) throws {
+        try FileManager.default.createDirectory(at: fallbackDirectory, withIntermediateDirectories: true)
+        var url = fallbackURL
+        try Data(apiKey.utf8).write(to: url, options: [.atomic, .completeFileProtection])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try url.setResourceValues(values)
+    }
+
+    private func deleteFallback() { try? FileManager.default.removeItem(at: fallbackURL) }
+
+    private func storedPreferencesKey() -> String? {
+        guard let key = preferences.string(forKey: preferenceKey), !key.trimmed.isEmpty else { return nil }
+        return key
+    }
+
+    private func saveToPreferences(_ apiKey: String) { preferences.set(apiKey, forKey: preferenceKey) }
+    private func deletePreferences() { preferences.removeObject(forKey: preferenceKey) }
 }
 
 private extension String {

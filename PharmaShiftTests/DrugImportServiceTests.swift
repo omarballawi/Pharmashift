@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import PharmaShift
 
@@ -49,6 +50,24 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertLessThanOrEqual(packet.warningsText.count, TrustedDrugSourcePacketExtractor.sectionLimit)
     }
 
+    func testConsistencyNormalizerDerivesBandsAndFixesOralTypo() {
+        let drug = Drug(scientificName: "Example")
+        drug.routes = ["Orak"]
+        drug.onsetText = "30–60 minutes"
+        drug.durationText = "6–8 hours"
+        drug.halfLifeText = "2 days"
+        drug.dosingFrequency = .threeTimesDaily
+        DrugDataConsistencyNormalizer.normalize(drug)
+        XCTAssertEqual(drug.routes, ["Oral"])
+        XCTAssertEqual(drug.onsetMinutes, 45)
+        XCTAssertEqual(drug.onsetBand, .fast)
+        XCTAssertEqual(drug.durationHours, 7)
+        XCTAssertEqual(drug.durationBand, .short)
+        XCTAssertEqual(drug.halfLifeHours, 48)
+        XCTAssertEqual(drug.halfLifeBand, .long)
+        XCTAssertEqual(drug.timesPerDay, 3)
+    }
+
     func testDeepSeekRequestUsesJSONModeAndNoImagePayload() throws {
         let request = try DeepSeekDrugImportService.makeRequest(apiKey: "secret", packet: mockPacket(), identity: confirmedIdentity())
         let body = try XCTUnwrap(request.httpBody)
@@ -58,6 +77,83 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertTrue(text.contains("\"thinking\":{\"type\":\"disabled\"}"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("base64"))
+    }
+
+    func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {
+        let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.")
+        let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
+        XCTAssertTrue(text.contains("\"max_tokens\":4500"))
+        XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
+        XCTAssertTrue(text.contains("Trusted source lookup did not return a usable page"))
+        XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
+    }
+
+    func testStandaloneAIDraftUsesConfirmedIdentityWithoutSourceRequirement() throws {
+        let info = try DrugImportValidator.parseAIDraft(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet")
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
+        XCTAssertEqual(info.sourceQuality.sourceName, "Generated with AI")
+        XCTAssertEqual(info.sourceQuality.sourceURL, "")
+        XCTAssertFalse(info.sourceQuality.needsReview)
+        XCTAssertTrue(info.sourceQuality.notes.contains("editable"))
+    }
+
+    func testKeyStoreFallsBackToProtectedDeviceStorage() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DeepSeekKeyStore(service: "test.\(UUID().uuidString)", fallbackDirectory: directory, allowsKeychain: false)
+        XCTAssertEqual(try store.save(apiKey: " sk-test\n123 "), .protectedFile)
+        XCTAssertEqual(store.apiKey(), "sk-test123")
+        XCTAssertTrue(store.savedKeyStatusDescription().contains("protected device storage"))
+        store.delete()
+        XCTAssertNil(store.apiKey())
+    }
+
+    func testKeyStoreFallsBackToAppPreferencesWhenOtherStoresAreUnavailable() throws {
+        let suiteName = "RenlystTests.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        let store = DeepSeekKeyStore(
+            service: "test.\(UUID().uuidString)",
+            fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+            allowsKeychain: false,
+            allowsProtectedFile: false,
+            preferences: preferences
+        )
+        XCTAssertEqual(try store.save(apiKey: "sk-test-preferences"), .appPreferences)
+        XCTAssertEqual(store.apiKey(), "sk-test-preferences")
+        XCTAssertTrue(store.savedKeyStatusDescription().contains("app preferences"))
+        store.delete()
+        XCTAssertNil(store.apiKey())
+    }
+
+    func testFormatterUsesPersistedPreferenceKeyForAuthorization() async throws {
+        let suiteName = "RenlystFormatterTests.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+        let store = DeepSeekKeyStore(
+            service: "formatter.\(UUID().uuidString)",
+            fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+            allowsKeychain: false,
+            allowsProtectedFile: false,
+            preferences: preferences
+        )
+        try store.save(apiKey: "ui-test-persisted-key")
+
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [["message": ["content": validJSON()]]]
+        ])
+        DeepSeekURLProtocolStub.requestHandler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ui-test-persisted-key")
+            let response = try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]))
+            return (response, responseBody)
+        }
+        defer { DeepSeekURLProtocolStub.requestHandler = nil }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DeepSeekURLProtocolStub.self]
+        let service = DeepSeekDrugImportService(session: URLSession(configuration: configuration), keyStore: store)
+        let info = try await service.format(packet: mockPacket(), identity: confirmedIdentity())
+        XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
     }
 
     func testValidatorOverridesIdentityAndFallsBackInvalidEnumsToUnknown() throws {
@@ -78,9 +174,24 @@ final class DrugImportServiceTests: XCTestCase {
         let info = try DrugImportValidator.parse(jsonString: json, confirmedIdentity: confirmedIdentity(), packet: packet)
         XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
         XCTAssertEqual(info.identity.tradeNames, ["Coversyl"])
+        XCTAssertEqual(info.identity.class, "Wrong")
         XCTAssertEqual(info.pharmacokinetics.halfLifeBand, .unknown)
         XCTAssertEqual(info.sourceQuality.sourceName, "DailyMed")
         XCTAssertTrue(info.sourceQuality.needsReview)
+    }
+
+    func testIdentityNeedsANameButNotClassOrProductDetails() {
+        XCTAssertTrue(UserConfirmedDrugIdentity(scientificName: "", tradeNames: ["Gasec"], strength: "", dosageForm: "", route: "", system: "", drugClass: "").isComplete)
+        XCTAssertFalse(UserConfirmedDrugIdentity(scientificName: "", tradeNames: [], strength: "20 mg", dosageForm: "Tablet", route: "Oral", system: "GI", drugClass: "").isComplete)
+    }
+
+    func testSearchRankerPrioritizesIngredientAndForm() {
+        let identity = UserConfirmedDrugIdentity(scientificName: "Omeprazole", tradeNames: ["Gasec"], strength: "20 mg", dosageForm: "Capsule", route: "Oral", system: "GI", drugClass: "")
+        let results = [
+            DrugSearchResult(id: "tablet", displayName: "Omeprazole tablet", activeIngredient: "Omeprazole", dosageForm: "Tablet", sourceName: "DailyMed"),
+            DrugSearchResult(id: "capsule", displayName: "Omeprazole capsule", activeIngredient: "Omeprazole", dosageForm: "Capsule", sourceName: "DailyMed")
+        ]
+        XCTAssertEqual(DrugSearchRanker.ranked(results, identity: identity).first?.id, "capsule")
     }
 
     func testValidatorRejectsMarkdownWrappedJSON() {
@@ -99,6 +210,17 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(drug.flashcards, ["Scientific?\tPerindopril arginine"])
         XCTAssertEqual(drug.importedSourceName, "DailyMed")
         XCTAssertTrue(drug.mechanism.isEmpty)
+    }
+
+    func testImportApplierRespectsFieldLevelExclusions() throws {
+        let drug = Drug(scientificName: "Keep me", tradeNames: ["Old trade"])
+        let info = try DrugImportValidator.parse(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packet: mockPacket())
+        let selection = ImportSelection(sections: [.identity, .safety], excludedFieldKeys: ["identity.trade", "safety.warnings"])
+        DrugImportApplier.apply(info, selection: selection, to: drug)
+        XCTAssertEqual(drug.scientificName, "Perindopril arginine")
+        XCTAssertEqual(drug.tradeNames, ["Old trade"])
+        XCTAssertTrue(drug.warnings.isEmpty)
+        XCTAssertFalse(drug.contraindications.isEmpty)
     }
 
     private func confirmedIdentity() -> UserConfirmedDrugIdentity {
@@ -124,4 +246,25 @@ final class DrugImportServiceTests: XCTestCase {
         }
         """
     }
+}
+
+private final class DeepSeekURLProtocolStub: URLProtocol {
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let handler = try XCTUnwrap(Self.requestHandler)
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }

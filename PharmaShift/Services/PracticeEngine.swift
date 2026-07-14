@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 
 enum PracticeMode: String, CaseIterable, Identifiable, Codable {
+    case smartSession = "Smart Session"
     case scientificToTrade = "Scientific → Trade"
     case tradeToScientific = "Trade → Scientific"
     case classExamples = "Class → Examples"
@@ -17,6 +18,7 @@ enum PracticeMode: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
     var icon: String {
         switch self {
+        case .smartSession: "sparkles.rectangle.stack.fill"
         case .scientificToTrade, .tradeToScientific: "arrow.left.arrow.right"
         case .classExamples: "square.grid.2x2"
         case .drugUse: "cross.vial"
@@ -31,6 +33,7 @@ enum PracticeMode: String, CaseIterable, Identifiable, Codable {
     }
     var detail: String {
         switch self {
+        case .smartSession: "A focused mix of due, weak, visual, safety, and counseling questions"
         case .scientificToTrade: "Choose or recall a trade name"
         case .tradeToScientific: "Choose or recall the scientific name"
         case .classExamples: "Match classes to drug examples"
@@ -55,9 +58,18 @@ enum PracticeGenerator {
             guard !cases.isEmpty else { return [] }
             return (0..<questionCount).map { index in
                 let item = cases[index % cases.count]
-                return PracticeQuestion(drugID: known.first(where: { $0.scientificName.localizedCaseInsensitiveCompare(item.relatedScientificName) == .orderedSame })?.id,
-                                        drugName: item.relatedScientificName, prompt: item.prompt, correctAnswer: item.expectedIdea,
-                                        explanation: item.expectedIdea, questionType: .casePractice, interaction: .recall, caseID: item.id)
+                let choices = multipleChoice(correct: item.expectedIdea, candidates: cases.map(\.expectedIdea), index: index)
+                return PracticeQuestion(
+                    drugID: known.first(where: { $0.scientificName.localizedCaseInsensitiveCompare(item.relatedScientificName) == .orderedSame })?.id,
+                    drugName: item.relatedScientificName,
+                    prompt: choices.isEmpty ? "True or false: \(item.expectedIdea)" : item.prompt,
+                    correctAnswer: choices.isEmpty ? "True" : item.expectedIdea,
+                    choices: choices.isEmpty ? ["True", "False"] : choices,
+                    explanation: item.expectedIdea,
+                    questionType: .casePractice,
+                    interaction: choices.isEmpty ? .trueFalse : .multipleChoice,
+                    caseID: item.id
+                )
             }
         }
         var eligible = known.filter { chapter == nil || $0.chapter == chapter }
@@ -70,6 +82,7 @@ enum PracticeGenerator {
             eligible = eligible.filter { $0.nextReviewDate < tomorrow }
         }
         if mode == .imageQuiz { eligible = eligible.filter { $0.imageData != nil } }
+        if mode == .classExamples { eligible = eligible.filter { !$0.drugClass.trimmed.isEmpty } }
         guard !eligible.isEmpty else { return [] }
         eligible.sort {
             if $0.masteryCount != $1.masteryCount { return $0.masteryCount < $1.masteryCount }
@@ -86,12 +99,15 @@ enum PracticeGenerator {
         if mode == .weakDrug {
             if !drug.masteryScientificName { resolvedMode = .tradeToScientific }
             else if !drug.masteryTradeName { resolvedMode = .scientificToTrade }
-            else if !drug.masteryClass { resolvedMode = .classExamples }
+            else if !drug.masteryClass && !drug.drugClass.trimmed.isEmpty { resolvedMode = .classExamples }
             else if !drug.masteryUse { resolvedMode = .drugUse }
             else if !drug.masteryWarning { resolvedMode = .drugWarning }
             else { resolvedMode = .counseling }
-        } else if mode == .systemSpecific || mode == .dueReview {
-            resolvedMode = [.tradeToScientific, .classExamples, .drugUse, .drugWarning, .counseling][index % 5]
+        } else if mode == .smartSession || mode == .systemSpecific || mode == .dueReview {
+            let rotation: [PracticeMode] = drug.imageData == nil
+                ? [.tradeToScientific, .classExamples, .drugUse, .drugWarning, .counseling]
+                : [.imageQuiz, .classExamples, .drugUse, .drugWarning, .counseling]
+            resolvedMode = rotation[index % rotation.count]
         } else { resolvedMode = mode }
 
         let prompt: String
@@ -127,13 +143,53 @@ enum PracticeGenerator {
                 answer = drug.counselingSentence.isEmpty ? "Draft and verify a counseling sentence with your pharmacist." : drug.counselingSentence
             }
             questionType = .counseling; candidates = []; image = nil
-        case .weakDrug, .dueReview, .systemSpecific, .casePractice:
-            fatalError("Resolved above")
+        case .smartSession, .weakDrug, .dueReview, .systemSpecific, .casePractice:
+            prompt = "Which fact belongs to \(drug.displayName)?"
+            answer = drug.indications.first ?? drug.drugClass
+            questionType = .use
+            candidates = all.compactMap(\.indications.first)
+            image = nil
+        }
+        if resolvedMode != .imageQuiz && (questionType == .scientificName || questionType == .tradeName) {
+            return PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: prompt,
+                correctAnswer: answer,
+                explanation: answer,
+                questionType: questionType,
+                interaction: .textEntry,
+                imageData: image
+            )
         }
         let choices = multipleChoice(correct: answer, candidates: candidates, index: index)
-        return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: prompt, correctAnswer: answer,
-                                choices: choices, explanation: answer, questionType: questionType,
-                                interaction: choices.isEmpty ? .recall : .multipleChoice, imageData: image)
+        return PracticeQuestion(
+            drugID: drug.id,
+            drugName: drug.displayName,
+            prompt: choices.isEmpty ? "True or false: \(answer)" : prompt,
+            correctAnswer: choices.isEmpty ? "True" : answer,
+            choices: choices.isEmpty ? ["True", "False"] : choices,
+            explanation: answer,
+            questionType: questionType,
+            interaction: choices.isEmpty ? .trueFalse : .multipleChoice,
+            imageData: image
+        )
+    }
+
+    static func generatedReview(for drug: Drug) -> [PracticeQuestion] {
+        Array(drug.generatedReviewQuestions.prefix(8)).map { item in
+            PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: item.prompt,
+                correctAnswer: item.correctAnswer,
+                choices: item.choices,
+                explanation: item.explanation,
+                questionType: item.questionType,
+                interaction: item.interaction,
+                imageData: item.questionType == .scientificName ? drug.imageData : nil
+            )
+        }
     }
 
     private static func multipleChoice(correct: String, candidates: [String], index: Int) -> [String] {
@@ -196,6 +252,13 @@ enum LearningProgressService {
         award("First Five", when: profile.completedQuestions >= 5, profile: profile)
         award("Three Day Streak", when: profile.currentStreak >= 3, profile: profile)
         award("Practice 25", when: profile.completedQuestions >= 25, profile: profile)
+        let logs = try context.fetch(FetchDescriptor<ReviewLog>())
+        award("Recovered 10 forgotten facts", when: logs.filter { $0.wasCorrect && $0.scoreAfter > $0.scoreBefore }.count >= 10, profile: profile)
+        award("Completed 7 counseling practices", when: logs.filter { $0.wasCorrect && $0.questionType == .counseling }.count >= 7, profile: profile)
+        award("Solved 5 cases without hints", when: logs.filter { $0.wasCorrect && $0.questionType == .casePractice }.count >= 5, profile: profile)
+        let drugs = try context.fetch(FetchDescriptor<Drug>()).filter { !$0.isUnknown && !$0.drugClass.trimmed.isEmpty }
+        let masteredClass = Dictionary(grouping: drugs, by: { $0.drugClass.lowercased() }).values.contains { !$0.isEmpty && $0.allSatisfy(\.isMastered) }
+        award("Mastered an entire class", when: masteredClass, profile: profile)
         try context.save()
         return profile
     }

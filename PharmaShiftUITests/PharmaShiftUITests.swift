@@ -1,6 +1,13 @@
 import XCTest
 
 final class PharmaShiftUITests: XCTestCase {
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication, maximumSwipes: Int = 6) {
+        for _ in 0..<maximumSwipes {
+            if element.isHittable { return }
+            app.swipeUp()
+        }
+    }
+
     func testHomeDashboardAndFastCaptureAreReachable() {
         let app = XCUIApplication()
         app.launch()
@@ -14,7 +21,7 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.buttons["capture.saveOpen"].isEnabled)
     }
 
-    func testContinuousDrugCardScrollsThroughPharmacologyAndSafety() {
+    func testFivePageDrugCardNavigatesThroughLearnAndSafety() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["Add"].tap()
@@ -28,10 +35,29 @@ final class PharmaShiftUITests: XCTestCase {
         save.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.identity"].waitForExistence(timeout: 5))
-        for _ in 0..<4 where !app.descendants(matching: .any)["drugCard.pharmacology"].exists { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].exists)
-        for _ in 0..<4 where !app.descendants(matching: .any)["drugCard.safety"].exists { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].exists)
+        app.buttons["Learn"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].waitForExistence(timeout: 5))
+        app.buttons["Safety"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Source"].exists)
+    }
+
+    func testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-mockDrugImport")
+        app.launch()
+        app.tabBars.buttons["Add"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
+        let generate = app.buttons["capture.generateAI"]
+        XCTAssertTrue(generate.waitForExistence(timeout: 15))
+        generate.tap()
+        let scientific = app.textFields["trustedImport.scientificName"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 10))
+        scientific.tap(); scientific.typeText("Metformin")
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["DailyMed"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
     }
 
@@ -60,38 +86,96 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.buttons["backup.import"].exists)
     }
 
-    func testImportChooserAndPreviewUseSelectiveFields() {
+    func testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch() {
+        let app = XCUIApplication()
+        app.launch()
+        openDeepSeekSettings(in: app)
+
+        let clear = app.buttons["deepSeek.clearKey"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.tap()
+        dismissDeepSeekAlert(in: app)
+
+        let field = app.secureTextFields["deepSeek.keyField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("ui-test-key-1234")
+        app.buttons["deepSeek.saveKey"].tap()
+
+        let alert = app.alerts["DeepSeek key"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Saved key")).firstMatch.exists)
+        alert.buttons["OK"].tap()
+        XCTAssertTrue(app.staticTexts["deepSeek.keyStatus"].label.contains("1234"))
+
+        app.terminate()
+        app.launch()
+        openDeepSeekSettings(in: app)
+        let status = app.staticTexts["deepSeek.keyStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.label.contains("1234"))
+    }
+
+    private func openDeepSeekSettings(in app: XCUIApplication) {
+        app.tabBars.buttons["More"].tap()
+        if !app.descendants(matching: .any)["more.dashboard"].waitForExistence(timeout: 2) {
+            app.tabBars.buttons["More"].tap()
+        }
+        let preferences = app.buttons["Practice preferences"]
+        XCTAssertTrue(preferences.waitForExistence(timeout: 5))
+        preferences.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["deepSeek.settings"].waitForExistence(timeout: 5))
+    }
+
+    private func dismissDeepSeekAlert(in app: XCUIApplication) {
+        let alert = app.alerts["DeepSeek key"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["OK"].tap()
+    }
+
+    func testTrustedImportReachesSourceChooser() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-mockDrugImport")
+        app.launchArguments.append("-mockDrugImportSkipPhoto")
+        app.launch()
+        app.tabBars.buttons["Add"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
+        let importButton = app.buttons["capture.trustedImport"]
+        XCTAssertTrue(importButton.waitForExistence(timeout: 10))
+        importButton.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 10))
+        let scientific = app.textFields["trustedImport.scientificName"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
+        scientific.tap()
+        scientific.typeText("Mock Drug")
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
+        let formulation = app.buttons["trustedImport.result.mock-label"]
+        XCTAssertTrue(formulation.waitForExistence(timeout: 5))
+    }
+
+    func testGeneratedPreviewAllowsSelectiveFields() {
         let app = XCUIApplication()
         app.launchArguments.append("-mockDrugImport")
         app.launch()
         app.tabBars.buttons["Add"].tap()
-        let scientific = app.textFields["capture.scientificName"]
-        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture.screen"].waitForExistence(timeout: 15))
+        app.buttons["capture.generateAI"].tap()
+        let scientific = app.textFields["trustedImport.scientificName"]
+        XCTAssertTrue(scientific.waitForExistence(timeout: 10))
         scientific.tap()
         scientific.typeText("Mock Drug")
-        app.swipeUp()
-        app.buttons["capture.saveOpen"].tap()
-        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5))
-        app.buttons["Edit"].tap()
-        let importButton = app.buttons["drugEditor.import"]
-        XCTAssertTrue(importButton.waitForExistence(timeout: 5))
-        importButton.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.confirm"].waitForExistence(timeout: 5))
-        app.swipeUp()
-        let search = app.buttons["trustedImport.search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        XCTAssertTrue(search.isEnabled)
-        search.tap()
-        let formulation = app.buttons["trustedImport.result.mock-label"]
-        XCTAssertTrue(formulation.waitForExistence(timeout: 5))
-        formulation.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.switches["trustedImport.section.Identity"].value as? String, "0")
-        XCTAssertEqual(app.switches["trustedImport.section.Uses & mechanism"].value as? String, "1")
-        let apply = app.descendants(matching: .any)["trustedImport.apply"]
-        for _ in 0..<5 where !apply.exists { app.swipeUp() }
-        XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        XCTAssertTrue(apply.isEnabled)
+        if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
+        app.buttons["trustedImport.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
+        let scientificField = app.switches["import.field.identity.scientific"]
+        XCTAssertEqual(scientificField.value as? String, "1")
+        scrollToHittable(scientificField, in: app)
+        XCTAssertTrue(scientificField.isHittable)
+        scientificField.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        expectation(for: NSPredicate(format: "value == '0'"), evaluatedWith: scientificField)
+        waitForExpectations(timeout: 5)
     }
 
     func testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress() {

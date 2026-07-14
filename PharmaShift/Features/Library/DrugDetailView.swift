@@ -1,5 +1,7 @@
 import SwiftData
 import SwiftUI
+import AVFoundation
+import Speech
 
 private enum DrugCardAnchor: String, CaseIterable, Identifiable {
     case identity = "Identity"
@@ -18,7 +20,37 @@ private enum DrugCardAnchor: String, CaseIterable, Identifiable {
 private enum DrugDetailSheet: String, Identifiable {
     case editor
     case review
+    case mechanism
+    case pkTimeline
+    case safetySort
+    case counselingBuilder
+    case voiceCounseling
+    case atomicNotes
+    case regenerateReview
     var id: String { rawValue }
+}
+
+private enum DrugCardPage: String, CaseIterable, Identifiable {
+    case overview = "Overview"
+    case brands = "Brands"
+    case doses = "Doses"
+    case learn = "Learn"
+    case safety = "Safety"
+    case counsel = "Counsel"
+    case links = "Notes & Links"
+
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .overview: "sparkles"
+        case .brands: "shippingbox.fill"
+        case .doses: "function"
+        case .learn: "book.pages.fill"
+        case .safety: "shield.fill"
+        case .counsel: "quote.bubble.fill"
+        case .links: "point.3.connected.trianglepath.dotted"
+        }
+    }
 }
 
 struct DrugDetailView: View {
@@ -26,29 +58,28 @@ struct DrugDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppTheme.self) private var theme
     @Environment(ReviewScheduler.self) private var scheduler
+    @Query private var relationships: [DrugRelationship]
     let drug: Drug
     @State private var sheet: DrugDetailSheet?
     @State private var expandedFields: Set<String> = []
+    @State private var selectedPage: DrugCardPage = .overview
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    hero
-                    jumpChips(proxy)
-                    identityCard.id(DrugCardAnchor.identity).accessibilityIdentifier("drugCard.identity")
-                    usesCard.id(DrugCardAnchor.uses)
-                    pharmacologyCard.id(DrugCardAnchor.pharmacology).accessibilityIdentifier("drugCard.pharmacology")
-                    safetyCard.id(DrugCardAnchor.safety).accessibilityIdentifier("drugCard.safety")
-                    counselingCard.id(DrugCardAnchor.counseling)
-                    arabicCard.id(DrugCardAnchor.arabic)
-                    notesCard.id(DrugCardAnchor.notes)
-                    masteryCard.id(DrugCardAnchor.mastery)
-                    actions.id(DrugCardAnchor.review)
+        VStack(spacing: 0) {
+            pagePicker
+            TabView(selection: $selectedPage) {
+                ForEach(DrugCardPage.allCases) { page in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            pageContent(page)
+                        }
+                        .padding()
+                    }
+                    .background(theme.background)
+                    .tag(page)
                 }
-                .padding()
             }
-            .background(theme.background)
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationTitle("Drug Card")
         .navigationBarTitleDisplayMode(.inline)
@@ -58,8 +89,173 @@ struct DrugDetailView: View {
                 switch destination {
                 case .editor: DrugEditorView(drug: drug)
                 case .review: PracticeSessionView(initialDrug: drug)
+                case .mechanism: MechanismBuilderView(drug: drug)
+                case .pkTimeline: PKTimelineChallengeView(drug: drug)
+                case .safetySort: SafetySortView(drug: drug)
+                case .counselingBuilder: CounselingBuilderView(drug: drug)
+                case .voiceCounseling: VoiceCounselingView(drug: drug)
+                case .atomicNotes: AtomicNotesView(drug: drug)
+                case .regenerateReview: DrugImportView(drug: drug, startsInAIMode: true)
                 }
             }
+        }
+    }
+
+    private var pagePicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                ForEach(DrugCardPage.allCases) { page in
+                    Button {
+                        withAnimation(reduceMotion ? nil : .snappy) { selectedPage = page }
+                    } label: {
+                        Label(page.rawValue, systemImage: page.icon)
+                            .font(.caption.weight(.semibold)).padding(.horizontal, 11).frame(minHeight: 38)
+                            .background(selectedPage == page ? theme.tint : Color.secondary.opacity(0.10), in: Capsule())
+                            .foregroundStyle(selectedPage == page ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal).padding(.vertical, 8)
+        }
+        .background(.bar)
+        .accessibilityLabel("Drug Card pages")
+    }
+
+    @ViewBuilder private func pageContent(_ page: DrugCardPage) -> some View {
+        switch page {
+        case .overview:
+            hero
+            mustKnowCard
+            identityCard.accessibilityIdentifier("drugCard.identity")
+            masteryCard
+            actions
+        case .brands:
+            brandsCard
+        case .doses:
+            DoseRegimensView(drug: drug)
+        case .learn:
+            usesCard
+            pharmacologyCard.accessibilityIdentifier("drugCard.pharmacology")
+            interactiveLessonButton("Build the mechanism", icon: "arrow.down.square.fill", destination: .mechanism)
+            interactiveLessonButton("Explore the PK timeline", icon: "waveform.path.ecg.rectangle.fill", destination: .pkTimeline)
+        case .safety:
+            safetyCard.accessibilityIdentifier("drugCard.safety")
+            interactiveLessonButton("Sort safety statements", icon: "rectangle.3.group.bubble.fill", destination: .safetySort)
+        case .counsel:
+            counselingCard
+            interactiveLessonButton("Build the counseling message", icon: "text.bubble.fill", destination: .counselingBuilder)
+            interactiveLessonButton("Counsel this patient", icon: "waveform.badge.mic", destination: .voiceCounseling)
+            arabicCard
+            actions
+        case .links:
+            notesCard
+            interactiveLessonButton("Add a linked note", icon: "note.text.badge.plus", destination: .atomicNotes)
+            connectedKnowledgeCard
+            relationshipCard
+            provenanceDetails
+        }
+    }
+
+    private var brandsCard: some View {
+        card("Active ingredient & products", icon: "shippingbox.fill") {
+            value("Canonical ingredient", drug.ingredientNames.joined(separator: " + "))
+            if drug.products.isEmpty {
+                Text("No product variants saved yet.").foregroundStyle(.secondary)
+                Button { sheet = .regenerateReview } label: { Label("Add a brand or package", systemImage: "plus") }
+            } else {
+                ForEach(drug.products.sorted(by: { $0.tradeName < $1.tradeName })) { product in
+                    NavigationLink {
+                        ProductLeafletEditorView(product: product, drug: drug)
+                    } label: {
+                        HStack(spacing: 12) {
+                            if let data = product.thumbnailData ?? product.imageData, let image = UIImage(data: data) {
+                                Image(uiImage: image).resizable().scaledToFill().frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 12))
+                            } else {
+                                Image(systemName: "pills.fill").frame(width: 58, height: 58).background(theme.softTint, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
+                                Text([product.manufacturer, product.strength, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary)
+                                Text(product.leafletText.trimmed.isEmpty ? "Leaflet not added" : "Leaflet saved").font(.caption2).foregroundStyle(product.leafletText.trimmed.isEmpty ? .orange : .green)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.secondary)
+                        }
+                        .padding(10).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var relationshipCard: some View {
+        card("Library interactions", icon: "link.badge.plus") {
+            let linked = relationships.filter { $0.sourceDrug?.id == drug.id || $0.targetDrug?.id == drug.id }
+            if linked.isEmpty {
+                Text("No sourced library relationship has been found yet. Use Refresh links in the Library.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(linked) { relationship in
+                    if let target = relationship.sourceDrug?.id == drug.id ? relationship.targetDrug : relationship.sourceDrug {
+                        NavigationLink {
+                            DrugDetailView(drug: target)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack { Text(target.displayName).font(.headline); Spacer(); Text(relationship.severity.rawValue).font(.caption.bold()) }
+                                Text(relationship.summary).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            .padding(11).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func interactiveLessonButton(_ title: String, icon: String, destination: DrugDetailSheet) -> some View {
+        Button { sheet = destination } label: {
+            HStack {
+                Image(systemName: icon).font(.title3).foregroundStyle(theme.tint)
+                Text(title).font(.headline)
+                Spacer()
+                Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.secondary)
+            }
+            .padding(15).frame(minHeight: 56)
+            .background(theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var mustKnowCard: some View {
+        card("3 things to remember", icon: "lightbulb.max.fill") {
+            let facts = Array(drug.mustKnow.filter { !$0.trimmed.isEmpty }.prefix(3))
+            if facts.isEmpty {
+                Text("Add three must-know facts to make every review focused.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(index + 1)").font(.caption.bold()).foregroundStyle(.white)
+                            .frame(width: 25, height: 25).background(theme.tint, in: Circle())
+                        Text(fact).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
+    private var connectedKnowledgeCard: some View {
+        card("Connected knowledge", icon: "point.3.connected.trianglepath.dotted") {
+            LocalDrugGraphView(drug: drug)
+        }
+    }
+
+    private var provenanceDetails: some View {
+        card("Card history", icon: "clock.arrow.circlepath") {
+            value("Created", drug.dateAdded.formatted(date: .abbreviated, time: .omitted))
+            if let reviewed = drug.lastReviewed { value("Last reviewed", reviewed.formatted(date: .abbreviated, time: .shortened)) }
+            value("Generated by", drug.importedSourceName.trimmed.isEmpty ? "Manual card" : drug.importedSourceName)
         }
     }
 
@@ -168,15 +364,15 @@ struct DrugDetailView: View {
             PharmacologyMeter(title: "Onset", icon: "hare.fill", scale: .onset, value: drug.onsetMinutes, fallback: drug.onsetBand.rawValue, detail: drug.onsetText)
             PharmacologyMeter(title: "Duration", icon: "timer", scale: .duration, value: drug.durationHours, fallback: drug.durationBand.rawValue, detail: drug.durationText)
             DosingFrequencyMeter(frequency: drug.dosingFrequency, timesPerDay: drug.timesPerDay)
-            PharmacologyStatusCard(title: "Prodrug", value: drug.prodrugStatus.rawValue, detail: "", icon: "arrow.triangle.2.circlepath")
-            PharmacologyStatusCard(title: "Excretion", value: drug.excretionRoute.rawValue, detail: drug.excretionNotes, icon: "drop.triangle.fill")
+            PharmacologyStatusCard(title: "Tablet/capsule status", value: drug.prodrugInfo.classification.rawValue, detail: [drug.prodrugInfo.administeredCompound, drug.prodrugInfo.activeCompound.trimmed.isEmpty ? "" : "Becomes: \(drug.prodrugInfo.activeCompound)", drug.prodrugInfo.activationPathway, drug.prodrugInfo.explanation].filter { !$0.trimmed.isEmpty }.joined(separator: "\n"), icon: "arrow.triangle.2.circlepath")
+            PharmacologyStatusCard(title: "How the body removes it", value: drug.eliminationInfo.dominantPathway.rawValue, detail: [drug.eliminationInfo.summary, drug.eliminationInfo.routes.map { [$0.pathway.rawValue, $0.percentage.map { "\($0.formatted())%" } ?? "", $0.detail].filter { !$0.trimmed.isEmpty }.joined(separator: " — ") }.joined(separator: "\n")].filter { !$0.trimmed.isEmpty }.joined(separator: "\n"), icon: "drop.triangle.fill")
             arabicValue("PK memory line", drug.pkMemoryLineArabic)
         }
     }
 
     private var safetyCard: some View {
         card("Safety", icon: "shield.fill") {
-            SafetyRadar(values: safetyRadarValues)
+            knowledgeCompletenessMap
             if !drug.safetyFlags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -195,6 +391,30 @@ struct DrugDetailView: View {
             safetyValue("Renal caution", text: drug.renalCaution, severity: drug.renalSeverityRaw)
             safetyValue("Hepatic caution", text: drug.hepaticCaution, severity: drug.hepaticSeverityRaw)
             safetyValue("Pregnancy caution", text: drug.pregnancyCaution, severity: drug.pregnancySeverityRaw)
+        }
+    }
+
+    private var knowledgeCompletenessMap: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Knowledge completeness").font(.subheadline.bold())
+            completenessRow("Identity", complete: !drug.scientificName.trimmed.isEmpty && !drug.drugClass.trimmed.isEmpty)
+            completenessRow("Uses", complete: !drug.indications.isEmpty)
+            completenessRow("PK", complete: !drug.halfLifeText.trimmed.isEmpty || drug.halfLifeHours != nil)
+            completenessRow("Safety", complete: !drug.warnings.isEmpty || !drug.contraindications.isEmpty)
+            completenessRow("Counseling", complete: !drug.counselingSentence.trimmed.isEmpty)
+            completenessRow("Interactions", complete: !drug.interactions.isEmpty)
+            completenessRow("Image recognition", complete: !drug.packageImages.isEmpty)
+        }
+        .padding(13).background(theme.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func completenessRow(_ label: String, complete: Bool) -> some View {
+        HStack {
+            Image(systemName: complete ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(complete ? theme.tint : .secondary)
+            Text(label).font(.caption.weight(.semibold))
+            Spacer()
+            Text(complete ? "Ready" : "Add info").font(.caption2).foregroundStyle(.secondary)
         }
     }
 
@@ -222,13 +442,34 @@ struct DrugDetailView: View {
     }
 
     private var notesCard: some View {
-        card("Personal notes", icon: "note.text") { expandableValue("My notes", drug.notes) }
+        card("Personal notes", icon: "note.text") {
+            expandableValue("My notes", drug.notes)
+            ForEach(drug.atomicNotes.prefix(4)) { note in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack { Text(note.kind.rawValue).font(.caption.bold()).foregroundStyle(theme.tint); Spacer(); Text(note.linkedField).font(.caption2).foregroundStyle(.secondary) }
+                    Text(note.text).font(.subheadline)
+                }
+                .padding(10).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
     }
 
     private var masteryCard: some View {
         card("Drug Mastery", icon: "sparkles") {
             HStack { Text("Six mastery checks").font(.subheadline); Spacer(); Text("\(drug.masteryCount)/6").font(.headline.monospacedDigit()) }
             ProgressView(value: Double(drug.masteryCount), total: 6).tint(drug.isMastered ? .green : theme.tint)
+            VStack(spacing: 8) {
+                ForEach(drug.memoryItems) { item in
+                    HStack {
+                        Text(item.field.rawValue).font(.caption.weight(.semibold))
+                        Spacer()
+                        Text(item.strengthLabel).font(.caption2.bold())
+                            .foregroundStyle(memoryColor(item.strengthLabel))
+                            .padding(.horizontal, 7).padding(.vertical, 4)
+                            .background(memoryColor(item.strengthLabel).opacity(0.12), in: Capsule())
+                    }
+                }
+            }
             expandableValue("Must know", drug.mustKnow.joined(separator: "\n"))
             if !flashcardPairs.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -249,6 +490,12 @@ struct DrugDetailView: View {
 
     private var actions: some View {
         card("Review actions", icon: "brain.head.profile") {
+            if drug.reviewQuestionsNeedRegeneration {
+                Label("Questions need regeneration because linked card facts changed.", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .font(.caption).foregroundStyle(.orange)
+                Button { sheet = .regenerateReview } label: { Label("Regenerate with AI", systemImage: "sparkles") }
+                    .buttonStyle(.bordered)
+            }
             Button { sheet = .review } label: {
                 Label("Start review / ابدأ المراجعة", systemImage: "brain.head.profile").frame(maxWidth: .infinity, minHeight: 48)
             }
@@ -304,16 +551,18 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func value(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Text(text).frame(maxWidth: .infinity, alignment: .leading)
-            }
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if text.trimmed.isEmpty {
+                HStack { Text("Not found").foregroundStyle(.secondary); Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) }
+            } else { Text(text).frame(maxWidth: .infinity, alignment: .leading) }
         }
     }
 
     @ViewBuilder private func expandableValue(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
+        if text.trimmed.isEmpty {
+            HStack { VStack(alignment: .leading) { Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary); Text("Not found").foregroundStyle(.secondary) }; Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) }
+        } else {
             let isExpanded = expandedFields.contains(label)
             VStack(alignment: .leading, spacing: 5) {
                 Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -331,7 +580,9 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func arabicValue(_ label: String, _ text: String) -> some View {
-        if !text.trimmed.isEmpty {
+        if text.trimmed.isEmpty {
+            HStack { Text("Not found").foregroundStyle(.secondary); Spacer(); Text(label).font(.caption.weight(.semibold)); Button("Search") { sheet = .regenerateReview }.font(.caption.bold()) }
+        } else {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Text(text).frame(maxWidth: .infinity, alignment: .trailing)
@@ -341,22 +592,516 @@ struct DrugDetailView: View {
     }
 
     @ViewBuilder private func safetyValue(_ title: String, text: String, severity: String) -> some View {
-        if !text.trimmed.isEmpty || severity != SafetySeverity.unknown.rawValue {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text(title).font(.subheadline.bold())
-                    Spacer()
-                    Text(severity).font(.caption2.bold()).padding(.horizontal, 7).padding(.vertical, 4)
-                        .background(severityColor(severity).opacity(0.16), in: Capsule()).foregroundStyle(severityColor(severity))
-                }
-                if !text.trimmed.isEmpty { Text(text).font(.subheadline) }
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(title).font(.subheadline.bold())
+                Spacer()
+                Text(severity).font(.caption2.bold()).padding(.horizontal, 7).padding(.vertical, 4)
+                    .background(severityColor(severity).opacity(0.16), in: Capsule()).foregroundStyle(severityColor(severity))
             }
-            .padding(11).background(severityColor(severity).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+            if text.trimmed.isEmpty { HStack { Text("Not found").font(.subheadline).foregroundStyle(.secondary); Spacer(); Button("Search this field") { sheet = .regenerateReview }.font(.caption.bold()) } }
+            else { Text(text).font(.subheadline) }
         }
+        .padding(11).background(severityColor(severity).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func severity(_ rawValue: String) -> SafetySeverity { SafetySeverity(rawValue: rawValue) ?? .unknown }
+    private func memoryColor(_ label: String) -> Color {
+        switch label { case "Strong": .green; case "Medium": .orange; case "Weak": .red; default: .secondary }
+    }
     private func severityColor(_ rawValue: String) -> Color {
         switch severity(rawValue) { case .low: .green; case .medium: .orange; case .high: .red; case .unknown: .secondary }
     }
+}
+
+private struct DoseRegimensView: View {
+    @Environment(AppTheme.self) private var theme
+    let drug: Drug
+    @State private var selectedRegimenID = ""
+    @State private var ageYears = 5
+    @State private var ageExtraMonths = 0
+    @State private var sex: PatientSexAtBirth = .female
+    @State private var measuredWeight = ""
+    @State private var height = ""
+    @State private var renalFunction = "Normal"
+    @State private var hepaticFunction = "Normal"
+    @State private var isPregnant = false
+    @State private var result: DoseCalculationResult?
+    @State private var errorMessage = ""
+
+    private var selectedRegimen: DoseRegimen? {
+        drug.doseRegimens.first(where: { $0.id == selectedRegimenID }) ?? drug.doseRegimens.first
+    }
+    private var ageMonths: Int { ageYears * 12 + ageExtraMonths }
+    private var estimatedWeight: Double? { PediatricWeightReference.medianWeightKG(ageMonths: ageMonths, sex: sex) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Standard regimens", systemImage: "list.bullet.clipboard.fill").font(.title3.bold()).foregroundStyle(theme.tint)
+                if drug.doseRegimens.isEmpty {
+                    Text("Not found").foregroundStyle(.secondary)
+                    Text("Refresh this card from Altibbi, an official label, or a pasted product leaflet to add indication- and age-specific regimens.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(drug.doseRegimens) { regimen in
+                        Button { selectedRegimenID = regimen.id; result = nil } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack { Text(regimen.indication).font(.headline); Spacer(); Text(regimen.population.rawValue).font(.caption.bold()) }
+                                Text(regimenSummary(regimen)).font(.subheadline).foregroundStyle(.secondary)
+                                if !regimen.durationText.trimmed.isEmpty { Text(regimen.durationText).font(.caption).foregroundStyle(.secondary) }
+                            }
+                            .padding(11).background(selectedRegimen?.id == regimen.id ? theme.softTint : Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20))
+
+            VStack(alignment: .leading, spacing: 13) {
+                Label("Educational dose calculator", systemImage: "function").font(.title3.bold()).foregroundStyle(theme.tint)
+                Text("No patient details are saved. Always verify the current clinical reference and product.").font(.caption).foregroundStyle(.secondary)
+                Stepper("Age: \(ageYears) years", value: $ageYears, in: 0...120)
+                Stepper("Extra months: \(ageExtraMonths)", value: $ageExtraMonths, in: 0...11)
+                Picker("Sex at birth", selection: $sex) { ForEach(PatientSexAtBirth.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                TextField("Measured weight kg (optional through age 10)", text: $measuredWeight).keyboardType(.decimalPad)
+                if measuredWeight.trimmed.isEmpty {
+                    if let estimatedWeight {
+                        LabeledContent("WHO median estimate", value: "\(estimatedWeight.formatted(.number.precision(.fractionLength(1)))) kg")
+                        Link("WHO weight-for-age source", destination: URL(string: PediatricWeightReference.sourceURL)!).font(.caption)
+                    } else {
+                        Label("Enter a measured weight. WHO weight-for-age estimates stop after age 10.", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    }
+                }
+                if selectedRegimen?.formula == .mgPerSquareMeter { TextField("Height cm", text: $height).keyboardType(.decimalPad) }
+                Picker("Kidney function", selection: $renalFunction) { Text("Normal").tag("Normal"); Text("Reduced / unknown").tag("Reduced / unknown") }
+                Picker("Liver function", selection: $hepaticFunction) { Text("Normal").tag("Normal"); Text("Reduced / unknown").tag("Reduced / unknown") }
+                Toggle("Pregnant", isOn: $isPregnant).disabled(sex == .male)
+                Button { calculate() } label: { Label("Calculate from selected regimen", systemImage: "equal.circle.fill").frame(maxWidth: .infinity, minHeight: 48) }
+                    .buttonStyle(.borderedProminent).disabled(selectedRegimen == nil)
+                if !errorMessage.isEmpty { Text(errorMessage).font(.subheadline).foregroundStyle(.orange) }
+                if let result {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("\(result.dosePerAdministrationMG.formatted(.number.precision(.fractionLength(0...2)))) mg per administration").font(.title3.bold())
+                        Text("\(result.totalDailyDoseMG.formatted(.number.precision(.fractionLength(0...2)))) mg/day in \(result.administrationsPerDay) dose(s)").font(.headline)
+                        Text(result.equation).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        if result.appliedMaximum { Label("Maximum dose cap applied", systemImage: "arrow.down.to.line.compact").foregroundStyle(.orange) }
+                        ForEach(result.cautions, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
+                    }.padding(12).background(theme.softTint, in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+            .padding(16).background(theme.card, in: RoundedRectangle(cornerRadius: 20))
+        }
+    }
+
+    private func calculate() {
+        guard let regimen = selectedRegimen else { return }
+        let measured = Double(measuredWeight.replacingOccurrences(of: ",", with: "."))
+        let input = DosePatientInput(ageMonths: ageMonths, sexAtBirth: sex, measuredWeightKG: measured, estimatedWeightKG: measured == nil ? estimatedWeight : nil, heightCM: Double(height.replacingOccurrences(of: ",", with: ".")), renalFunction: renalFunction, hepaticFunction: hepaticFunction, isPregnant: isPregnant)
+        do { result = try DoseCalculator.calculate(regimen: regimen, input: input); errorMessage = "" }
+        catch { result = nil; errorMessage = error.localizedDescription }
+    }
+
+    private func regimenSummary(_ regimen: DoseRegimen) -> String {
+        switch regimen.formula {
+        case .fixed: return "\(regimen.fixedDoseMG?.formatted() ?? "—") mg • \(regimen.route)"
+        case .mgPerKgPerDose: return "\(regimen.amountPerKG?.formatted() ?? "—") mg/kg/dose • \(regimen.dividedDoses ?? 1)× daily"
+        case .mgPerKgPerDay: return "\(regimen.amountPerKG?.formatted() ?? "—") mg/kg/day ÷ \(regimen.dividedDoses ?? 1)"
+        case .mgPerSquareMeter: return "\(regimen.amountPerSquareMeter?.formatted() ?? "—") mg/m²/dose"
+        }
+    }
+}
+
+private struct ProductLeafletEditorView: View {
+    @Environment(\.modelContext) private var context
+    let product: DrugProduct
+    let drug: Drug
+    @State private var leafletText: String
+
+    init(product: DrugProduct, drug: Drug) {
+        self.product = product; self.drug = drug
+        _leafletText = State(initialValue: product.leafletText)
+    }
+
+    var body: some View {
+        Form {
+            Section("Product") {
+                LabeledContent("Trade name", value: product.tradeName)
+                LabeledContent("Ingredient", value: drug.ingredientNames.joined(separator: " + "))
+                if !product.strength.trimmed.isEmpty { LabeledContent("Strength", value: product.strength) }
+                if !product.dosageForm.trimmed.isEmpty { LabeledContent("Form", value: product.dosageForm) }
+            }
+            Section("Paste leaflet") {
+                TextEditor(text: $leafletText).frame(minHeight: 260)
+                Button("Save leaflet") { product.leafletText = leafletText; product.leafletUpdatedAt = .now; try? context.save() }.buttonStyle(.borderedProminent)
+            }
+            Section {
+                NavigationLink { DrugImportView(drug: drug, startsInAIMode: true, initialLeafletText: leafletText) } label: {
+                    Label("Update ingredient profile with this leaflet", systemImage: "sparkles")
+                }
+            } footer: { Text("The leaflet is product-specific. You review every proposed profile change before saving.") }
+        }
+        .navigationTitle(product.tradeName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct LocalDrugGraphView: View {
+    @Environment(AppTheme.self) private var theme
+    @Query(sort: \Drug.scientificName) private var allDrugs: [Drug]
+    let drug: Drug
+
+    private var nodes: [(label: String, icon: String, color: Color)] {
+        [
+            (drug.chapterRaw, drug.chapter.icon, theme.colors(for: drug.chapter).first ?? theme.tint),
+            (drug.drugClass.trimmed.isEmpty ? "Class unknown" : drug.drugClass, "square.grid.2x2.fill", .indigo),
+            (drug.indications.first ?? "Use unknown", "cross.case.fill", .green),
+            (drug.warnings.first ?? "Warning unknown", "exclamationmark.triangle.fill", .orange),
+            ("\(related.count) related drugs", "pills.fill", .teal)
+        ]
+    }
+    private var related: [Drug] { allDrugs.filter { $0.id != drug.id && !$0.drugClass.trimmed.isEmpty && $0.drugClass.localizedCaseInsensitiveCompare(drug.drugClass) == .orderedSame } }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            ZStack {
+                Canvas { context, _ in
+                    for index in nodes.indices {
+                        let target = position(index, size: proxy.size)
+                        var path = Path(); path.move(to: center); path.addLine(to: target)
+                        context.stroke(path, with: .color(theme.tint.opacity(0.25)), lineWidth: 1.5)
+                    }
+                }
+                Text(drug.displayName).font(.caption.bold()).foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(2)
+                    .frame(width: 88, height: 88).background(theme.crystalGradient, in: Circle()).position(center)
+                ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
+                    VStack(spacing: 3) { Image(systemName: node.icon); Text(node.label).font(.system(size: 9, weight: .semibold)).lineLimit(2).multilineTextAlignment(.center) }
+                        .foregroundStyle(node.color).frame(width: 84).frame(minHeight: 48).padding(.vertical, 5)
+                        .background(node.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 13)).position(position(index, size: proxy.size))
+                }
+            }
+        }
+        .frame(height: 300).accessibilityElement(children: .ignore)
+        .accessibilityLabel(nodes.map { "\($0.label) linked to \(drug.displayName)" }.joined(separator: "; "))
+        if !related.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack { ForEach(related.prefix(6)) { value in NavigationLink { DrugDetailView(drug: value) } label: { Text(value.displayName).font(.caption.bold()).padding(.horizontal, 10).frame(minHeight: 38).background(.teal.opacity(0.10), in: Capsule()) }.buttonStyle(.plain) } }
+            }
+        }
+    }
+    private func position(_ index: Int, size: CGSize) -> CGPoint {
+        let angle = Double(index) / Double(max(nodes.count, 1)) * .pi * 2 - .pi / 2
+        return CGPoint(x: size.width / 2 + CGFloat(cos(angle)) * max(90, size.width / 2 - 48), y: size.height / 2 + CGFloat(sin(angle)) * max(92, size.height / 2 - 40))
+    }
+}
+
+private struct MechanismBuilderView: View {
+    @Environment(\.dismiss) private var dismiss
+    let drug: Drug
+    @State private var steps: [String] = []
+    @State private var checked = false
+
+    private var answer: [String] {
+        let separators = CharacterSet(charactersIn: "→↓\n")
+        let parsed = drug.mechanism.components(separatedBy: separators).map(\.trimmed).filter { !$0.isEmpty }
+        return parsed.count > 1 ? parsed : drug.mechanismKeywords.filter { !$0.trimmed.isEmpty }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Arrange the mechanism").font(.largeTitle.bold())
+                    Text("Move the steps from target to clinical effect.").foregroundStyle(.secondary)
+                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                        HStack(spacing: 10) {
+                            Text("\(index + 1)").font(.caption.bold()).frame(width: 28, height: 28).background(.tint.opacity(0.15), in: Circle())
+                            Text(step).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(spacing: 3) {
+                                Button { move(index, by: -1) } label: { Image(systemName: "chevron.up") }.disabled(index == 0)
+                                Button { move(index, by: 1) } label: { Image(systemName: "chevron.down") }.disabled(index + 1 == steps.count)
+                            }
+                        }
+                        .padding(12).background(.background, in: RoundedRectangle(cornerRadius: 15))
+                    }
+                    if checked {
+                        Label(steps == answer ? "Correct sequence" : "Almost—compare with the saved mechanism and try again.", systemImage: steps == answer ? "checkmark.seal.fill" : "arrow.clockwise")
+                            .foregroundStyle(steps == answer ? .green : .orange).font(.subheadline.bold())
+                    }
+                    Button("Check sequence") { withAnimation(.snappy) { checked = true } }
+                        .buttonStyle(.borderedProminent).frame(maxWidth: .infinity, minHeight: 48).disabled(steps.count < 2)
+                    if answer.count < 2 { Text("Add mechanism steps or keywords to enable this builder.").foregroundStyle(.secondary) }
+                }
+                .padding()
+            }
+            .navigationTitle(drug.displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .onAppear { if steps.isEmpty { steps = answer.shuffled() } }
+        }
+    }
+
+    private func move(_ index: Int, by offset: Int) {
+        let destination = index + offset
+        guard steps.indices.contains(destination) else { return }
+        withAnimation(.snappy) { steps.swapAt(index, destination); checked = false }
+    }
+}
+
+private struct PKTimelineChallengeView: View {
+    @Environment(\.dismiss) private var dismiss
+    let drug: Drug
+    @State private var onsetPosition = 0.35
+    @State private var halfLifePosition = 0.55
+    @State private var durationPosition = 0.65
+    @State private var checked = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("PK Timeline").font(.largeTitle.bold())
+                    Text("Place each marker. The scale is logarithmic so minutes and days stay usable together.").foregroundStyle(.secondary)
+                    timelineRow("Onset", icon: "hare.fill", scale: .onset, position: $onsetPosition, answer: drug.onsetMinutes)
+                    timelineRow("Half-life", icon: "clock.arrow.circlepath", scale: .halfLife, position: $halfLifePosition, answer: drug.halfLifeHours)
+                    timelineRow("Duration", icon: "timer", scale: .duration, position: $durationPosition, answer: drug.durationHours)
+                    Button("Check timeline") { withAnimation(.snappy) { checked = true } }
+                        .buttonStyle(.borderedProminent).frame(maxWidth: .infinity, minHeight: 48)
+                    if checked {
+                        VStack(alignment: .leading, spacing: 7) {
+                            result("Onset", position: onsetPosition, answer: drug.onsetMinutes, scale: .onset)
+                            result("Half-life", position: halfLifePosition, answer: drug.halfLifeHours, scale: .halfLife)
+                            result("Duration", position: durationPosition, answer: drug.durationHours, scale: .duration)
+                        }
+                        .padding(14).background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(drug.displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func timelineRow(_ title: String, icon: String, scale: PharmacologyScale, position: Binding<Double>, answer: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack { Label(title, systemImage: icon).font(.headline); Spacer(); Text(scale.formatted(scale.value(at: position.wrappedValue))).font(.caption.monospacedDigit()) }
+            Slider(value: position, in: 0...1).tint(.accentColor).disabled(answer == nil)
+            HStack { Text(scale.formatted(scale.bounds.lowerBound)); Spacer(); Text(scale.formatted(scale.bounds.upperBound)) }.font(.caption2).foregroundStyle(.secondary)
+            if answer == nil { Text("No normalized value saved yet.").font(.caption).foregroundStyle(.secondary) }
+        }
+        .padding(14).background(.background, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func result(_ title: String, position: Double, answer: Double?, scale: PharmacologyScale) -> some View {
+        guard let answer else { return AnyView(Label("\(title): add a normalized value", systemImage: "questionmark.circle").foregroundStyle(.secondary)) }
+        let guess = scale.value(at: position)
+        let close = max(guess, answer) / max(min(guess, answer), 0.01) <= 2
+        return AnyView(Label("\(title): \(scale.formatted(answer))", systemImage: close ? "checkmark.circle.fill" : "arrow.left.arrow.right.circle").foregroundStyle(close ? .green : .orange))
+    }
+}
+
+private struct SafetySortView: View {
+    struct Item: Identifiable { let id = UUID(); let text: String; let category: String }
+    let drug: Drug
+    @Environment(\.dismiss) private var dismiss
+    @State private var index = 0
+    @State private var result: String?
+    @State private var score = 0
+    private let categories = ["Common effect", "Serious warning", "Contraindication", "Interaction"]
+    private var items: [Item] {
+        [drug.commonSideEffects.first.map { Item(text: $0, category: categories[0]) }, drug.warnings.first.map { Item(text: $0, category: categories[1]) }, drug.contraindications.first.map { Item(text: $0, category: categories[2]) }, drug.interactions.first.map { Item(text: $0, category: categories[3]) }].compactMap { $0 }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                if items.indices.contains(index) {
+                    Text("Safety Sort").font(.largeTitle.bold())
+                    Text(items[index].text).font(.title3.bold()).multilineTextAlignment(.center).padding().frame(maxWidth: .infinity, minHeight: 150).background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 22))
+                    ForEach(categories, id: \.self) { category in
+                        Button { choose(category) } label: { Text(category).frame(maxWidth: .infinity, minHeight: 46) }.buttonStyle(.bordered).disabled(result != nil)
+                    }
+                    if let result {
+                        Label(result, systemImage: result == "Correct" ? "checkmark.circle.fill" : "xmark.circle.fill").foregroundStyle(result == "Correct" ? .green : .orange)
+                        Button(index + 1 == items.count ? "See result" : "Next") { index += 1; self.result = nil }.buttonStyle(.borderedProminent)
+                    }
+                } else if items.isEmpty {
+                    EmptyStateView(icon: "shield.slash", title: "Add safety facts", message: "Save at least one effect, warning, contraindication, or interaction to start.")
+                } else {
+                    Image(systemName: "checkmark.seal.fill").font(.system(size: 58)).foregroundStyle(.green)
+                    Text("\(score) of \(items.count) sorted correctly").font(.title2.bold())
+                    Button("Try again") { index = 0; score = 0 }.buttonStyle(.borderedProminent)
+                }
+                Spacer()
+            }
+            .padding().navigationTitle(drug.displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func choose(_ category: String) { let correct = category == items[index].category; result = correct ? "Correct" : "Belongs in \(items[index].category)"; if correct { score += 1 } }
+}
+
+private struct CounselingBuilderView: View {
+    @Environment(\.dismiss) private var dismiss
+    let drug: Drug
+    @State private var selected: Set<String> = []
+    @State private var checked = false
+    private var correct: [String] { [drug.howToTake, drug.foodInstruction, drug.counselingSentence, drug.missedDoseArabic].map(\.trimmed).filter { !$0.isEmpty } }
+    private var choices: [String] { Array((correct + ["Stop as soon as you feel better", "Double the next dose if one is missed"]).prefix(6)) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Counseling Builder").font(.largeTitle.bold())
+                    Text("Choose every statement that belongs in a clear patient explanation.").foregroundStyle(.secondary)
+                    ForEach(choices, id: \.self) { choice in
+                        Button { if selected.contains(choice) { selected.remove(choice) } else { selected.insert(choice) }; checked = false } label: {
+                            HStack { Image(systemName: selected.contains(choice) ? "checkmark.circle.fill" : "circle"); Text(choice).multilineTextAlignment(.leading); Spacer() }
+                                .padding(13).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).background(.background, in: RoundedRectangle(cornerRadius: 15))
+                        }.buttonStyle(.plain)
+                    }
+                    Button("Check message") { checked = true }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity, minHeight: 48)
+                    if checked {
+                        let missed = correct.filter { !selected.contains($0) }
+                        Label(missed.isEmpty ? "You covered every saved point." : "Missed: \(missed.joined(separator: " • "))", systemImage: missed.isEmpty ? "checkmark.seal.fill" : "exclamationmark.bubble.fill")
+                            .foregroundStyle(missed.isEmpty ? .green : .orange).font(.subheadline)
+                    }
+                }.padding()
+            }
+            .navigationTitle(drug.displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+private struct AtomicNotesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    let drug: Drug
+    @State private var kind: AtomicNoteKind = .memoryTrick
+    @State private var linkedField = "General"
+    @State private var noteText = ""
+    @State private var contextText = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("New atomic note") {
+                    Picker("Type", selection: $kind) { ForEach(AtomicNoteKind.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Linked field", selection: $linkedField) {
+                        ForEach(["General", "Identity", "Uses", "Mechanism", "PK", "Safety", "Counseling", "Shelf"], id: \.self) { Text($0).tag($0) }
+                    }
+                    TextField("One small, specific note", text: $noteText, axis: .vertical).lineLimit(2...5)
+                    TextField("Context or shift (optional)", text: $contextText)
+                    Button { save() } label: { Label("Save linked note", systemImage: "link.badge.plus").frame(maxWidth: .infinity, minHeight: 44) }
+                        .buttonStyle(.borderedProminent).disabled(noteText.trimmed.isEmpty)
+                }
+                Section("Linked to \(drug.displayName)") {
+                    if drug.atomicNotes.isEmpty { Text("No atomic notes yet.").foregroundStyle(.secondary) }
+                    ForEach(drug.atomicNotes) { note in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack { Text(note.kind.rawValue).font(.caption.bold()); Spacer(); Text(note.linkedField).font(.caption2).foregroundStyle(.secondary) }
+                            Text(note.text)
+                            if !note.context.trimmed.isEmpty { Text(note.context).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        .swipeActions { Button("Delete", role: .destructive) { remove(note) } }
+                    }
+                }
+            }
+            .navigationTitle("Atomic Notes").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func save() {
+        var notes = drug.atomicNotes
+        notes.insert(AtomicDrugNote(kindRaw: kind.rawValue, text: noteText.trimmed, linkedField: linkedField, context: contextText.trimmed), at: 0)
+        drug.atomicNotes = notes; try? context.save(); noteText = ""; contextText = ""
+    }
+    private func remove(_ note: AtomicDrugNote) { drug.atomicNotes = drug.atomicNotes.filter { $0.id != note.id }; try? context.save() }
+}
+
+@MainActor
+private final class CounselingSpeechRecognizer: ObservableObject {
+    @Published var transcript = ""
+    @Published var isRecording = false
+    @Published var errorMessage: String?
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ar-IQ"))
+    private let audioEngine = AVAudioEngine()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+
+    func toggle() { isRecording ? stop() : requestAccessAndStart() }
+    func requestAccessAndStart() {
+        SFSpeechRecognizer.requestAuthorization { status in
+            DispatchQueue.main.async {
+                guard status == .authorized else { self.errorMessage = "Speech recognition permission is required for voice practice."; return }
+                AVAudioApplication.requestRecordPermission { allowed in
+                    DispatchQueue.main.async {
+                        if allowed { self.start() }
+                        else { self.errorMessage = "Microphone permission is required for voice practice." }
+                    }
+                }
+            }
+        }
+    }
+    func start() {
+        do {
+            transcript = ""; errorMessage = nil
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            let request = SFSpeechAudioBufferRecognitionRequest(); request.shouldReportPartialResults = true; self.request = request
+            let node = audioEngine.inputNode; let format = node.outputFormat(forBus: 0)
+            node.removeTap(onBus: 0)
+            node.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in request.append(buffer) }
+            audioEngine.prepare(); try audioEngine.start(); isRecording = true
+            task = recognizer?.recognitionTask(with: request) { [weak self] result, error in
+                DispatchQueue.main.async {
+                    if let result { self?.transcript = result.bestTranscription.formattedString }
+                    if error != nil || result?.isFinal == true { self?.stop() }
+                }
+            }
+        } catch { errorMessage = error.localizedDescription; stop() }
+    }
+    func stop() { if audioEngine.isRunning { audioEngine.stop(); audioEngine.inputNode.removeTap(onBus: 0) }; request?.endAudio(); task?.cancel(); isRecording = false }
+}
+
+private struct VoiceCounselingView: View {
+    @Environment(\.dismiss) private var dismiss
+    let drug: Drug
+    @StateObject private var speech = CounselingSpeechRecognizer()
+    private var points: [String] { [drug.counselingHowToTakeArabic, drug.counselingFoodArabic, drug.counselingSentence, drug.missedDoseArabic] .map(\.trimmed).filter { !$0.isEmpty } }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Counsel this patient").font(.largeTitle.bold())
+                    Text("Speak naturally in Iraqi Arabic or English. Renlyst checks coverage, not accent or grammar.").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 7) { ForEach(points, id: \.self) { Label(shortPrompt($0), systemImage: "circle") } }.font(.subheadline)
+                    Button { speech.toggle() } label: {
+                        Label(speech.isRecording ? "Stop recording" : "Start counseling", systemImage: speech.isRecording ? "stop.circle.fill" : "mic.circle.fill").frame(maxWidth: .infinity, minHeight: 54)
+                    }.buttonStyle(.borderedProminent).tint(speech.isRecording ? .red : .accentColor)
+                    if !speech.transcript.isEmpty {
+                        Text(speech.transcript).padding(14).frame(maxWidth: .infinity, alignment: .leading).background(.background, in: RoundedRectangle(cornerRadius: 16))
+                        Text("You covered \(coveredCount)/\(points.count) saved points.").font(.title3.bold())
+                        ForEach(points.filter { !isCovered($0) }, id: \.self) { Label("Missed: \($0)", systemImage: "exclamationmark.bubble.fill").font(.caption).foregroundStyle(.orange) }
+                    }
+                    if let error = speech.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
+                }.padding()
+            }
+            .navigationTitle(drug.displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { speech.stop(); dismiss() } } }
+        }
+    }
+    private var coveredCount: Int { points.filter(isCovered).count }
+    private func isCovered(_ point: String) -> Bool {
+        let words = point.lowercased().components(separatedBy: .alphanumerics.inverted).filter { $0.count > 3 }
+        let transcript = speech.transcript.lowercased()
+        return words.prefix(6).contains { transcript.contains($0) }
+    }
+    private func shortPrompt(_ point: String) -> String { point.count > 80 ? String(point.prefix(77)) + "…" : point }
 }

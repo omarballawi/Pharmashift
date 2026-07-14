@@ -1,4 +1,4 @@
-name: Build unsigned PharmaShift IPA
+name: Build unsigned Renlyst IPA
 
 on:
   workflow_dispatch:
@@ -6,36 +6,94 @@ on:
     branches:
       - main
     paths-ignore:
-      - PharmaShift.ipa
+      - Renlyst.ipa
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Run simulator tests
-    runs-on: macos-15-intel
-    timeout-minutes: 40
+    name: Run unit tests
+    runs-on: macos-15
+    timeout-minutes: 15
 
     steps:
       - name: Check out project
         uses: actions/checkout@v6
 
-      - name: Run unit and UI tests
+      - name: Select an available iPhone simulator
         run: |
           set -euo pipefail
-          xcrun simctl list devices available
+          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$SIMULATOR_ID"
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+
+      - name: Run unit test suite
+        run: |
+          set -euo pipefail
           xcodebuild \
             -project PharmaShift.xcodeproj \
             -scheme PharmaShift \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -derivedDataPath build/TestDerivedData \
+            -only-testing:PharmaShiftTests \
             test
+
+  ui-test:
+    name: UI · ${{ matrix.test }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        test:
+          - testHomeDashboardAndFastCaptureAreReachable
+          - testFivePageDrugCardNavigatesThroughLearnAndSafety
+          - testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep
+          - testPhotoLibraryButtonPresentsLibraryInsteadOfCamera
+          - testBackupAndDataFlowIsReachable
+          - testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch
+          - testTrustedImportReachesSourceChooser
+          - testGeneratedPreviewAllowsSelectiveFields
+          - testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v6
+
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$SIMULATOR_ID"
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+
+      - name: Run UI journey
+        run: |
+          set -euo pipefail
+          run_ui_test() {
+            xcodebuild \
+              -project PharmaShift.xcodeproj \
+              -scheme PharmaShift \
+              -configuration Debug \
+              -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+              -derivedDataPath build/UITestDerivedData \
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/${{ matrix.test }} \
+              test
+          }
+          if ! run_ui_test; then
+            echo "First UI attempt failed; rebooting the simulator and retrying once."
+            xcrun simctl shutdown "$SIMULATOR_ID" || true
+            xcrun simctl boot "$SIMULATOR_ID"
+            xcrun simctl bootstatus "$SIMULATOR_ID" -b
+            run_ui_test
+          fi
 
   build:
     name: Build IPA for Windows sideloading
-    needs: test
+    needs: [test, ui-test]
     runs-on: macos-15
     timeout-minutes: 20
 
@@ -51,7 +109,7 @@ jobs:
       - name: Build unsigned iPhone application
         run: |
           set -euo pipefail
-          rm -rf build Payload PharmaShift.ipa
+          rm -rf build Payload Renlyst.ipa
 
           xcodebuild \
             -project PharmaShift.xcodeproj \
@@ -66,20 +124,20 @@ jobs:
             DEVELOPMENT_TEAM='' \
             clean build
 
-          APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/PharmaShift.app'
+          APP_PATH='build/DerivedData/Build/Products/Release-iphoneos/Renlyst.app'
           test -d "$APP_PATH"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.pharmashift.app'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.5'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '5'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = 'com.renlyst.app'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = '1.7.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")" = '11'
           mkdir Payload
-          ditto "$APP_PATH" 'Payload/PharmaShift.app'
-          /usr/bin/zip -qry PharmaShift.ipa Payload
-          test -s PharmaShift.ipa
+          ditto "$APP_PATH" 'Payload/Renlyst.app'
+          /usr/bin/zip -qry Renlyst.ipa Payload
+          test -s Renlyst.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v7
         with:
-          name: PharmaShift-unsigned-IPA
-          path: PharmaShift.ipa
+          name: Renlyst-unsigned-IPA
+          path: Renlyst.ipa
           if-no-files-found: error
           retention-days: 7

@@ -41,4 +41,15 @@ final class ReviewSchedulerTests: XCTestCase {
         XCTAssertTrue(drug.masteryUse)
         XCTAssertEqual(scheduler.lastIntervalDays, 3)
     }
+
+    func testMemoryGradesTuneFieldLevelInterval() {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        let drug = Drug(scientificName: "Test")
+        let scheduler = ReviewScheduler()
+        _ = scheduler.apply(rating: .correct, questionType: .warning, to: drug, now: now, calendar: calendar)
+        let goodDate = drug.nextReviewDate
+        scheduler.adjust(field: .warning, grade: .easy, for: drug, now: now, calendar: calendar)
+        XCTAssertGreaterThan(drug.nextReviewDate, goodDate)
+        XCTAssertEqual(drug.memoryItems.first(where: { $0.field == .warning })?.strengthLabel, "Strong")
+    }
 }

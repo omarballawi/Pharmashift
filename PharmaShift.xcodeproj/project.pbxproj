@@ -40,6 +40,8 @@
 		B00000000000000000000020 /* PracticeEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000024 /* PracticeEngine.swift */; };
 		B00000000000000000000021 /* PracticeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000025 /* PracticeEngineTests.swift */; };
 		B00000000000000000000022 /* MigrationFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000026 /* MigrationFixtureTests.swift */; };
+		B00000000000000000000023 /* DeepSeekLearningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000027 /* DeepSeekLearningService.swift */; };
+		B00000000000000000000024 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,7 +73,7 @@
 		A00000000000000000000015 /* ModelAndPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/ModelAndPersistenceTests.swift; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000016 /* ReportBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/ReportBuilderTests.swift; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000017 /* PharmaShiftUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftUITests/PharmaShiftUITests.swift; sourceTree = SOURCE_ROOT; };
-		A00000000000000000000018 /* PharmaShift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PharmaShift.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000018 /* Renlyst.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Renlyst.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000019 /* PharmaShiftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PharmaShiftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0000000000000000000001A /* PharmaShiftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PharmaShiftUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0000000000000000000001B /* PreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Shared/PreviewSupport.swift; sourceTree = SOURCE_ROOT; };
@@ -86,6 +88,8 @@
 		A00000000000000000000024 /* PracticeEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/PracticeEngine.swift; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000025 /* PracticeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/PracticeEngineTests.swift; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000026 /* MigrationFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShiftTests/MigrationFixtureTests.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000027 /* DeepSeekLearningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PharmaShift/Services/DeepSeekLearningService.swift; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = PharmaShift/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,11 +116,13 @@
 			A0000000000000000000001E, A0000000000000000000001F,
 			A00000000000000000000022, A00000000000000000000023,
 			A00000000000000000000024,
+			A00000000000000000000027,
+			A00000000000000000000028,
 			A00000000000000000000013,
 		); name = PharmaShift; sourceTree = "<group>"; };
 		C00000000000000000000012 /* PharmaShiftTests */ = {isa = PBXGroup; children = (A00000000000000000000014, A00000000000000000000015, A00000000000000000000016, A00000000000000000000020, A00000000000000000000021, A00000000000000000000025, A00000000000000000000026,); name = PharmaShiftTests; sourceTree = "<group>"; };
 		C00000000000000000000013 /* PharmaShiftUITests */ = {isa = PBXGroup; children = (A00000000000000000000017,); name = PharmaShiftUITests; sourceTree = "<group>"; };
-		C00000000000000000000014 /* Products */ = {isa = PBXGroup; children = (A00000000000000000000018, A00000000000000000000019, A0000000000000000000001A,); name = Products; sourceTree = "<group>"; };
+		C00000000000000000000014 /* Products */ = {isa = PBXGroup; children = (A00000000000000000000018 /* Renlyst.app */, A00000000000000000000019, A0000000000000000000001A,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -130,7 +136,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		E00000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000024,); runOnlyForDeploymentPostprocessing = 0; };
 		E00000000000000000000022 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		E00000000000000000000023 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
@@ -146,6 +152,7 @@
 			B0000000000000000000001A, B0000000000000000000001B,
 			B0000000000000000000001E, B0000000000000000000001F,
 			B00000000000000000000020,
+			B00000000000000000000023,
 		); runOnlyForDeploymentPostprocessing = 0; };
 		E00000000000000000000012 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B0000000000000000000001C, B0000000000000000000001D, B00000000000000000000021, B00000000000000000000022,); runOnlyForDeploymentPostprocessing = 0; };
 		E00000000000000000000013 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
@@ -159,12 +166,12 @@
 /* Begin XCBuildConfiguration section */
 		F00000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_OPTIMIZATION_LEVEL = 0; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
 		F00000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; VALIDATE_PRODUCT = YES; }; name = Release; };
-		F00000000000000000000021 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.5; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
-		F00000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.5; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
-		F00000000000000000000031 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PharmaShift.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PharmaShift"; }; name = Debug; };
-		F00000000000000000000032 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PharmaShift.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PharmaShift"; }; name = Release; };
-		F00000000000000000000041 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Debug; };
-		F00000000000000000000042 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.pharmashift.app.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Release; };
+		F00000000000000000000021 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 11; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.7.0; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app; PRODUCT_MODULE_NAME = PharmaShift; PRODUCT_NAME = Renlyst; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		F00000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 11; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = PharmaShift/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.7.0; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app; PRODUCT_MODULE_NAME = PharmaShift; PRODUCT_NAME = Renlyst; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+		F00000000000000000000031 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Renlyst.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Renlyst"; }; name = Debug; };
+		F00000000000000000000032 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Renlyst.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Renlyst"; }; name = Release; };
+		F00000000000000000000041 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Debug; };
+		F00000000000000000000042 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.renlyst.app.uitests; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = PharmaShift; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */

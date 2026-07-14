@@ -769,7 +769,6 @@ final class Drug {
             case .renal: .renalUrine
             case .hepatic: .biliaryFecal
             case .mixed: .mixed
-            case .other: .other
             case .unknown: .unknown
             }
             return EliminationInfo(routes: excretionNotes.trimmed.isEmpty ? [] : [EliminationRouteInfo(pathway: pathway, detail: excretionNotes)], dominantPathway: pathway, summary: excretionNotes)
@@ -781,7 +780,7 @@ final class Drug {
             case .renalUrine: excretionRoute = .renal
             case .biliaryFecal: excretionRoute = .hepatic
             case .mixed: excretionRoute = .mixed
-            case .other, .pulmonary: excretionRoute = .other
+            case .other, .pulmonary: excretionRoute = .unknown
             case .unknown: excretionRoute = .unknown
             }
         }

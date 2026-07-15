@@ -23,7 +23,13 @@ final class BackupServiceTests: XCTestCase {
         drug.activeIngredients = ["Metformin"]
         drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients)
         drug.doseRegimens = [DoseRegimen(indication: "Type 2 diabetes", population: .adult, formula: .fixed, fixedDoseMG: 500, dividedDoses: 2)]
-        let product = DrugProduct(productKey: "metformin|glucophage|500", tradeName: "Glucophage", manufacturer: "Merck", strength: "500 mg", dosageForm: "Tablet", imageData: Data([21]), leafletText: "Product leaflet", profile: drug)
+        drug.dosageFormGroups = [DosageFormGroup(dosageForm: "Tablet", strengths: [FormStrength(strength: "500 mg", tradeNames: ["Glucophage"])])]
+        drug.clinicalDoses = [ClinicalDoseEntry(indication: "Type 2 diabetes", population: "Adult", doseText: "500 mg with meals")]
+        drug.interactionEntries = [DrugInteractionEntry(drugName: "Cimetidine", category: .monitorClosely)]
+        drug.adverseEffectEntries = [AdverseEffectEntry(name: "Diarrhea", incidence: "Common")]
+        drug.reproductiveSafety = ReproductiveSafetyProfile(pregnancy: "Review benefit and risk", lactation: "Present in milk")
+        drug.pharmacologyProfile = PharmacologyProfile(mechanismOfAction: "Reduces hepatic glucose production")
+        let product = DrugProduct(productKey: "metformin|glucophage|500", tradeName: "Glucophage", manufacturer: "Merck", strength: "500 mg", marketedStrengthLabel: "500 mg", ingredientComponents: [IngredientComponent(name: "Metformin", displayStrength: "500 mg")], dosageForm: "Tablet", imageData: Data([21]), leafletText: "Product leaflet", profile: drug)
         let review = ReviewLog(drug: drug, drugNameSnapshot: drug.displayName, questionType: .use, rating: .correct, scoreBefore: 1, scoreAfter: 2)
         let shift = ShiftLog(chapterFocus: .endocrine)
         shift.whatILearned = "تعلمت اليوم"
@@ -56,9 +62,17 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertEqual(restoredDrug.atomicNotes, drug.atomicNotes)
         XCTAssertTrue(restoredDrug.reviewQuestionsNeedRegeneration)
         XCTAssertEqual(restoredDrug.doseRegimens.first?.fixedDoseMG, 500)
+        XCTAssertEqual(restoredDrug.dosageFormGroups.first?.strengths.first?.strength, "500 mg")
+        XCTAssertEqual(restoredDrug.clinicalDoses.first?.doseText, "500 mg with meals")
+        XCTAssertEqual(restoredDrug.interactionEntries.first?.category, .monitorClosely)
+        XCTAssertEqual(restoredDrug.adverseEffectEntries.first?.name, "Diarrhea")
+        XCTAssertEqual(restoredDrug.reproductiveSafety.lactation, "Present in milk")
+        XCTAssertEqual(restoredDrug.pharmacologyProfile.mechanismOfAction, "Reduces hepatic glucose production")
         let restoredProduct = try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<DrugProduct>()).first)
         XCTAssertEqual(restoredProduct.tradeName, "Glucophage")
         XCTAssertEqual(restoredProduct.leafletText, "Product leaflet")
+        XCTAssertEqual(restoredProduct.marketedStrengthLabel, "500 mg")
+        XCTAssertEqual(restoredProduct.ingredientComponents.first?.name, "Metformin")
         XCTAssertEqual(restoredProduct.profile?.id, restoredDrug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<ReviewLog>()).first).drug?.id, drug.id)
         XCTAssertEqual(try XCTUnwrap(destination.mainContext.fetch(FetchDescriptor<EncounterNote>()).first).relatedDrug?.id, drug.id)

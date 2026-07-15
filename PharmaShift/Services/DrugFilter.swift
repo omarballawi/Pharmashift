@@ -16,10 +16,14 @@ struct DrugFilter {
 
     func matches(_ drug: Drug, now: Date = .now, calendar: Calendar = .current) -> Bool {
         let haystack = [
-            drug.scientificName, drug.tradeNames.joined(separator: " "), drug.chapterRaw, drug.chapter.arabicName,
+            drug.scientificName, drug.ingredientNames.joined(separator: " "), drug.effectiveTradeNames.joined(separator: " "), drug.chapterRaw, drug.chapter.arabicName,
             drug.drugClass, drug.shelfLocation, drug.captureLabel, drug.notes, drug.arabicPersonalNotes,
             drug.arabicExplanation, drug.arabicMechanism, drug.counselingSentence, drug.arabicCounseling,
-            drug.indications.joined(separator: " "), drug.importedSourceName
+            drug.indications.joined(separator: " "), drug.importedSourceName,
+            drug.products.flatMap { product in
+                [product.tradeName, product.manufacturer, product.strength, product.marketedStrengthLabel, product.dosageForm, product.route]
+                    + product.ingredientComponents.flatMap { [$0.name, $0.saltForm, $0.strengthText] }
+            }.joined(separator: " ")
         ]
             .joined(separator: " ")
         let dueBoundary = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
@@ -33,7 +37,7 @@ struct DrugFilter {
             && (!masteredOnly || drug.isMastered)
             && (!weakOnly || drug.confidenceLevel == .weak || drug.isConfusing)
             && (!incompleteOnly || drug.isIncomplete)
-            && (!missingImageOnly || drug.imageData == nil)
+            && (!missingImageOnly || drug.packageImages.isEmpty)
             && (!importedOnly || drug.isImported)
     }
 }

@@ -21,7 +21,7 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.buttons["capture.saveOpen"].isEnabled)
     }
 
-    func testFivePageDrugCardNavigatesThroughLearnAndSafety() {
+    func testOnePageDrugProfileExpandsPharmacologyAndSafety() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["Add"].tap()
@@ -35,9 +35,13 @@ final class PharmaShiftUITests: XCTestCase {
         save.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.identity"].waitForExistence(timeout: 5))
-        app.buttons["Learn"].tap()
+        let pharmacology = app.buttons["Pharmacology"]
+        scrollToHittable(pharmacology, in: app, maximumSwipes: 10)
+        pharmacology.tap()
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].waitForExistence(timeout: 5))
-        app.buttons["Safety"].tap()
+        let safety = app.buttons["Warnings & contraindications"]
+        scrollToHittable(safety, in: app, maximumSwipes: 10)
+        safety.tap()
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Source"].exists)
     }
@@ -102,7 +106,7 @@ final class PharmaShiftUITests: XCTestCase {
         field.typeText("ui-test-key-1234")
         app.buttons["deepSeek.saveKey"].tap()
 
-        let alert = app.alerts["DeepSeek key"]
+        let alert = app.alerts["AI key"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Saved key")).firstMatch.exists)
         alert.buttons["OK"].tap()
@@ -128,7 +132,7 @@ final class PharmaShiftUITests: XCTestCase {
     }
 
     private func dismissDeepSeekAlert(in app: XCUIApplication) {
-        let alert = app.alerts["DeepSeek key"]
+        let alert = app.alerts["AI key"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.buttons["OK"].tap()
     }

@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import PhotosUI
 import AVFoundation
 import Speech
 
@@ -30,25 +31,35 @@ private enum DrugDetailSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
-private enum DrugCardPage: String, CaseIterable, Identifiable {
+private enum DrugProfileSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
-    case brands = "Brands"
-    case doses = "Doses"
-    case learn = "Learn"
-    case safety = "Safety"
-    case counsel = "Counsel"
-    case links = "Notes & Links"
+    case brands = "Brands & package images"
+    case forms = "Dosage forms & strengths"
+    case doses = "Dosing by indication"
+    case uses = "Uses"
+    case interactions = "Interactions"
+    case adverse = "Adverse effects"
+    case warnings = "Warnings & contraindications"
+    case reproductive = "Pregnancy & lactation"
+    case pharmacology = "Pharmacology"
+    case counseling = "Counseling & Arabic notes"
+    case notes = "Notes, links & mastery"
 
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .overview: "sparkles"
         case .brands: "shippingbox.fill"
-        case .doses: "function"
-        case .learn: "book.pages.fill"
-        case .safety: "shield.fill"
-        case .counsel: "quote.bubble.fill"
-        case .links: "point.3.connected.trianglepath.dotted"
+        case .forms: "pills.fill"
+        case .doses: "list.number"
+        case .uses: "cross.case.fill"
+        case .interactions: "arrow.triangle.branch"
+        case .adverse: "waveform.path.ecg"
+        case .warnings: "shield.fill"
+        case .reproductive: "figure.and.child.holdinghands"
+        case .pharmacology: "atom"
+        case .counseling: "quote.bubble.fill"
+        case .notes: "point.3.connected.trianglepath.dotted"
         }
     }
 }
@@ -59,28 +70,30 @@ struct DrugDetailView: View {
     @Environment(AppTheme.self) private var theme
     @Environment(ReviewScheduler.self) private var scheduler
     @Query private var relationships: [DrugRelationship]
+    @Query(sort: \Drug.scientificName) private var allDrugs: [Drug]
     let drug: Drug
     @State private var sheet: DrugDetailSheet?
     @State private var expandedFields: Set<String> = []
-    @State private var selectedPage: DrugCardPage = .overview
+    @State private var expandedSections: Set<DrugProfileSection> = [.overview, .forms, .doses]
 
     var body: some View {
-        VStack(spacing: 0) {
-            pagePicker
-            TabView(selection: $selectedPage) {
-                ForEach(DrugCardPage.allCases) { page in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            pageContent(page)
-                        }
-                        .padding()
-                    }
-                    .background(theme.background)
-                    .tag(page)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                hero
+                HStack {
+                    Button("Expand all") { withAnimation(reduceMotion ? nil : .snappy) { expandedSections = Set(DrugProfileSection.allCases) } }
+                    Spacer()
+                    Button("Collapse all") { withAnimation(reduceMotion ? nil : .snappy) { expandedSections.removeAll() } }
+                }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 4)
+                ForEach(DrugProfileSection.allCases) { section in
+                    profileSection(section)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding()
         }
+        .background(theme.background)
         .navigationTitle("Drug Card")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { Button("Edit") { sheet = .editor } }
@@ -101,59 +114,77 @@ struct DrugDetailView: View {
         }
     }
 
-    private var pagePicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                ForEach(DrugCardPage.allCases) { page in
-                    Button {
-                        withAnimation(reduceMotion ? nil : .snappy) { selectedPage = page }
-                    } label: {
-                        Label(page.rawValue, systemImage: page.icon)
-                            .font(.caption.weight(.semibold)).padding(.horizontal, 11).frame(minHeight: 38)
-                            .background(selectedPage == page ? theme.tint : Color.secondary.opacity(0.10), in: Capsule())
-                            .foregroundStyle(selectedPage == page ? .white : .primary)
-                    }
-                    .buttonStyle(.plain)
+    @ViewBuilder private func profileSection(_ section: DrugProfileSection) -> some View {
+        let isExpanded = expandedSections.contains(section)
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(reduceMotion ? nil : .snappy) {
+                    if isExpanded { expandedSections.remove(section) } else { expandedSections.insert(section) }
                 }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: section.icon).foregroundStyle(theme.tint).frame(width: 24)
+                    Text(section.rawValue).font(.headline).foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption.bold()).foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .frame(minHeight: 52)
+                .padding(.horizontal, 14)
+                .contentShape(Rectangle())
+                .background(theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .padding(.horizontal).padding(.vertical, 8)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("drugProfile.section.\(section.id)")
+            if isExpanded {
+                profileSectionContent(section)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .background(.bar)
-        .accessibilityLabel("Drug Card pages")
     }
 
-    @ViewBuilder private func pageContent(_ page: DrugCardPage) -> some View {
-        switch page {
+    @ViewBuilder private func profileSectionContent(_ section: DrugProfileSection) -> some View {
+        switch section {
         case .overview:
-            hero
             mustKnowCard
             identityCard.accessibilityIdentifier("drugCard.identity")
-            masteryCard
             actions
         case .brands:
             brandsCard
+        case .forms:
+            dosageFormsAndStrengthsCard
         case .doses:
+            clinicalDosingCard
             DoseRegimensView(drug: drug)
-        case .learn:
+        case .uses:
             usesCard
-            pharmacologyCard.accessibilityIdentifier("drugCard.pharmacology")
             interactiveLessonButton("Build the mechanism", icon: "arrow.down.square.fill", destination: .mechanism)
-            interactiveLessonButton("Explore the PK timeline", icon: "waveform.path.ecg.rectangle.fill", destination: .pkTimeline)
-        case .safety:
+        case .interactions:
+            interactionListCard
+        case .adverse:
+            adverseEffectsListCard
+        case .warnings:
             safetyCard.accessibilityIdentifier("drugCard.safety")
             interactiveLessonButton("Sort safety statements", icon: "rectangle.3.group.bubble.fill", destination: .safetySort)
-        case .counsel:
+        case .reproductive:
+            reproductiveSafetyCard
+        case .pharmacology:
+            pharmacologyCard.accessibilityIdentifier("drugCard.pharmacology")
+            detailedPharmacologyCard
+            interactiveLessonButton("Explore the PK timeline", icon: "waveform.path.ecg.rectangle.fill", destination: .pkTimeline)
+        case .counseling:
             counselingCard
             interactiveLessonButton("Build the counseling message", icon: "text.bubble.fill", destination: .counselingBuilder)
             interactiveLessonButton("Counsel this patient", icon: "waveform.badge.mic", destination: .voiceCounseling)
             arabicCard
-            actions
-        case .links:
+        case .notes:
             notesCard
             interactiveLessonButton("Add a linked note", icon: "note.text.badge.plus", destination: .atomicNotes)
             connectedKnowledgeCard
             relationshipCard
             provenanceDetails
+            masteryCard
         }
     }
 
@@ -176,7 +207,9 @@ struct DrugDetailView: View {
                             }
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
-                                Text([product.manufacturer, product.strength, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary)
+                                Text([product.manufacturer, product.marketedStrengthLabel, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary)
+                                let components = product.ingredientComponents.map { [$0.name, $0.strengthText].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
+                                if !components.isEmpty { Text(components.joined(separator: " + ")).font(.caption2).foregroundStyle(.secondary) }
                                 Text(product.leafletText.trimmed.isEmpty ? "Leaflet not added" : "Leaflet saved").font(.caption2).foregroundStyle(product.leafletText.trimmed.isEmpty ? .orange : .green)
                             }
                             Spacer()
@@ -187,6 +220,152 @@ struct DrugDetailView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    private var dosageFormsAndStrengthsCard: some View {
+        card("Dosage Forms & Strengths", icon: "pills.fill") {
+            if drug.dosageFormGroups.isEmpty {
+                Text("No structured dosage forms or strengths saved.").foregroundStyle(.secondary)
+            } else {
+                ForEach(drug.dosageFormGroups) { group in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(group.dosageForm.uppercased()).font(.subheadline.bold()).foregroundStyle(theme.tint)
+                        ForEach(group.strengths) { item in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.strength).font(.body.weight(.semibold))
+                                if !item.tradeNames.isEmpty {
+                                    Text(item.tradeNames.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private var clinicalDosingCard: some View {
+        card("Dosing by indication", icon: "list.number") {
+            if drug.clinicalDoses.isEmpty {
+                Text("No indication-specific clinical dosing saved.").foregroundStyle(.secondary)
+            } else {
+                ForEach(drug.clinicalDoses) { dose in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(dose.indication).font(.headline)
+                        if !dose.population.trimmed.isEmpty { Text(dose.population.uppercased()).font(.caption.bold()).foregroundStyle(theme.tint) }
+                        Text(dose.doseText).font(.body)
+                        let details = [dose.route, dose.frequency, dose.duration].filter { !$0.trimmed.isEmpty }
+                        if !details.isEmpty { Text(details.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) }
+                        ForEach(dose.adjuncts, id: \.self) { Label($0, systemImage: "plus.circle") }
+                        ForEach(dose.considerations, id: \.self) { Label($0, systemImage: "exclamationmark.circle") }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    if dose.id != drug.clinicalDoses.last?.id { Divider() }
+                }
+            }
+        }
+    }
+
+    private var interactionListCard: some View {
+        card("Interactions", icon: "arrow.triangle.branch") {
+            if drug.interactionEntries.isEmpty {
+                Text("No structured interaction list saved.").foregroundStyle(.secondary)
+            } else {
+                ForEach(InteractionCategory.allCases) { category in
+                    let entries = drug.interactionEntries.filter { $0.category == category }
+                    if !entries.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(category.rawValue) (\(entries.count))").font(.headline).foregroundStyle(interactionColor(category))
+                            ForEach(entries) { entry in
+                                if let match = localDrug(named: entry.drugName) {
+                                    NavigationLink { DrugDetailView(drug: match) } label: {
+                                        interactionRow(entry, linked: true)
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    interactionRow(entry, linked: false)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 5)
+                    }
+                }
+            }
+        }
+    }
+
+    private func interactionRow(_ entry: DrugInteractionEntry, linked: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.drugName).font(.body.weight(.semibold))
+                if !entry.effect.trimmed.isEmpty { Text(entry.effect).font(.caption).foregroundStyle(.secondary) }
+                if !entry.management.trimmed.isEmpty { Text(entry.management).font(.caption).foregroundStyle(.secondary) }
+            }
+            Spacer()
+            if linked { Image(systemName: "arrow.up.right.circle.fill").foregroundStyle(theme.tint).accessibilityLabel("Open saved drug profile") }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var adverseEffectsListCard: some View {
+        card("Adverse effects", icon: "waveform.path.ecg") {
+            if drug.adverseEffectEntries.isEmpty {
+                Text("No structured adverse-effect list saved.").foregroundStyle(.secondary)
+            } else {
+                ForEach(drug.adverseEffectEntries) { effect in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(effect.name)
+                        Spacer()
+                        if !effect.incidence.trimmed.isEmpty { Text(effect.incidence).font(.body.monospacedDigit()).foregroundStyle(.secondary) }
+                        if effect.isSerious { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).accessibilityLabel("Serious") }
+                    }
+                    .padding(.vertical, 3)
+                }
+            }
+        }
+    }
+
+    private var reproductiveSafetyCard: some View {
+        card("Pregnancy & lactation", icon: "figure.and.child.holdinghands") {
+            expandableValue("Pregnancy", drug.reproductiveSafety.pregnancy)
+            arabicValue("ملاحظة الحمل", drug.reproductiveSafety.pregnancyArabicNote)
+            Divider()
+            expandableValue("Lactation", drug.reproductiveSafety.lactation)
+            arabicValue("ملاحظة الرضاعة", drug.reproductiveSafety.lactationArabicNote)
+        }
+    }
+
+    private var detailedPharmacologyCard: some View {
+        card("Clinical pharmacology", icon: "atom") {
+            expandableValue("Mechanism of action", drug.pharmacologyProfile.mechanismOfAction)
+            expandableValue("Absorption", drug.pharmacologyProfile.absorption.joined(separator: "\n"))
+            expandableValue("Distribution", drug.pharmacologyProfile.distribution.joined(separator: "\n"))
+            expandableValue("Metabolism", drug.pharmacologyProfile.metabolism.joined(separator: "\n"))
+            expandableValue("Elimination", drug.pharmacologyProfile.elimination.joined(separator: "\n"))
+        }
+    }
+
+    private func localDrug(named name: String) -> Drug? {
+        let needle = IngredientIdentity.normalize(name)
+        guard !needle.isEmpty else { return nil }
+        return allDrugs.first { candidate in
+            candidate.id != drug.id && (candidate.ingredientNames + candidate.effectiveTradeNames).contains {
+                IngredientIdentity.normalize($0) == needle
+            }
+        }
+    }
+
+    private func interactionColor(_ category: InteractionCategory) -> Color {
+        switch category {
+        case .contraindicated: .red
+        case .seriousUseAlternative: .orange
+        case .monitorClosely: .yellow
+        case .minor: .blue
+        case .unknown: .secondary
         }
     }
 
@@ -715,24 +894,76 @@ private struct ProductLeafletEditorView: View {
     @Environment(\.modelContext) private var context
     let product: DrugProduct
     let drug: Drug
+    @State private var tradeName: String
+    @State private var manufacturer: String
+    @State private var marketedStrengthLabel: String
+    @State private var dosageForm: String
+    @State private var route: String
+    @State private var country: String
+    @State private var ingredientComponents: [IngredientComponent]
     @State private var leafletText: String
+    @State private var imageData: Data?
+    @State private var thumbnailData: Data?
+    @State private var additionalImageData: [Data]
+    @State private var additionalThumbnailData: [Data]
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var imageFlow: ImageFlowDestination?
+    @State private var pendingCameraDraft: ImageDraft?
+    @State private var message: String?
 
     init(product: DrugProduct, drug: Drug) {
         self.product = product; self.drug = drug
+        _tradeName = State(initialValue: product.tradeName)
+        _manufacturer = State(initialValue: product.manufacturer)
+        _marketedStrengthLabel = State(initialValue: product.marketedStrengthLabel)
+        _dosageForm = State(initialValue: product.dosageForm)
+        _route = State(initialValue: product.route)
+        _country = State(initialValue: product.country)
+        _ingredientComponents = State(initialValue: product.ingredientComponents)
         _leafletText = State(initialValue: product.leafletText)
+        _imageData = State(initialValue: product.imageData)
+        _thumbnailData = State(initialValue: product.thumbnailData)
+        _additionalImageData = State(initialValue: product.additionalImageData)
+        _additionalThumbnailData = State(initialValue: product.additionalThumbnailData)
     }
 
     var body: some View {
         Form {
-            Section("Product") {
-                LabeledContent("Trade name", value: product.tradeName)
-                LabeledContent("Ingredient", value: drug.ingredientNames.joined(separator: " + "))
-                if !product.strength.trimmed.isEmpty { LabeledContent("Strength", value: product.strength) }
-                if !product.dosageForm.trimmed.isEmpty { LabeledContent("Form", value: product.dosageForm) }
+            Section("Brand product") {
+                TextField("Trade name", text: $tradeName)
+                TextField("Manufacturer", text: $manufacturer)
+                TextField("Marketed / printed strength", text: $marketedStrengthLabel)
+                TextField("Dosage form", text: $dosageForm)
+                TextField("Route", text: $route)
+                TextField("Country", text: $country)
+            }
+            Section {
+                ForEach(ingredientComponents.indices, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Active ingredient", text: $ingredientComponents[index].name)
+                        TextField("Component strength", text: $ingredientComponents[index].displayStrength)
+                        TextField("Salt form (optional)", text: $ingredientComponents[index].saltForm)
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) { ingredientComponents.remove(at: index) } label: { Label("Remove", systemImage: "trash") }
+                    }
+                }
+                Button { ingredientComponents.append(IngredientComponent(name: "")) } label: {
+                    Label("Add active ingredient", systemImage: "plus.circle")
+                }
+            } header: {
+                Text("Ingredient components")
+            } footer: {
+                Text("The printed total stays separate from each ingredient strength.")
+            }
+            Section("Package images") {
+                DrugPhotoGalleryView(images: currentImages, height: 190, onRemove: removePhoto)
+                Button { beginImageFlow(.camera) } label: { Label("Take another photo", systemImage: "camera.fill") }
+                Button { beginImageFlow(.library) } label: { Label("Add from photo library", systemImage: "photo.on.rectangle") }
             }
             Section("Paste leaflet") {
                 TextEditor(text: $leafletText).frame(minHeight: 260)
-                Button("Save leaflet") { product.leafletText = leafletText; product.leafletUpdatedAt = .now; try? context.save() }.buttonStyle(.borderedProminent)
+                Button("Save brand product") { save() }.buttonStyle(.borderedProminent)
             }
             Section {
                 NavigationLink { DrugImportView(drug: drug, startsInAIMode: true, initialLeafletText: leafletText) } label: {
@@ -740,8 +971,84 @@ private struct ProductLeafletEditorView: View {
                 }
             } footer: { Text("The leaflet is product-specific. You review every proposed profile change before saving.") }
         }
-        .navigationTitle(product.tradeName)
+        .navigationTitle(tradeName.trimmed.isEmpty ? "Brand product" : tradeName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(tradeName.trimmed.isEmpty) } }
+        .task(id: photoItems.count) { await loadPhotoItems() }
+        .photosPicker(isPresented: libraryPresentation, selection: $photoItems, maxSelectionCount: 8, matching: .images)
+        .fullScreenCover(isPresented: cameraPresentation, onDismiss: presentPendingCameraDraft) {
+            CameraPicker { pendingCameraDraft = ImageDraft(image: $0) }.ignoresSafeArea()
+        }
+        .fullScreenCover(item: cropPresentation) { draft in
+            ImageEditorView(draft: draft) { appendPhoto($0) }.interactiveDismissDisabled()
+        }
+        .alert("Brand product", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") { message = nil }
+        } message: { Text(message ?? "") }
+    }
+
+    private var currentImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
+    private var cameraPresentation: Binding<Bool> { Binding(get: { if case .camera? = imageFlow { true } else { false } }, set: { if !$0 { imageFlow = nil } }) }
+    private var libraryPresentation: Binding<Bool> { Binding(get: { if case .library? = imageFlow { true } else { false } }, set: { if !$0 { imageFlow = nil } }) }
+    private var cropPresentation: Binding<ImageDraft?> {
+        Binding(
+            get: { if case .crop(let draft)? = imageFlow { draft } else { nil } },
+            set: { draft in imageFlow = draft.map { .crop($0) } }
+        )
+    }
+
+    private func beginImageFlow(_ destination: ImageFlowDestination) {
+        if case .camera = destination, !UIImagePickerController.isSourceTypeAvailable(.camera) {
+            message = "Camera is unavailable. Choose a photo from the library instead."
+        } else { imageFlow = destination }
+    }
+    private func presentPendingCameraDraft() { if let draft = pendingCameraDraft { pendingCameraDraft = nil; imageFlow = .crop(draft) } }
+    private func appendPhoto(_ payload: DrugImagePayload) {
+        if imageData == nil { imageData = payload.imageData; thumbnailData = payload.thumbnailData }
+        else { additionalImageData.append(payload.imageData); additionalThumbnailData.append(payload.thumbnailData) }
+    }
+    private func removePhoto(at index: Int) {
+        if index == 0 {
+            imageData = additionalImageData.first; thumbnailData = additionalThumbnailData.first
+            if !additionalImageData.isEmpty { additionalImageData.removeFirst() }
+            if !additionalThumbnailData.isEmpty { additionalThumbnailData.removeFirst() }
+        } else {
+            let item = index - 1
+            if additionalImageData.indices.contains(item) { additionalImageData.remove(at: item) }
+            if additionalThumbnailData.indices.contains(item) { additionalThumbnailData.remove(at: item) }
+        }
+    }
+    private func loadPhotoItems() async {
+        guard !photoItems.isEmpty else { return }
+        do {
+            for item in photoItems {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                let payload = try ImageCompressor.payload(from: ImageCompressor.image(from: data))
+                await MainActor.run { appendPhoto(payload) }
+            }
+            await MainActor.run { photoItems = [] }
+        } catch { await MainActor.run { message = error.localizedDescription; photoItems = [] } }
+    }
+    private func save() {
+        let cleanComponents = ingredientComponents.filter { !$0.name.trimmed.isEmpty }
+        product.tradeName = tradeName.trimmed
+        product.manufacturer = manufacturer.trimmed
+        product.marketedStrengthLabel = marketedStrengthLabel.trimmed
+        product.strength = marketedStrengthLabel.trimmed
+        product.ingredientComponents = cleanComponents
+        product.dosageForm = dosageForm.trimmed
+        product.route = route.trimmed
+        product.country = country.trimmed
+        product.imageData = imageData
+        product.thumbnailData = thumbnailData
+        product.additionalImageData = additionalImageData
+        product.additionalThumbnailData = additionalThumbnailData
+        product.leafletText = leafletText
+        product.leafletUpdatedAt = leafletText.trimmed.isEmpty ? nil : .now
+        product.productKey = IngredientIdentity.productKey(tradeName: product.tradeName, manufacturer: product.manufacturer, strength: product.marketedStrengthLabel, dosageForm: product.dosageForm, ingredientKey: drug.canonicalIngredientKey)
+        drug.tradeNames = Array(Set((drug.tradeNames + [product.tradeName]).filter { !$0.trimmed.isEmpty })).sorted()
+        do { try context.save(); message = "Brand product saved." }
+        catch { context.rollback(); message = error.localizedDescription }
     }
 }
 

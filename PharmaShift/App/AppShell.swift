@@ -146,7 +146,10 @@ private struct LearningSettingsView: View {
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
     @State private var keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+    @State private var geminiKey = ""
+    @State private var geminiStatus = GeminiKeyStore.shared.savedKeyStatusDescription()
     @State private var checkingConnection = false
+    @State private var checkingGeminiConnection = false
     @State private var showsKeyStatus = false
 
     var body: some View {
@@ -188,7 +191,39 @@ private struct LearningSettingsView: View {
                 LabeledContent("App build", value: appBuild)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("For standalone generation, DeepSeek receives the drug identity and optional package text you entered. Trusted import sends compact source text, and AI practice sends compact saved facts. Drug photos stay on device.")
+                Text("For standalone generation, DeepSeek receives the confirmed drug identity and optional package facts. Trusted import sends compact source text, and AI practice sends compact saved facts. DeepSeek does not receive drug photos.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Gemini package recognition") {
+                SecureField("Gemini API key", text: $geminiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.password)
+                    .accessibilityIdentifier("gemini.keyField")
+                PasteButton(payloadType: String.self) { strings in
+                    geminiKey = strings.first?.normalizedAPIKey ?? ""
+                }
+                .buttonStyle(.bordered)
+                Button { saveGeminiKey() } label: {
+                    Label("Save Gemini key", systemImage: "key.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(geminiKey.normalizedAPIKey.isEmpty)
+                Button(role: .destructive) { clearGeminiKey() } label: {
+                    Label("Clear Gemini key", systemImage: "trash")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                Button { checkGeminiConnection() } label: {
+                    Label(checkingGeminiConnection ? "Checking Gemini" : "Check Gemini connection", systemImage: "network")
+                }
+                .disabled(checkingGeminiConnection)
+                Text(geminiStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Medicine package photos are sent to Google Gemini 2.5 Flash to identify visible product facts and component strengths. Clinical profile generation remains with DeepSeek.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -208,7 +243,7 @@ private struct LearningSettingsView: View {
         .navigationTitle("Practice Preferences")
         .accessibilityIdentifier("deepSeek.settings")
         .onAppear { refreshKeyStatus() }
-        .alert("DeepSeek key", isPresented: $showsKeyStatus) {
+        .alert("AI key", isPresented: $showsKeyStatus) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(keyStatus)
@@ -248,6 +283,39 @@ private struct LearningSettingsView: View {
 
     private func refreshKeyStatus() {
         keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
+        geminiStatus = GeminiKeyStore.shared.savedKeyStatusDescription()
+    }
+
+    private func saveGeminiKey() {
+        do {
+            let location = try GeminiKeyStore.shared.save(apiKey: geminiKey)
+            guard GeminiKeyStore.shared.apiKey() == geminiKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
+            geminiStatus = "Saved key ••••\(geminiKey.normalizedAPIKey.suffix(4)) via \(location.label)"
+        } catch {
+            geminiStatus = "Could not save Gemini key: \(error.localizedDescription)"
+        }
+        keyStatus = geminiStatus
+        showsKeyStatus = true
+    }
+
+    private func clearGeminiKey() {
+        GeminiKeyStore.shared.delete()
+        geminiKey = ""
+        geminiStatus = "No Gemini key saved"
+        keyStatus = geminiStatus
+        showsKeyStatus = true
+    }
+
+    private func checkGeminiConnection() {
+        checkingGeminiConnection = true
+        Task {
+            do {
+                let status = try await GeminiKeyStore.shared.testConnection()
+                await MainActor.run { geminiStatus = status; keyStatus = status; checkingGeminiConnection = false; showsKeyStatus = true }
+            } catch {
+                await MainActor.run { geminiStatus = "Gemini connection failed: \(error.localizedDescription)"; keyStatus = geminiStatus; checkingGeminiConnection = false; showsKeyStatus = true }
+            }
+        }
     }
 
     private var appBuild: String {
@@ -275,7 +343,7 @@ private struct AboutView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Private, offline training companion", systemImage: "lock.shield.fill")
+                    Label("Offline-first training companion", systemImage: "lock.shield.fill")
                         .font(.headline)
                     Text("Renlyst is for personal pharmacy learning. Confirm clinical decisions and dispensing with your supervising pharmacist.")
                     Text("Renlyst للتعلّم الشخصي أثناء التدريب. أكّد القرارات السريرية وصرف الأدوية مع الصيدلي المشرف.")

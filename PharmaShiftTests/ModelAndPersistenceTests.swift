@@ -74,6 +74,26 @@ final class ModelAndPersistenceTests: XCTestCase {
         XCTAssertFalse(rejected.matches(drug))
     }
 
+    func testCombinationAndBrandProductMetadataAreSearchable() {
+        let drug = Drug(scientificName: "Sacubitril + Valsartan", tradeNames: ["Savesto"], chapter: .cardiovascular)
+        drug.activeIngredients = ["Sacubitril", "Valsartan"]
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients)
+        let product = DrugProduct(
+            productKey: "savesto-50",
+            tradeName: "Savesto",
+            manufacturer: "Local manufacturer",
+            strength: "50 mg",
+            marketedStrengthLabel: "50 mg",
+            ingredientComponents: [IngredientComponent(name: "Sacubitril", displayStrength: "24 mg"), IngredientComponent(name: "Valsartan", displayStrength: "26 mg")],
+            dosageForm: "Tablet",
+            profile: drug
+        )
+        drug.products = [product]
+        XCTAssertTrue(DrugFilter(searchText: "sacubitril").matches(drug))
+        XCTAssertTrue(DrugFilter(searchText: "26 mg").matches(drug))
+        XCTAssertTrue(DrugFilter(searchText: "Savesto 50 mg").matches(drug))
+    }
+
     func testArabicSearchAndFutureReadyDefaults() {
         let drug = Drug(scientificName: "Enalapril", chapter: .cardiovascular)
         drug.arabicExplanation = "يستخدم لعلاج ارتفاع ضغط الدم"

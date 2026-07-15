@@ -267,8 +267,8 @@ enum DrugImportError: LocalizedError, Equatable {
     case aiReturnedEmpty
     case unresolvedLocalBrand
     case deepSeekHTTPStatus(Int)
-    case missingGeminiKey
-    case geminiHTTPStatus(Int, String)
+    case missingOpenRouterKey
+    case openRouterHTTPStatus(Int, String)
     case packageRecognitionFailed
 
     var errorDescription: String? {
@@ -282,12 +282,12 @@ enum DrugImportError: LocalizedError, Equatable {
         case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry generation."
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
-        case .missingGeminiKey: "Add your Gemini API key in Settings before scanning a package."
-        case .geminiHTTPStatus(let status, let detail):
+        case .missingOpenRouterKey: "Add your OpenRouter API key in Settings before scanning a package."
+        case .openRouterHTTPStatus(let status, let detail):
             detail.isEmpty
-                ? "Gemini package recognition failed (HTTP \(status)). Check the saved key and try again."
-                : "Gemini package recognition failed (HTTP \(status)): \(detail)"
-        case .packageRecognitionFailed: "Gemini could not identify enough package facts. Retake clear front and back photos or enter the medicine manually."
+                ? "OpenRouter package recognition failed (HTTP \(status)). Check the saved key and model slug, then try again."
+                : "OpenRouter package recognition failed (HTTP \(status)): \(detail)"
+        case .packageRecognitionFailed: "The vision model could not identify enough package facts. Retake clear front and back photos or enter the medicine manually."
         }
     }
 }
@@ -494,29 +494,29 @@ protocol DrugPackageRecognizing: Sendable {
     func recognize(images: [Data]) async throws -> PackageRecognitionResult
 }
 
-actor GeminiPackageVisionService: DrugPackageRecognizing {
-    static let model = "gemini-2.5-flash"
-    static let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/interactions")!
+actor OpenRouterPackageVisionService: DrugPackageRecognizing {
+    static let defaultModel = "google/gemini-2.5-flash"
+    static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
     private let session: URLSession
-    private let keyStore: GeminiKeyStore
+    private let keyStore: OpenRouterKeyStore
 
-    init(session: URLSession = .shared, keyStore: GeminiKeyStore = .shared) {
+    init(session: URLSession = .shared, keyStore: OpenRouterKeyStore = .shared) {
         self.session = session
         self.keyStore = keyStore
     }
 
     func recognize(images: [Data]) async throws -> PackageRecognitionResult {
-        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
+        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingOpenRouterKey }
         guard !images.isEmpty else { throw DrugImportError.packageRecognitionFailed }
-        let request = try Self.makeRequest(apiKey: apiKey, images: images)
+        let request = try Self.makeRequest(apiKey: apiKey, model: keyStore.modelID(), images: images)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.packageRecognitionFailed }
         guard (200..<300).contains(http.statusCode) else {
-            throw DrugImportError.geminiHTTPStatus(http.statusCode, Self.errorDetail(from: data))
+            throw DrugImportError.openRouterHTTPStatus(http.statusCode, Self.errorDetail(from: data))
         }
-        let envelope = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
-        guard let text = envelope.steps.last(where: { $0.type == "model_output" })?.content?.first(where: { $0.type == "text" })?.text,
-              let json = text.data(using: .utf8),
+        let envelope = try JSONDecoder().decode(OpenRouterChatResponse.self, from: data)
+        guard let text = envelope.choices.first?.message.content,
+              let json = try? DeepSeekJSONSanitizer.objectData(from: text),
               let result = try? JSONDecoder().decode(PackageRecognitionResult.self, from: json),
               !result.tradeName.trimmed.isEmpty || !result.ingredients.isEmpty else {
             throw DrugImportError.packageRecognitionFailed
@@ -524,25 +524,34 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         return result
     }
 
-    static func makeRequest(apiKey: String, images: [Data]) throws -> URLRequest {
-        var input: [[String: Any]] = images.map { ["type": "image", "mime_type": "image/jpeg", "data": $0.base64EncodedString()] }
-        input.append(["type": "text", "text": Self.prompt])
+    static func makeRequest(apiKey: String, model: String, images: [Data]) throws -> URLRequest {
+        var content: [[String: Any]] = [["type": "text", "text": Self.prompt]]
+        content.append(contentsOf: images.map {
+            ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\($0.base64EncodedString())"]]
+        })
         let body: [String: Any] = [
-            "model": Self.model,
-            "input": input,
-            "store": false,
-            "response_format": ["type": "text", "mime_type": "application/json", "schema": Self.schema]
+            "model": model.trimmed.isEmpty ? Self.defaultModel : model.trimmed,
+            "messages": [["role": "user", "content": content]],
+            "response_format": [
+                "type": "json_schema",
+                "json_schema": ["name": "drug_package", "strict": true, "schema": Self.schema]
+            ],
+            "provider": ["require_parameters": true],
+            "temperature": 0,
+            "stream": false
         ]
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("https://github.com/omarballawi/Pharmashift", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("Renlyst", forHTTPHeaderField: "X-Title")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
     }
 
     static func errorDetail(from data: Data) -> String {
-        guard let envelope = try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data) else { return "" }
+        guard let envelope = try? JSONDecoder().decode(OpenRouterErrorEnvelope.self, from: data) else { return "" }
         return String(envelope.error.message.replacingOccurrences(of: "\n", with: " ").trimmed.prefix(300))
     }
 
@@ -569,21 +578,20 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
     ]
 }
 
-private struct GeminiErrorEnvelope: Decodable {
+private struct OpenRouterErrorEnvelope: Decodable {
     struct APIError: Decodable { var message: String }
     var error: APIError
 }
 
-private struct GeminiInteractionResponse: Decodable {
-    struct Step: Decodable {
-        struct Content: Decodable { var type: String; var text: String? }
-        var type: String
-        var content: [Content]?
+private struct OpenRouterChatResponse: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable { var content: String }
+        var message: Message
     }
-    var steps: [Step]
+    var choices: [Choice]
 }
 
-actor MockGeminiPackageVisionService: DrugPackageRecognizing {
+actor MockOpenRouterPackageVisionService: DrugPackageRecognizing {
     func recognize(images: [Data]) async throws -> PackageRecognitionResult {
         guard !images.isEmpty else { throw DrugImportError.packageRecognitionFailed }
         return PackageRecognitionResult(
@@ -1376,7 +1384,7 @@ private enum FastGatherPromptBuilder {
         Route: \(identity.route)
         System/chapter: \(identity.system)
 
-        Optional package facts recognized by Gemini or pasted leaflet details:
+        Optional package facts recognized by the package vision model or pasted leaflet details:
         \(packageText.prefix(2_000))
 
         Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and up to four short flashcards. Set memorization.reviewQuestions to an empty array; Renlyst creates eight review questions locally after decoding.
@@ -2213,43 +2221,56 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     private func deletePreferences() { preferences.removeObject(forKey: preferenceKey) }
 }
 
-final class GeminiKeyStore: @unchecked Sendable {
-    static let shared = GeminiKeyStore()
+final class OpenRouterKeyStore: @unchecked Sendable {
+    static let shared = OpenRouterKeyStore()
     private let storage: DeepSeekKeyStore
+    private let preferences: UserDefaults
+    private let modelPreferenceKey: String
 
     init(storage: DeepSeekKeyStore = DeepSeekKeyStore(
-        service: "com.renlyst.gemini",
+        service: "com.renlyst.openrouter",
         account: "api-key",
         fallbackDirectory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("gemini", isDirectory: true)
-    )) {
+            .appendingPathComponent("openrouter", isDirectory: true)
+    ), preferences: UserDefaults = .standard, modelPreferenceKey: String = "openrouter.vision-model") {
         self.storage = storage
+        self.preferences = preferences
+        self.modelPreferenceKey = modelPreferenceKey
     }
 
     func apiKey() -> String? { storage.apiKey() }
 
+    func modelID() -> String {
+        let saved = preferences.string(forKey: modelPreferenceKey)?.trimmed ?? ""
+        return saved.isEmpty ? OpenRouterPackageVisionService.defaultModel : saved
+    }
+
+    func saveModelID(_ modelID: String) {
+        let normalized = modelID.trimmed
+        preferences.set(normalized.isEmpty ? OpenRouterPackageVisionService.defaultModel : normalized, forKey: modelPreferenceKey)
+    }
+
     func savedKeyStatusDescription() -> String {
-        storage.maskedKeyDescription() ?? "No Gemini key saved"
+        storage.maskedKeyDescription() ?? "No OpenRouter key saved"
     }
 
     @discardableResult
     func save(apiKey: String) throws -> DeepSeekKeyStore.StorageLocation {
-        guard !apiKey.normalizedAPIKey.isEmpty else { throw DrugImportError.missingGeminiKey }
+        guard !apiKey.normalizedAPIKey.isEmpty else { throw DrugImportError.missingOpenRouterKey }
         return try storage.save(apiKey: apiKey)
     }
 
     func delete() { storage.delete() }
 
     func testConnection(session: URLSession = .shared) async throws -> String {
-        guard let apiKey = apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
-        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models")!)
-        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        guard let apiKey = apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingOpenRouterKey }
+        let request = try OpenRouterPackageVisionService.makeRequest(apiKey: apiKey, model: modelID(), images: [])
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            throw DrugImportError.geminiHTTPStatus(http.statusCode, GeminiPackageVisionService.errorDetail(from: data))
+            throw DrugImportError.openRouterHTTPStatus(http.statusCode, OpenRouterPackageVisionService.errorDetail(from: data))
         }
-        return "Gemini 2.5 Flash connection is ready"
+        return "OpenRouter is ready with \(modelID())"
     }
 }
 

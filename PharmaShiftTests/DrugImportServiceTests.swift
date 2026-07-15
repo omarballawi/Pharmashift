@@ -96,46 +96,56 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertFalse(text.localizedCaseInsensitiveContains("base64"))
     }
 
-    func testGeminiPackageRecognitionSendsImagesAndReadsOnlyModelOutput() async throws {
-        let preferences = try XCTUnwrap(UserDefaults(suiteName: "GeminiTests.\(UUID().uuidString)"))
+    func testOpenRouterPackageRecognitionUsesConfiguredModelAndReadsAssistantContent() async throws {
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: "OpenRouterTests.\(UUID().uuidString)"))
         let storage = DeepSeekKeyStore(
-            service: "gemini.\(UUID().uuidString)",
+            service: "openrouter.\(UUID().uuidString)",
             fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
             allowsKeychain: false,
             allowsProtectedFile: false,
             preferences: preferences
         )
-        let keyStore = GeminiKeyStore(storage: storage)
-        try keyStore.save(apiKey: "gemini-test-key")
+        let modelPreferenceKey = "openrouter.test-model.\(UUID().uuidString)"
+        let keyStore = OpenRouterKeyStore(storage: storage, preferences: preferences, modelPreferenceKey: modelPreferenceKey)
+        XCTAssertEqual(keyStore.modelID(), "google/gemini-2.5-flash")
+        keyStore.saveModelID("google/gemini-3-flash-preview")
+        try keyStore.save(apiKey: "openrouter-test-key")
         defer { keyStore.delete() }
         let resultJSON = """
         {"tradeName":"Savesto","manufacturer":"","ingredients":[{"name":"Sacubitril","saltForm":"","strengthValue":24,"strengthUnit":"mg","displayStrength":"24 mg"},{"name":"Valsartan","saltForm":"","strengthValue":26,"strengthUnit":"mg","displayStrength":"26 mg"}],"marketedStrengthLabel":"50 mg","dosageForm":"Tablet","route":"Oral","country":"Iraq","confidence":0.98,"ambiguities":[]}
         """
         let responseBody = try JSONSerialization.data(withJSONObject: [
-            "steps": [
-                ["type": "user_input", "content": [["type": "text", "text": "This must not be decoded"]]],
-                ["type": "model_output", "content": [["type": "text", "text": resultJSON]]]
-            ]
+            "choices": [["message": ["role": "assistant", "content": resultJSON]]]
         ])
-        let outboundRequest = try GeminiPackageVisionService.makeRequest(apiKey: "gemini-test-key", images: [Data([1, 2, 3])])
+        let outboundRequest = try OpenRouterPackageVisionService.makeRequest(apiKey: "openrouter-test-key", model: keyStore.modelID(), images: [Data([1, 2, 3])])
         let outboundBody = try XCTUnwrap(outboundRequest.httpBody)
         let outboundJSON = try XCTUnwrap(try JSONSerialization.jsonObject(with: outboundBody) as? [String: Any])
-        let outboundInput = try XCTUnwrap(outboundJSON["input"] as? [[String: Any]])
+        let messages = try XCTUnwrap(outboundJSON["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.first?["content"] as? [[String: Any]])
+        let imageURL = try XCTUnwrap(content.last?["image_url"] as? [String: Any])
         let responseFormat = try XCTUnwrap(outboundJSON["response_format"] as? [String: Any])
-        XCTAssertEqual(outboundRequest.url?.absoluteString, "https://generativelanguage.googleapis.com/v1beta/interactions")
-        XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
-        XCTAssertEqual(outboundJSON["model"] as? String, "gemini-2.5-flash")
-        XCTAssertEqual(outboundJSON["store"] as? Bool, false)
-        XCTAssertEqual(outboundInput.first?["data"] as? String, Data([1, 2, 3]).base64EncodedString())
-        XCTAssertEqual(responseFormat["mime_type"] as? String, "application/json")
+        let jsonSchema = try XCTUnwrap(responseFormat["json_schema"] as? [String: Any])
+        let provider = try XCTUnwrap(outboundJSON["provider"] as? [String: Any])
+        XCTAssertEqual(outboundRequest.url?.absoluteString, "https://openrouter.ai/api/v1/chat/completions")
+        XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "Authorization"), "Bearer openrouter-test-key")
+        XCTAssertNil(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"))
+        XCTAssertEqual(outboundJSON["model"] as? String, "google/gemini-3-flash-preview")
+        XCTAssertEqual(messages.first?["role"] as? String, "user")
+        XCTAssertEqual(content.first?["type"] as? String, "text")
+        XCTAssertEqual(content.last?["type"] as? String, "image_url")
+        XCTAssertEqual(imageURL["url"] as? String, "data:image/jpeg;base64,\(Data([1, 2, 3]).base64EncodedString())")
+        XCTAssertEqual(responseFormat["type"] as? String, "json_schema")
+        XCTAssertEqual(jsonSchema["name"] as? String, "drug_package")
+        XCTAssertEqual(jsonSchema["strict"] as? Bool, true)
+        XCTAssertEqual(provider["require_parameters"] as? Bool, true)
         DeepSeekURLProtocolStub.requestHandler = { request in
-            XCTAssertEqual(request.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer openrouter-test-key")
             return (try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)), responseBody)
         }
         defer { DeepSeekURLProtocolStub.requestHandler = nil }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [DeepSeekURLProtocolStub.self]
-        let service = GeminiPackageVisionService(session: URLSession(configuration: configuration), keyStore: keyStore)
+        let service = OpenRouterPackageVisionService(session: URLSession(configuration: configuration), keyStore: keyStore)
         let result = try await service.recognize(images: [Data([1, 2, 3])])
         XCTAssertEqual(result.tradeName, "Savesto")
         XCTAssertEqual(result.ingredients.map(\.strengthText), ["24 mg", "26 mg"])
@@ -147,7 +157,7 @@ final class DrugImportServiceTests: XCTestCase {
         }
         do {
             _ = try await service.recognize(images: [Data([1, 2, 3])])
-            XCTFail("Expected Gemini HTTP failure")
+            XCTFail("Expected OpenRouter HTTP failure")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("HTTP 400"))
             XCTAssertTrue(error.localizedDescription.contains("Invalid request payload"))

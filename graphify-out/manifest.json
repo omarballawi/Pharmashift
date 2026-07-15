@@ -25,8 +25,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/App/AppShell.swift": {
-    "mtime": 1784082372.7933874,
-    "ast_hash": "7d05f783b9a60a136a24fbc455baceb5",
+    "mtime": 1784088610.9622042,
+    "ast_hash": "a18eafe3bb709e61606cd24f34af1598",
     "semantic_hash": ""
   },
   "PharmaShift/App/AppTheme.swift": {
@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Features/Capture/CaptureView.swift": {
-    "mtime": 1784082000.6866558,
-    "ast_hash": "b178b9003c1fb9f4c4aeabfbfbcf1eb6",
+    "mtime": 1784088543.902981,
+    "ast_hash": "22ec5658005343471e119b2ee7e6337f",
     "semantic_hash": ""
   },
   "PharmaShift/Features/Home/HomeView.swift": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   ".github/workflows/build-unsigned-ipa.yml": {
-    "mtime": 1784087833.0431888,
-    "ast_hash": "ae55be432c665c1bf56dbf63d1cee864",
+    "mtime": 1784088701.6036382,
+    "ast_hash": "50c0693d4244b7ebc956ef14e5e01952",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -140,8 +140,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1784082372.7944324,
-    "ast_hash": "0e1c10ab86d08fa57fbd89ba47a78829",
+    "mtime": 1784088701.5985477,
+    "ast_hash": "8c188c8a6a643d25a24af86be18993d4",
     "semantic_hash": ""
   },
   "WINDOWS_IPA.md": {
@@ -165,8 +165,8 @@
     "semantic_hash": ""
   },
   "PharmaShiftTests/DrugImportServiceTests.swift": {
-    "mtime": 1784087574.7274282,
-    "ast_hash": "044cfb28b476c82692a97e1f2c028b3c",
+    "mtime": 1784088647.834808,
+    "ast_hash": "062e5903e621bbf8cd9fc3e674cacda3",
     "semantic_hash": ""
   },
   "PharmaShiftTests/MigrationFixtureTests.swift": {
@@ -185,8 +185,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Features/Library/DrugImportView.swift": {
-    "mtime": 1784082315.0978727,
-    "ast_hash": "d1e452c391a83b8a2e7fe1b3cd90d460",
+    "mtime": 1784088543.9009113,
+    "ast_hash": "c793c9440a11f6b180cfb787a2462e3d",
     "semantic_hash": ""
   },
   "PharmaShift/Services/BackupService.swift": {
@@ -195,8 +195,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Services/DrugImportService.swift": {
-    "mtime": 1784087590.8516822,
-    "ast_hash": "2623ebf4edccce5f41b5a8d5e5ddd0d5",
+    "mtime": 1784088543.894691,
+    "ast_hash": "37a8000ab247bbb221b9b77c0295a1a2",
     "semantic_hash": ""
   },
   "PharmaShift/Services/PracticeEngine.swift": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "DESIGN.md": {
-    "mtime": 1784082172.1172953,
-    "ast_hash": "70f16bcdf3751cb869d31972f97b8fd5",
+    "mtime": 1784088701.6005821,
+    "ast_hash": "bcdec1488becfe7cb012c0fea3d1cab9",
     "semantic_hash": ""
   },
   "PharmaShift/Services/DeepSeekLearningService.swift": {

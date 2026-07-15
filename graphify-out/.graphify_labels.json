@@ -66,10 +66,13 @@
   "64": "MemoryReviewGrade",
   "65": "Bool",
   "66": "DeepSeekURLProtocolStub",
+  "67": "VerificationStatus",
   "68": "DrugBackupDTO",
   "69": "String",
   "71": "BackupImportPreviewView",
   "72": "ExcretionRoute",
   "74": "AppTheme",
-  "80": "VerificationStatus"
+  "75": "Double",
+  "80": "VerificationStatus",
+  "84": "String"
 }

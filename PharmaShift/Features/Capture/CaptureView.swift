@@ -62,7 +62,7 @@ struct CaptureView: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("capture.trustedImport")
-                Text("Gemini 2.5 Flash identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
+                Text("Your selected OpenRouter vision model identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: { Text("Choose how to add") }

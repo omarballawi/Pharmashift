@@ -74,7 +74,7 @@ struct DrugImportView: View {
         drug: Drug? = nil,
         providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
         aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault(),
-        packageRecognizer: any DrugPackageRecognizing = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockGeminiPackageVisionService() : GeminiPackageVisionService(),
+        packageRecognizer: any DrugPackageRecognizing = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockOpenRouterPackageVisionService() : OpenRouterPackageVisionService(),
         fastGatherService: any FastDrugGatheringService = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockFastDrugGatherService() : DeepSeekFastDrugGatherService(),
         startsInAIMode: Bool = false,
         initialLeafletText: String = ""
@@ -308,7 +308,7 @@ struct DrugImportView: View {
         let images = currentImages
         guard !images.isEmpty else { return }
         isLoading = true
-        loadingMessage = "Gemini 2.5 Flash is identifying the package and ingredient strengths..."
+        loadingMessage = "OpenRouter (\(OpenRouterKeyStore.shared.modelID())) is identifying the package and ingredient strengths..."
         Task {
             do {
                 let recognition = try await packageRecognizer.recognize(images: images)
@@ -570,7 +570,7 @@ private struct ImportFromPhotoView: View {
                         .buttonStyle(.bordered)
                 }
             } footer: {
-                Text("Package photos are sent to Gemini 2.5 Flash for semantic medicine-package recognition. They are not sent to DeepSeek.")
+                Text("Package photos are sent through OpenRouter to your selected vision model for semantic medicine-package recognition. They are not sent to DeepSeek.")
             }
             Section("Recognized package") {
                 if recognition.confidence > 0 {

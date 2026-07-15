@@ -57,7 +57,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 - Smart Session: one recommended mixed session; individual modes live under Quick practice and Choose a mode.
 - Practice questions default to MCQ, True/False, matching/sorting, and short selection interactions. Text entry is reserved for scientific/trade-name spelling.
 - AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
-- AI package recognition: Gemini 2.5 Flash receives package photos and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
+- AI package recognition: OpenRouter sends package photos to a user-configurable vision model, defaulting to `google/gemini-2.5-flash`, and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
 - AI clinical generation: DeepSeek V4 Flash uses five focused section requests for identity/dosing, interactions/warnings, adverse effects, reproductive safety/pharmacology, and counseling/learning. Altibbi-first trusted aggregation with RxNorm/DailyMed/openFDA support, leaflet override, field review, editable questions, and `Not found` instead of silent gaps remain available.
 - System paths: class lessons advance through Recognize, Understand, Safety, Counsel, and Apply, then a system checkpoint.
 - Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, atomic linked notes, mechanism builder, PK timeline, safety sort, counseling builder, and voice counseling simulator.
@@ -84,7 +84,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 
 ## Last updated
 
-2026-07-15 — Gemini 2.5 Flash semantic package recognition, grouped DeepSeek clinical generation, combination-component strengths, editable brand media, and a one-page expandable drug profile with rich forms, doses, interactions, adverse effects, reproductive safety, and ADME.
+2026-07-15 — OpenRouter vision package recognition with configurable model slug and Gemini 2.5 Flash default; grouped DeepSeek clinical generation, combination-component strengths, editable brand media, and a one-page expandable drug profile with rich forms, doses, interactions, adverse effects, reproductive safety, and ADME.
 
 2026-07-14 — ingredient-centered profiles and product variants, seven-page swipeable Drug Card, Altibbi-first source aggregation, product leaflet updates, structured standard regimens and dose calculator, WHO pediatric median estimates through age 10, detailed prodrug/elimination, library relationship refresh, and full question refresh.
 

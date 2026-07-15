@@ -1580,7 +1580,7 @@ enum DrugImportValidator {
     private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
         let requestedSystem = identity.system.trimmed
         let generatedSystem = normalizedChapter(imported.system)
-        ImportedIdentity(
+        return ImportedIdentity(
             scientificName: identity.scientificName,
             tradeNames: identity.tradeNames,
             system: requestedSystem.isEmpty || requestedSystem == Chapter.other.rawValue ? generatedSystem : requestedSystem,

@@ -154,7 +154,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "foundation",
-      "community": 61,
+      "community": 46,
       "norm_label": "foundation"
     },
     {
@@ -234,7 +234,7 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "pharmashifttests_drugimportservicetests_drugimportservicetests_testopenrouterpackagerecognitionusesconfiguredmodelandreadsassistantcontent",
-      "community": 84,
+      "community": 3,
       "norm_label": ".testopenrouterpackagerecognitionusesconfiguredmodelandreadsassistantcontent()"
     },
     {
@@ -815,7 +815,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "pharmashifttests_modelandpersistencetests_modelandpersistencetests_testprivacyvalidatorfindsphoneandemail",
-      "community": 61,
+      "community": 46,
       "norm_label": ".testprivacyvalidatorfindsphoneandemail()"
     },
     {
@@ -1356,7 +1356,7 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "observation",
-      "community": 61,
+      "community": 46,
       "norm_label": "observation"
     },
     {
@@ -1557,7 +1557,7 @@
       "source_location": "L144",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview",
-      "community": 84,
+      "community": 3,
       "norm_label": "learningsettingsview"
     },
     {
@@ -1577,7 +1577,7 @@
       "source_location": "L273",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_cleardeepseekkey",
-      "community": 84,
+      "community": 3,
       "norm_label": ".cleardeepseekkey()"
     },
     {
@@ -1587,7 +1587,7 @@
       "source_location": "L280",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_checkconnection",
-      "community": 84,
+      "community": 3,
       "norm_label": ".checkconnection()"
     },
     {
@@ -1597,7 +1597,7 @@
       "source_location": "L292",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_refreshkeystatus",
-      "community": 84,
+      "community": 3,
       "norm_label": ".refreshkeystatus()"
     },
     {
@@ -1607,7 +1607,7 @@
       "source_location": "L298",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_saveopenrouterconfiguration",
-      "community": 84,
+      "community": 3,
       "norm_label": ".saveopenrouterconfiguration()"
     },
     {
@@ -1617,7 +1617,7 @@
       "source_location": "L316",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_clearopenrouterkey",
-      "community": 84,
+      "community": 3,
       "norm_label": ".clearopenrouterkey()"
     },
     {
@@ -1627,7 +1627,7 @@
       "source_location": "L324",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_learningsettingsview_checkopenrouterconnection",
-      "community": 84,
+      "community": 3,
       "norm_label": ".checkopenrouterconnection()"
     },
     {
@@ -1637,7 +1637,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_swift_binding",
-      "community": 84,
+      "community": 3,
       "norm_label": "binding"
     },
     {
@@ -1647,7 +1647,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_app_appshell_swift_bool",
-      "community": 84,
+      "community": 3,
       "norm_label": "bool"
     },
     {
@@ -1667,7 +1667,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_app_apptheme",
-      "community": 61,
+      "community": 46,
       "norm_label": "apptheme.swift"
     },
     {
@@ -1677,7 +1677,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pharmashift_app_apptheme_apptheme",
-      "community": 61,
+      "community": 46,
       "norm_label": "apptheme"
     },
     {
@@ -1687,7 +1687,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "lineargradient",
-      "community": 61,
+      "community": 46,
       "norm_label": "lineargradient"
     },
     {
@@ -1697,7 +1697,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "pharmashift_app_apptheme_apptheme_colors",
-      "community": 61,
+      "community": 46,
       "norm_label": ".colors()"
     },
     {
@@ -1707,7 +1707,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_app_apptheme_swift_color",
-      "community": 61,
+      "community": 46,
       "norm_label": "color"
     },
     {
@@ -1717,7 +1717,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_app_pharmashiftapp",
-      "community": 74,
+      "community": 61,
       "norm_label": "pharmashiftapp.swift"
     },
     {
@@ -1727,7 +1727,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pharmashift_app_pharmashiftapp_pharmashiftapp",
-      "community": 74,
+      "community": 61,
       "norm_label": "pharmashiftapp"
     },
     {
@@ -1737,7 +1737,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "app",
-      "community": 74,
+      "community": 61,
       "norm_label": "app"
     },
     {
@@ -1747,7 +1747,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "scene",
-      "community": 74,
+      "community": 61,
       "norm_label": "scene"
     },
     {
@@ -1768,7 +1768,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "uniformtypeidentifiers",
-      "community": 61,
+      "community": 46,
       "norm_label": "uniformtypeidentifiers"
     },
     {
@@ -2879,7 +2879,7 @@
       "source_location": "L328",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugdetailview_drugdetailview_localdrug",
-      "community": 82,
+      "community": 45,
       "norm_label": ".localdrug()"
     },
     {
@@ -3239,7 +3239,7 @@
       "source_location": "L1110",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugdetailview_productleafleteditorview_save",
-      "community": 82,
+      "community": 45,
       "norm_label": ".save()"
     },
     {
@@ -3669,7 +3669,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage",
-      "community": 71,
+      "community": 31,
       "norm_label": "importstage"
     },
     {
@@ -3679,7 +3679,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "int",
-      "community": 71,
+      "community": 31,
       "norm_label": "int"
     },
     {
@@ -3689,7 +3689,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage_photo",
-      "community": 71,
+      "community": 31,
       "norm_label": "photo"
     },
     {
@@ -3699,7 +3699,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage_confirm",
-      "community": 71,
+      "community": 31,
       "norm_label": "confirm"
     },
     {
@@ -3709,7 +3709,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage_source",
-      "community": 71,
+      "community": 31,
       "norm_label": "source"
     },
     {
@@ -3719,7 +3719,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage_preview",
-      "community": 71,
+      "community": 31,
       "norm_label": "preview"
     },
     {
@@ -3729,7 +3729,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_importstage_challenge",
-      "community": 71,
+      "community": 31,
       "norm_label": "challenge"
     },
     {
@@ -3879,7 +3879,7 @@
       "source_location": "L278",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_drugimportview_removephoto",
-      "community": 71,
+      "community": 31,
       "norm_label": ".removephoto()"
     },
     {
@@ -3939,7 +3939,7 @@
       "source_location": "L383",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_drugimportview_loadsource",
-      "community": 51,
+      "community": 75,
       "norm_label": ".loadsource()"
     },
     {
@@ -3949,7 +3949,7 @@
       "source_location": "L407",
       "_origin": "ast",
       "id": "pharmashift_features_library_drugimportview_drugimportview_formatwithretry",
-      "community": 51,
+      "community": 75,
       "norm_label": ".formatwithretry()"
     },
     {
@@ -4509,7 +4509,7 @@
       "source_location": "L141",
       "_origin": "ast",
       "id": "pharmashift_features_practice_practiceview_practiceview_learningtool",
-      "community": 45,
+      "community": 33,
       "norm_label": ".learningtool()"
     },
     {
@@ -4519,7 +4519,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_features_practice_practiceview_swift_color",
-      "community": 45,
+      "community": 33,
       "norm_label": "color"
     },
     {
@@ -4689,7 +4689,7 @@
       "source_location": "L565",
       "_origin": "ast",
       "id": "pharmashift_features_practice_practiceview_practicesessionview_gradecolor",
-      "community": 45,
+      "community": 33,
       "norm_label": ".gradecolor()"
     },
     {
@@ -4789,7 +4789,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_features_report_reportview",
-      "community": 42,
+      "community": 41,
       "norm_label": "reportview.swift"
     },
     {
@@ -4819,7 +4819,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_features_report_reportview_swift_double",
-      "community": 42,
+      "community": 41,
       "norm_label": "double"
     },
     {
@@ -4859,7 +4859,7 @@
       "source_location": "L103",
       "_origin": "ast",
       "id": "pharmashift_features_report_reportview_weaknessradarview",
-      "community": 42,
+      "community": 41,
       "norm_label": "weaknessradarview"
     },
     {
@@ -5439,7 +5439,7 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "pharmashift_models_models_durationband",
-      "community": 62,
+      "community": 44,
       "norm_label": "durationband"
     },
     {
@@ -5449,7 +5449,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "pharmashift_models_models_durationband_unknown",
-      "community": 62,
+      "community": 44,
       "norm_label": "unknown"
     },
     {
@@ -5459,7 +5459,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "pharmashift_models_models_durationband_short",
-      "community": 62,
+      "community": 44,
       "norm_label": "short"
     },
     {
@@ -5469,7 +5469,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "pharmashift_models_models_durationband_medium",
-      "community": 62,
+      "community": 44,
       "norm_label": "medium"
     },
     {
@@ -5479,7 +5479,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "pharmashift_models_models_durationband_long",
-      "community": 62,
+      "community": 44,
       "norm_label": "long"
     },
     {
@@ -5839,7 +5839,7 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "pharmashift_models_models_verificationstatus",
-      "community": 33,
+      "community": 47,
       "norm_label": "verificationstatus"
     },
     {
@@ -5849,7 +5849,7 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "pharmashift_models_models_verificationstatus_personal",
-      "community": 33,
+      "community": 47,
       "norm_label": "personal"
     },
     {
@@ -5859,7 +5859,7 @@
       "source_location": "L127",
       "_origin": "ast",
       "id": "pharmashift_models_models_verificationstatus_pendingpharmacist",
-      "community": 33,
+      "community": 47,
       "norm_label": "pendingpharmacist"
     },
     {
@@ -5869,7 +5869,7 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "pharmashift_models_models_verificationstatus_pharmacistverified",
-      "community": 33,
+      "community": 47,
       "norm_label": "pharmacistverified"
     },
     {
@@ -5999,7 +5999,7 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "pharmashift_models_models_memoryreviewgrade",
-      "community": 45,
+      "community": 33,
       "norm_label": "memoryreviewgrade"
     },
     {
@@ -6009,7 +6009,7 @@
       "source_location": "L152",
       "_origin": "ast",
       "id": "pharmashift_models_models_memoryreviewgrade_again",
-      "community": 45,
+      "community": 33,
       "norm_label": "again"
     },
     {
@@ -6019,7 +6019,7 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "pharmashift_models_models_memoryreviewgrade_hard",
-      "community": 45,
+      "community": 33,
       "norm_label": "hard"
     },
     {
@@ -6029,7 +6029,7 @@
       "source_location": "L154",
       "_origin": "ast",
       "id": "pharmashift_models_models_memoryreviewgrade_good",
-      "community": 45,
+      "community": 33,
       "norm_label": "good"
     },
     {
@@ -6039,7 +6039,7 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "pharmashift_models_models_memoryreviewgrade_easy",
-      "community": 45,
+      "community": 33,
       "norm_label": "easy"
     },
     {
@@ -6839,7 +6839,7 @@
       "source_location": "L562",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality",
-      "community": 31,
+      "community": 42,
       "norm_label": "drugevidencequality"
     },
     {
@@ -6849,7 +6849,7 @@
       "source_location": "L563",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality_officiallabel",
-      "community": 31,
+      "community": 42,
       "norm_label": "officiallabel"
     },
     {
@@ -6859,7 +6859,7 @@
       "source_location": "L564",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality_productleaflet",
-      "community": 31,
+      "community": 42,
       "norm_label": "productleaflet"
     },
     {
@@ -6869,7 +6869,7 @@
       "source_location": "L565",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality_altibbi",
-      "community": 31,
+      "community": 42,
       "norm_label": "altibbi"
     },
     {
@@ -6879,7 +6879,7 @@
       "source_location": "L566",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality_aiunverified",
-      "community": 31,
+      "community": 42,
       "norm_label": "aiunverified"
     },
     {
@@ -6889,7 +6889,7 @@
       "source_location": "L567",
       "_origin": "ast",
       "id": "pharmashift_models_models_drugevidencequality_manual",
-      "community": 31,
+      "community": 42,
       "norm_label": "manual"
     },
     {
@@ -7109,7 +7109,7 @@
       "source_location": "L1198",
       "_origin": "ast",
       "id": "pharmashift_models_models_ingredientidentity",
-      "community": 82,
+      "community": 45,
       "norm_label": "ingredientidentity"
     },
     {
@@ -7129,7 +7129,7 @@
       "source_location": "L1205",
       "_origin": "ast",
       "id": "pharmashift_models_models_ingredientidentity_productkey",
-      "community": 82,
+      "community": 45,
       "norm_label": ".productkey()"
     },
     {
@@ -7139,7 +7139,7 @@
       "source_location": "L1209",
       "_origin": "ast",
       "id": "pharmashift_models_models_ingredientidentity_normalize",
-      "community": 82,
+      "community": 45,
       "norm_label": ".normalize()"
     },
     {
@@ -7269,7 +7269,7 @@
       "source_location": "L1322",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice",
-      "community": 82,
+      "community": 45,
       "norm_label": "druglibrarymigrationservice"
     },
     {
@@ -7279,7 +7279,7 @@
       "source_location": "L1327",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice_runifneeded",
-      "community": 82,
+      "community": 45,
       "norm_label": ".runifneeded()"
     },
     {
@@ -7289,7 +7289,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_models_models_swift_modelcontext",
-      "community": 82,
+      "community": 45,
       "norm_label": "modelcontext"
     },
     {
@@ -7299,7 +7299,7 @@
       "source_location": "L1353",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice_backfillrichprofilesifneeded",
-      "community": 82,
+      "community": 45,
       "norm_label": ".backfillrichprofilesifneeded()"
     },
     {
@@ -7309,7 +7309,7 @@
       "source_location": "L1374",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice_makelegacyproduct",
-      "community": 82,
+      "community": 45,
       "norm_label": ".makelegacyproduct()"
     },
     {
@@ -7319,7 +7319,7 @@
       "source_location": "L1382",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice_merge",
-      "community": 82,
+      "community": 45,
       "norm_label": ".merge()"
     },
     {
@@ -7329,7 +7329,7 @@
       "source_location": "L1397",
       "_origin": "ast",
       "id": "pharmashift_models_models_druglibrarymigrationservice_unique",
-      "community": 82,
+      "community": 45,
       "norm_label": ".unique()"
     },
     {
@@ -8509,7 +8509,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_services_drugfilter",
-      "community": 61,
+      "community": 46,
       "norm_label": "drugfilter.swift"
     },
     {
@@ -9171,7 +9171,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_swift_int",
-      "community": 51,
+      "community": 56,
       "norm_label": "int"
     },
     {
@@ -9411,7 +9411,7 @@
       "source_location": "L256",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_importselection_contains",
-      "community": 51,
+      "community": 4,
       "norm_label": ".contains()"
     },
     {
@@ -9521,7 +9521,7 @@
       "source_location": "L269",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_drugimporterror_deepseekhttpstatus",
-      "community": 84,
+      "community": 4,
       "norm_label": "deepseekhttpstatus"
     },
     {
@@ -9621,7 +9621,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_swift_drug",
-      "community": 51,
+      "community": 75,
       "norm_label": "drug"
     },
     {
@@ -9671,7 +9671,7 @@
       "source_location": "L390",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider",
-      "community": 75,
+      "community": 51,
       "norm_label": "altibbiprovider"
     },
     {
@@ -9681,7 +9681,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "urlsession",
-      "community": 84,
+      "community": 51,
       "norm_label": "urlsession"
     },
     {
@@ -9691,7 +9691,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_swift_url",
-      "community": 75,
+      "community": 51,
       "norm_label": "url"
     },
     {
@@ -9701,7 +9701,7 @@
       "source_location": "L396",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_init",
-      "community": 75,
+      "community": 51,
       "norm_label": ".init()"
     },
     {
@@ -9711,7 +9711,7 @@
       "source_location": "L407",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_searchdrug",
-      "community": 75,
+      "community": 51,
       "norm_label": ".searchdrug()"
     },
     {
@@ -9721,7 +9721,7 @@
       "source_location": "L420",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_fetchdrugdetails",
-      "community": 75,
+      "community": 51,
       "norm_label": ".fetchdrugdetails()"
     },
     {
@@ -9731,7 +9731,7 @@
       "source_location": "L446",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_drugurls",
-      "community": 75,
+      "community": 51,
       "norm_label": ".drugurls()"
     },
     {
@@ -9741,7 +9741,7 @@
       "source_location": "L456",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_result",
-      "community": 75,
+      "community": 51,
       "norm_label": ".result()"
     },
     {
@@ -9751,7 +9751,7 @@
       "source_location": "L461",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_article",
-      "community": 75,
+      "community": 51,
       "norm_label": ".article()"
     },
     {
@@ -9761,7 +9761,7 @@
       "source_location": "L467",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_firstmatch",
-      "community": 75,
+      "community": 51,
       "norm_label": ".firstmatch()"
     },
     {
@@ -9771,7 +9771,7 @@
       "source_location": "L471",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_matches",
-      "community": 75,
+      "community": 51,
       "norm_label": ".matches()"
     },
     {
@@ -9781,7 +9781,7 @@
       "source_location": "L480",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_altibbiprovider_plaintext",
-      "community": 75,
+      "community": 51,
       "norm_label": ".plaintext()"
     },
     {
@@ -9821,7 +9821,7 @@
       "source_location": "L497",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterpackagevisionservice",
-      "community": 84,
+      "community": 3,
       "norm_label": "openrouterpackagevisionservice"
     },
     {
@@ -9831,7 +9831,7 @@
       "source_location": "L503",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterpackagevisionservice_init",
-      "community": 84,
+      "community": 3,
       "norm_label": ".init()"
     },
     {
@@ -9841,7 +9841,7 @@
       "source_location": "L508",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterpackagevisionservice_recognize",
-      "community": 84,
+      "community": 4,
       "norm_label": ".recognize()"
     },
     {
@@ -9861,7 +9861,7 @@
       "source_location": "L527",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterpackagevisionservice_makerequest",
-      "community": 84,
+      "community": 3,
       "norm_label": ".makerequest()"
     },
     {
@@ -9881,7 +9881,7 @@
       "source_location": "L553",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterpackagevisionservice_errordetail",
-      "community": 84,
+      "community": 4,
       "norm_label": ".errordetail()"
     },
     {
@@ -9971,7 +9971,7 @@
       "source_location": "L614",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_trusteddrugsourcepacketextractor",
-      "community": 51,
+      "community": 56,
       "norm_label": "trusteddrugsourcepacketextractor"
     },
     {
@@ -9991,7 +9991,7 @@
       "source_location": "L653",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_trusteddrugsourcepacketextractor_compact",
-      "community": 51,
+      "community": 56,
       "norm_label": ".compact()"
     },
     {
@@ -10721,7 +10721,7 @@
       "source_location": "L1152",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_deepseekdrugimportservice_format",
-      "community": 84,
+      "community": 4,
       "norm_label": ".format()"
     },
     {
@@ -10771,7 +10771,7 @@
       "source_location": "L1212",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_deepseekfastdruggatherservice",
-      "community": 84,
+      "community": 51,
       "norm_label": "deepseekfastdruggatherservice"
     },
     {
@@ -10781,7 +10781,7 @@
       "source_location": "L1216",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_deepseekfastdruggatherservice_init",
-      "community": 84,
+      "community": 51,
       "norm_label": ".init()"
     },
     {
@@ -10791,7 +10791,7 @@
       "source_location": "L1229",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_deepseekfastdruggatherservice_gather",
-      "community": 84,
+      "community": 4,
       "norm_label": ".gather()"
     },
     {
@@ -10801,7 +10801,7 @@
       "source_location": "L1255",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_deepseekfastdruggatherservice_makerequest",
-      "community": 84,
+      "community": 4,
       "norm_label": ".makerequest()"
     },
     {
@@ -11221,7 +11221,7 @@
       "source_location": "L1866",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_drugimportapplier",
-      "community": 51,
+      "community": 75,
       "norm_label": "drugimportapplier"
     },
     {
@@ -11231,7 +11231,7 @@
       "source_location": "L1868",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_drugimportapplier_defaultselection",
-      "community": 51,
+      "community": 75,
       "norm_label": ".defaultselection()"
     },
     {
@@ -11241,7 +11241,7 @@
       "source_location": "L1886",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_drugimportapplier_apply",
-      "community": 51,
+      "community": 75,
       "norm_label": ".apply()"
     },
     {
@@ -11371,7 +11371,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "userdefaults",
-      "community": 84,
+      "community": 3,
       "norm_label": "userdefaults"
     },
     {
@@ -11621,7 +11621,7 @@
       "source_location": "L2380",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore",
-      "community": 84,
+      "community": 3,
       "norm_label": "openrouterkeystore"
     },
     {
@@ -11631,7 +11631,7 @@
       "source_location": "L2386",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_init",
-      "community": 84,
+      "community": 3,
       "norm_label": ".init()"
     },
     {
@@ -11641,7 +11641,7 @@
       "source_location": "L2397",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_apikey",
-      "community": 84,
+      "community": 4,
       "norm_label": ".apikey()"
     },
     {
@@ -11651,7 +11651,7 @@
       "source_location": "L2399",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_modelid",
-      "community": 84,
+      "community": 3,
       "norm_label": ".modelid()"
     },
     {
@@ -11661,7 +11661,7 @@
       "source_location": "L2404",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_savemodelid",
-      "community": 84,
+      "community": 3,
       "norm_label": ".savemodelid()"
     },
     {
@@ -11671,7 +11671,7 @@
       "source_location": "L2409",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_savedkeystatusdescription",
-      "community": 84,
+      "community": 3,
       "norm_label": ".savedkeystatusdescription()"
     },
     {
@@ -11681,7 +11681,7 @@
       "source_location": "L2413",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_save",
-      "community": 84,
+      "community": 3,
       "norm_label": ".save()"
     },
     {
@@ -11691,7 +11691,7 @@
       "source_location": "L2419",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_delete",
-      "community": 84,
+      "community": 3,
       "norm_label": ".delete()"
     },
     {
@@ -11701,7 +11701,7 @@
       "source_location": "L2421",
       "_origin": "ast",
       "id": "pharmashift_services_drugimportservice_openrouterkeystore_testconnection",
-      "community": 84,
+      "community": 4,
       "norm_label": ".testconnection()"
     },
     {
@@ -12101,7 +12101,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_services_privacyvalidator",
-      "community": 61,
+      "community": 46,
       "norm_label": "privacyvalidator.swift"
     },
     {
@@ -12111,7 +12111,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "pharmashift_services_privacyvalidator_privacyvalidator",
-      "community": 61,
+      "community": 46,
       "norm_label": "privacyvalidator"
     },
     {
@@ -12121,7 +12121,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pharmashift_services_privacyvalidator_privacyvalidator_containsobviousidentifier",
-      "community": 61,
+      "community": 46,
       "norm_label": ".containsobviousidentifier()"
     },
     {
@@ -12131,7 +12131,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_privacyvalidator_swift_string",
-      "community": 61,
+      "community": 46,
       "norm_label": "string"
     },
     {
@@ -12141,7 +12141,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_privacyvalidator_swift_bool",
-      "community": 61,
+      "community": 46,
       "norm_label": "bool"
     },
     {
@@ -12151,7 +12151,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder",
-      "community": 61,
+      "community": 46,
       "norm_label": "reportbuilder.swift"
     },
     {
@@ -12161,7 +12161,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder",
-      "community": 61,
+      "community": 46,
       "norm_label": "reportbuilder"
     },
     {
@@ -12171,7 +12171,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder_populate",
-      "community": 61,
+      "community": 46,
       "norm_label": ".populate()"
     },
     {
@@ -12181,7 +12181,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_swift_drug",
-      "community": 61,
+      "community": 46,
       "norm_label": "drug"
     },
     {
@@ -12191,7 +12191,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_swift_calendar",
-      "community": 61,
+      "community": 46,
       "norm_label": "calendar"
     },
     {
@@ -12201,7 +12201,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder_text",
-      "community": 61,
+      "community": 46,
       "norm_label": ".text()"
     },
     {
@@ -12211,7 +12211,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_swift_string",
-      "community": 61,
+      "community": 46,
       "norm_label": "string"
     },
     {
@@ -12221,7 +12221,7 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder_uniquelines",
-      "community": 61,
+      "community": 46,
       "norm_label": ".uniquelines()"
     },
     {
@@ -12231,7 +12231,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder_groupedcounts",
-      "community": 61,
+      "community": 46,
       "norm_label": ".groupedcounts()"
     },
     {
@@ -12241,7 +12241,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "pharmashift_services_reportbuilder_reportbuilder_masteredbychapter",
-      "community": 61,
+      "community": 46,
       "norm_label": ".masteredbychapter()"
     },
     {
@@ -12251,7 +12251,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_services_reportfile",
-      "community": 61,
+      "community": 46,
       "norm_label": "reportfile.swift"
     },
     {
@@ -12262,7 +12262,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "coretransferable",
-      "community": 61,
+      "community": 46,
       "norm_label": "coretransferable"
     },
     {
@@ -12272,7 +12272,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "pharmashift_services_reportfile_reportfile",
-      "community": 61,
+      "community": 46,
       "norm_label": "reportfile"
     },
     {
@@ -12282,7 +12282,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "transferable",
-      "community": 61,
+      "community": 46,
       "norm_label": "transferable"
     },
     {
@@ -12292,7 +12292,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_services_reportfile_swift_string",
-      "community": 61,
+      "community": 46,
       "norm_label": "string"
     },
     {
@@ -12302,7 +12302,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "transferrepresentation",
-      "community": 61,
+      "community": 46,
       "norm_label": "transferrepresentation"
     },
     {
@@ -12312,7 +12312,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_services_reviewscheduler",
-      "community": 61,
+      "community": 46,
       "norm_label": "reviewscheduler.swift"
     },
     {
@@ -13613,7 +13613,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pharmashift_shared_previewsupport",
-      "community": 41,
+      "community": 54,
       "norm_label": "previewsupport.swift"
     },
     {
@@ -13623,7 +13623,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pharmashift_shared_previewsupport_previewdata",
-      "community": 41,
+      "community": 54,
       "norm_label": "previewdata"
     },
     {
@@ -13633,7 +13633,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "pharmashift_shared_previewsupport_swift_modelcontainer",
-      "community": 41,
+      "community": 54,
       "norm_label": "modelcontainer"
     },
     {
@@ -53822,5 +53822,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "bb99c3cdbb70b8d9db8f25c9423c342750d73dfc"
+  "built_at_commit": "34fa2f2a499f4a16f62f59e23c791e4430c688e2"
 }

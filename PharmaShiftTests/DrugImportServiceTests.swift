@@ -357,6 +357,40 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(info.pharmacologyProfile?.mechanismOfAction, "ARNI combination")
     }
 
+    func testAIDraftKeepsGeneratedChapterFormRouteAndAdversePercentagesWhenUserLeavesThemBlank() throws {
+        let json = """
+        {
+          "identity":{"system":"Gastrointestinal","class":"Proton pump inhibitor","dosageForm":"Delayed-release capsule","strength":"20 mg","route":"Oral"},
+          "adverseEffects":{"common":["Headache (7%)","Abdominal pain (5%)"],"serious":[]},
+          "dosageFormGroups":[{"dosageForm":"Delayed-release capsule","strengths":[{"strength":"10 mg","tradeNames":[]},{"strength":"20 mg","tradeNames":[]},{"strength":"40 mg","tradeNames":[]}]}]
+        }
+        """
+        let identity = UserConfirmedDrugIdentity(scientificName: "Omeprazole", tradeNames: [], strength: "", dosageForm: "", route: "", system: "", drugClass: "")
+        let info = try DrugImportValidator.parseAIDraft(jsonString: json, confirmedIdentity: identity, packageText: "")
+        XCTAssertEqual(info.identity.system, Chapter.gastrointestinal.rawValue)
+        XCTAssertEqual(info.identity.dosageForm, "Delayed-release capsule")
+        XCTAssertEqual(info.identity.strength, "20 mg")
+        XCTAssertEqual(info.identity.route, "Oral")
+        XCTAssertEqual(info.dosageFormGroups?.first?.strengths.map(\.strength), ["10 mg", "20 mg", "40 mg"])
+        XCTAssertEqual(info.adverseEffectEntries?.map(\.incidence), ["7%", "5%"])
+    }
+
+    func testRegenerationSelectsMissingStructuredFormsPercentagesEliminationAndADME() throws {
+        let drug = Drug(
+            scientificName: "Omeprazole",
+            tradeNames: ["Losec"],
+            chapter: .other,
+            dosageForms: [],
+            commonSideEffects: ["Headache"]
+        )
+        drug.halfLifeText = "1 hour"
+        let info = try DrugImportValidator.parseAIDraft(jsonString: validJSON(), confirmedIdentity: confirmedIdentity(), packageText: "")
+        let selection = DrugImportApplier.defaultSelection(info: info, drug: drug)
+        XCTAssertTrue(selection.contains(.identity))
+        XCTAssertTrue(selection.contains(.adverseEffects))
+        XCTAssertTrue(selection.contains(.pharmacokinetics))
+    }
+
     func testJSONSanitizerHandlesBracesInsideStrings() throws {
         let data = try DeepSeekJSONSanitizer.objectData(from: "prefix {\"note\":\"use {carefully}\",\"ok\":true} suffix")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

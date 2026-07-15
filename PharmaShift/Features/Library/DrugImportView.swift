@@ -99,7 +99,7 @@ struct DrugImportView: View {
             strength: drug?.strengths.first ?? "",
             dosageForm: drug?.dosageForms.first ?? "",
             route: drug?.routes.first ?? "",
-            system: drug?.chapterRaw ?? Chapter.other.rawValue,
+            system: startsInAIMode ? "" : (drug?.chapterRaw ?? Chapter.other.rawValue),
             drugClass: drug?.drugClass ?? ""
         ))
     }
@@ -567,14 +567,19 @@ private struct ConfirmDrugIdentityView: View {
                 TextField("Marketed package strength (optional)", text: $identity.strength)
                 TextField("Dosage form (optional)", text: $identity.dosageForm)
                 TextField("Route (optional)", text: $identity.route)
-                Picker("System / Chapter", selection: $identity.system) {
-                    ForEach(Chapter.allCases) { Text($0.rawValue).tag($0.rawValue) }
+                if isAIMode {
+                    LabeledContent("System / Chapter", value: "Assigned by AI")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("System / Chapter", selection: $identity.system) {
+                        ForEach(Chapter.allCases) { Text($0.rawValue).tag($0.rawValue) }
+                    }
                 }
             } header: {
                 Text(isAIMode ? "Tell AI which drug to build" : "Name required before import")
             } footer: {
                 Text(isAIMode
-                     ? "Enter a scientific or trade name. No source is required; AI will build the complete card and you choose what to save."
+                     ? "Enter a scientific or trade name. AI assigns the system/chapter and fills missing form, route, and common active-ingredient strengths."
                      : "Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
             }
             Section {

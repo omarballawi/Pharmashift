@@ -992,19 +992,19 @@ enum ProfileGenerationGroup: String, CaseIterable, Sendable {
         let precisionRule: String
         switch self {
         case .identityAndUses:
-            precisionRule = "Keep the confirmed identity unchanged. Include only well-established uses and distinguish the pharmacologic mechanism from clinical indications."
+            precisionRule = "Keep the confirmed drug name unchanged, assign exactly one valid system/chapter, and infer class, dosage form, and route when the user left them blank. Include only well-established uses and distinguish the pharmacologic mechanism from clinical indications."
         case .dosageFormsAndDosing:
-            precisionRule = "Separate marketed dosage forms and strengths from clinical regimens. Never infer a clinical dose from package strength. Separate every indication and population."
+            precisionRule = "Always populate dosageFormGroups. Separate marketed dosage forms and strengths from clinical regimens. If the captured product form or strength is missing, provide the commonly marketed forms and strengths of the active ingredient. Never infer a clinical dose from package strength. Separate every indication and population."
         case .interactions:
             precisionRule = "List clinically meaningful interacting medicines by generic name, include all known contraindicated and serious-use-alternative medicines, and do not duplicate names."
         case .warningsAndContraindications:
             precisionRule = "Do not mix adverse effects or interactions into this slice. Distinguish absolute contraindications from warnings and organ-specific cautions."
         case .adverseEffects:
-            precisionRule = "Keep common and serious effects distinct. Include an incidence only when you are confident in the reported value; otherwise leave incidence empty."
+            precisionRule = "Keep common and serious effects distinct. For every commonly reported non-serious effect, include the established incidence or incidence range and always format it with the % symbol. Do not substitute vague words such as common for a percentage."
         case .reproductiveSafety:
             precisionRule = "Keep pregnancy and lactation separate. State uncertainty explicitly and do not convert limited evidence into a safety claim."
         case .pharmacology:
-            precisionRule = "Keep mechanism, absorption, distribution, metabolism, and elimination separate. Do not confuse plasma half-life with duration of effect."
+            precisionRule = "This slice is required: populate tablet/capsule active-drug or prodrug status, pharmacokinetics, eliminationInfo, mechanismOfAction, and every ADME section (absorption, distribution, metabolism, elimination). Use qualitative established facts when an exact number is unavailable. Name the main organ/pathway that removes the drug. Do not confuse plasma half-life with duration of effect."
         case .counselingAndLearning:
             precisionRule = "Use only stable facts already implied by the confirmed drug identity; avoid adding new doses, contraindications, or interaction claims in this slice."
         }
@@ -1096,6 +1096,36 @@ private extension ImportedDrugInfo {
         result.identity.tradeNames = identity.tradeNames
         result.identity.activeIngredients = identity.ingredients.isEmpty ? result.identity.activeIngredients : identity.ingredients
         result.identity.marketedStrengthLabel = identity.marketedStrengthLabel.trimmed.isEmpty ? result.identity.marketedStrengthLabel : identity.marketedStrengthLabel
+        if result.dosageFormGroups?.isEmpty != false, !result.identity.dosageForm.trimmed.isEmpty {
+            let strengths = [result.identity.strength.trimmed].filter { !$0.isEmpty }.map { FormStrength(strength: $0) }
+            result.dosageFormGroups = [DosageFormGroup(dosageForm: result.identity.dosageForm.trimmed, strengths: strengths)]
+        }
+        if result.eliminationInfo == nil {
+            let pathway: EliminationPathway = switch result.pharmacokinetics.excretionRoute {
+            case .renal: .renalUrine
+            case .hepatic: .biliaryFecal
+            case .mixed: .mixed
+            case .other: .other
+            case .unknown: .unknown
+            }
+            let summary = [result.pharmacokinetics.metabolism, result.pharmacokinetics.excretionNotes]
+                .compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n")
+            if pathway != .unknown || !summary.isEmpty {
+                result.eliminationInfo = EliminationInfo(
+                    metabolismSite: result.pharmacokinetics.metabolism?.trimmed ?? "",
+                    routes: [EliminationRouteInfo(pathway: pathway, detail: summary)],
+                    dominantPathway: pathway,
+                    summary: summary
+                )
+            }
+        }
+        var pharmacology = result.pharmacologyProfile ?? PharmacologyProfile()
+        if pharmacology.mechanismOfAction.trimmed.isEmpty { pharmacology.mechanismOfAction = result.usesMechanism.simpleMechanismArabic.trimmed }
+        if pharmacology.metabolism.isEmpty, let metabolism = result.pharmacokinetics.metabolism?.trimmed, !metabolism.isEmpty { pharmacology.metabolism = [metabolism] }
+        if pharmacology.elimination.isEmpty, let elimination = result.eliminationInfo?.summary.trimmed, !elimination.isEmpty { pharmacology.elimination = [elimination] }
+        if !([pharmacology.mechanismOfAction] + pharmacology.absorption + pharmacology.distribution + pharmacology.metabolism + pharmacology.elimination).allSatisfy({ $0.trimmed.isEmpty }) {
+            result.pharmacologyProfile = pharmacology
+        }
         result.memorization.reviewQuestions = LocalReviewQuestionBuilder.questions(for: result)
         return result
     }
@@ -1324,7 +1354,7 @@ enum PromptBuilder {
         Marketed package strength: \(identity.marketedStrengthLabel.isEmpty ? identity.strength : identity.marketedStrengthLabel)
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
-        System/chapter: \(identity.system)
+        System/chapter: assign exactly one of \(Chapter.allCases.map(\.rawValue).joined(separator: ", ")). The user does not choose this in AI-only mode.
         Class: derive from the active ingredient and trusted source when confident; otherwise leave it empty and mark source quality for review.
 
         Trusted source packet:
@@ -1406,7 +1436,7 @@ enum PromptBuilder {
           "dosageFormGroups": [{"dosageForm": "", "strengths": [{"strength": "", "tradeNames": []}]}],
           "clinicalDoses": [{"indication": "", "population": "Adult", "doseText": "", "route": "", "frequency": "", "duration": "", "adjuncts": [], "considerations": [], "sourceIDs": []}],
           "interactionEntries": [{"drugName": "", "category": "unknown", "effect": "", "management": "", "sourceIDs": []}],
-          "adverseEffectEntries": [{"name": "", "incidence": "", "isSerious": false, "sourceIDs": []}],
+          "adverseEffectEntries": [{"name": "", "incidence": "7%", "isSerious": false, "sourceIDs": []}],
           "reproductiveSafety": {"pregnancy": "", "lactation": "", "pregnancyArabicNote": "", "lactationArabicNote": "", "sourceIDs": []},
           "pharmacologyProfile": {"mechanismOfAction": "", "absorption": [], "distribution": [], "metabolism": [], "elimination": [], "sourceIDs": []},
           "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": true, "missingImportantFields": [], "notes": ""}
@@ -1420,7 +1450,7 @@ private enum FastGatherPromptBuilder {
     Accuracy rules:
     - Treat the user-confirmed identity and package component strengths as fixed inputs.
     - Prefer widely established facts over obscure details. If a detail is uncertain, formulation-dependent, country-dependent, or not established, leave it empty or say "unknown" instead of guessing.
-    - Never invent citations, source IDs, percentages, interaction names, dose values, or claims of source verification.
+    - Never invent citations, source IDs, interaction names, dose values, or claims of source verification. Report an adverse-effect percentage only when it is an established incidence from your pharmaceutical knowledge; otherwise mark it as not established.
     - Never treat package strength as a clinical dose. Keep combination-drug component strengths separate from the marketed total.
     - Clinical dose regimens must name the indication and population. Do not provide patient-specific advice.
     - Return only the requested slice while keeping the full JSON shape valid so Renlyst can merge the slices locally.
@@ -1440,7 +1470,7 @@ private enum FastGatherPromptBuilder {
         Marketed package strength: \(identity.marketedStrengthLabel.isEmpty ? identity.strength : identity.marketedStrengthLabel)
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
-        System/chapter: \(identity.system)
+        System/chapter: assign exactly one of \(Chapter.allCases.map(\.rawValue).joined(separator: ", ")). The user does not choose this in AI-only mode.
 
         Optional package facts recognized by the package vision model or pasted leaflet details:
         \(packageText.prefix(2_000))
@@ -1491,21 +1521,85 @@ enum DrugImportValidator {
         let data = try DeepSeekJSONSanitizer.normalizedCardData(from: jsonString)
         guard var info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
         info.doseRegimens = info.doseRegimens?.filter { !$0.indication.trimmed.isEmpty }
+        info.dosageFormGroups = info.dosageFormGroups?.compactMap { group in
+            let form = group.dosageForm.trimmed
+            let strengths = group.strengths.filter { !$0.strength.trimmed.isEmpty }
+            guard !form.isEmpty else { return nil }
+            return DosageFormGroup(dosageForm: form, strengths: strengths)
+        }
+        info.clinicalDoses = info.clinicalDoses?.filter { !$0.indication.trimmed.isEmpty && !$0.doseText.trimmed.isEmpty }
+        info.interactionEntries = info.interactionEntries?.filter { !$0.drugName.trimmed.isEmpty }
+        normalizeAdverseEffects(&info)
+        if let value = info.prodrugInfo,
+           value.classification == .unknown,
+           [value.administeredCompound, value.activeCompound, value.activationSite, value.activationPathway, value.explanation].allSatisfy({ $0.trimmed.isEmpty }) {
+            info.prodrugInfo = nil
+        }
+        if var value = info.eliminationInfo {
+            value.routes = value.routes.filter { $0.pathway != .unknown || !$0.detail.trimmed.isEmpty || $0.percentage != nil }
+            let hasContent = !value.metabolismSite.trimmed.isEmpty || !value.metabolismEnzymes.isEmpty || !value.routes.isEmpty || value.dominantPathway != .unknown || !value.summary.trimmed.isEmpty
+            info.eliminationInfo = hasContent ? value : nil
+        }
+        if let value = info.pharmacologyProfile,
+           ([value.mechanismOfAction] + value.absorption + value.distribution + value.metabolism + value.elimination).allSatisfy({ $0.trimmed.isEmpty }) {
+            info.pharmacologyProfile = nil
+        }
         return info
     }
 
+    private static func normalizeAdverseEffects(_ info: inout ImportedDrugInfo) {
+        var entries = (info.adverseEffectEntries ?? []).filter { !$0.name.trimmed.isEmpty }
+        if entries.isEmpty {
+            entries = info.adverseEffects.common.map { adverseEntry(from: $0, isSerious: false) }
+                + info.adverseEffects.serious.map { adverseEntry(from: $0, isSerious: true) }
+            entries = entries.filter { !$0.name.trimmed.isEmpty }
+        } else {
+            entries = entries.map { entry in
+                var value = entry
+                let incidence = value.incidence.trimmed
+                if !incidence.isEmpty, !incidence.contains("%"), Double(incidence) != nil { value.incidence = "\(incidence)%" }
+                return value
+            }
+        }
+        info.adverseEffectEntries = entries
+    }
+
+    private static func adverseEntry(from rawValue: String, isSerious: Bool) -> AdverseEffectEntry {
+        let raw = rawValue.trimmed
+        let pattern = #"\(?\s*(<?\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*%)\s*\)?"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+              let wholeRange = Range(match.range(at: 0), in: raw),
+              let incidenceRange = Range(match.range(at: 1), in: raw) else {
+            return AdverseEffectEntry(name: raw, isSerious: isSerious)
+        }
+        let name = raw.replacingCharacters(in: wholeRange, with: "").trimmingCharacters(in: CharacterSet(charactersIn: " -–—,:;()"))
+        return AdverseEffectEntry(name: name, incidence: String(raw[incidenceRange]).replacingOccurrences(of: " ", with: ""), isSerious: isSerious)
+    }
+
     private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
+        let requestedSystem = identity.system.trimmed
+        let generatedSystem = normalizedChapter(imported.system)
         ImportedIdentity(
             scientificName: identity.scientificName,
             tradeNames: identity.tradeNames,
-            system: identity.system,
+            system: requestedSystem.isEmpty || requestedSystem == Chapter.other.rawValue ? generatedSystem : requestedSystem,
             class: imported.class.trimmed,
-            dosageForm: identity.dosageForm,
-            strength: identity.strength,
-            route: identity.route,
+            dosageForm: identity.dosageForm.trimmed.isEmpty ? imported.dosageForm.trimmed : identity.dosageForm.trimmed,
+            strength: identity.strength.trimmed.isEmpty ? imported.strength.trimmed : identity.strength.trimmed,
+            route: identity.route.trimmed.isEmpty ? imported.route.trimmed : identity.route.trimmed,
             activeIngredients: identity.ingredients.isEmpty ? imported.activeIngredients : identity.ingredients,
             marketedStrengthLabel: identity.marketedStrengthLabel.trimmed.isEmpty ? imported.marketedStrengthLabel : identity.marketedStrengthLabel
         )
+    }
+
+    private static func normalizedChapter(_ value: String) -> String {
+        let normalized = IngredientIdentity.normalize(value)
+        guard !normalized.isEmpty else { return Chapter.other.rawValue }
+        return Chapter.allCases.first { chapter in
+            let candidate = IngredientIdentity.normalize(chapter.rawValue)
+            return normalized == candidate || normalized.contains(candidate) || candidate.contains(normalized)
+        }?.rawValue ?? Chapter.other.rawValue
     }
 
     private static func ensureLearningContent(_ info: inout ImportedDrugInfo) {
@@ -1774,13 +1868,17 @@ enum DrugImportApplier {
     static func defaultSelection(info: ImportedDrugInfo, drug: Drug?) -> ImportSelection {
         guard let drug else { return ImportSelection(sections: Set(ImportSection.allCases)) }
         var sections: Set<ImportSection> = [.sourceQuality]
-        if drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty { sections.insert(.identity) }
+        if (drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty) || drug.chapter == .other || drug.dosageFormGroups.isEmpty { sections.insert(.identity) }
         if drug.indications.isEmpty && drug.mechanism.trimmed.isEmpty { sections.insert(.usesMechanism) }
-        if drug.halfLifeText.trimmed.isEmpty && drug.halfLifeBand == .unknown { sections.insert(.pharmacokinetics) }
+        let pharmacology = drug.pharmacologyProfile
+        let missingADME = pharmacology.mechanismOfAction.trimmed.isEmpty || pharmacology.absorption.isEmpty || pharmacology.distribution.isEmpty || pharmacology.metabolism.isEmpty || pharmacology.elimination.isEmpty
+        let elimination = drug.eliminationInfo
+        let missingElimination = elimination.dominantPathway == .unknown || (elimination.summary.trimmed.isEmpty && elimination.routes.isEmpty)
+        if (drug.halfLifeText.trimmed.isEmpty && drug.halfLifeBand == .unknown) || missingADME || missingElimination || drug.prodrugInfo.classification == .unknown { sections.insert(.pharmacokinetics) }
         if drug.warnings.isEmpty && drug.contraindications.isEmpty { sections.insert(.safety) }
         if drug.counselingSentence.trimmed.isEmpty { sections.insert(.counseling) }
         if drug.arabicExplanation.trimmed.isEmpty { sections.insert(.arabicExplanation) }
-        if drug.commonSideEffects.isEmpty { sections.insert(.adverseEffects) }
+        if drug.adverseEffectEntries.isEmpty || drug.adverseEffectEntries.filter({ !$0.isSerious }).allSatisfy({ $0.incidence.trimmed.isEmpty }) { sections.insert(.adverseEffects) }
         if drug.mustKnow.isEmpty && drug.flashcards.isEmpty { sections.insert(.memorization) }
         return ImportSelection(sections: sections)
     }

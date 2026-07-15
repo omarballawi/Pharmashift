@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Features/Library/DrugDetailView.swift": {
-    "mtime": 1784090038.702983,
-    "ast_hash": "d989f3402aad1d8f102557eab47aa099",
+    "mtime": 1784093910.035803,
+    "ast_hash": "57fed6bff68e93a31cd6590e1e778ac4",
     "semantic_hash": ""
   },
   "PharmaShift/Features/Library/DrugEditorView.swift": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   ".github/workflows/build-unsigned-ipa.yml": {
-    "mtime": 1784090097.7670987,
-    "ast_hash": "c8852bf827eca7cb73332c1447e61692",
+    "mtime": 1784094099.502037,
+    "ast_hash": "d8c0a9f727baf7113f6c1575cdb2c88a",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -165,8 +165,8 @@
     "semantic_hash": ""
   },
   "PharmaShiftTests/DrugImportServiceTests.swift": {
-    "mtime": 1784090097.7621412,
-    "ast_hash": "27a6fa66ef3a60c622e6da613385c60b",
+    "mtime": 1784093614.9898229,
+    "ast_hash": "68f433026bf29d77f153a2cc8173ad36",
     "semantic_hash": ""
   },
   "PharmaShiftTests/MigrationFixtureTests.swift": {
@@ -185,8 +185,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Features/Library/DrugImportView.swift": {
-    "mtime": 1784090121.3099313,
-    "ast_hash": "4ec09aad82ea8c5256989ab56fc463f0",
+    "mtime": 1784093350.7274928,
+    "ast_hash": "040945e312c1f962c4cfb32d6d2e2dc0",
     "semantic_hash": ""
   },
   "PharmaShift/Services/BackupService.swift": {
@@ -195,8 +195,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Services/DrugImportService.swift": {
-    "mtime": 1784090121.3121822,
-    "ast_hash": "6cc8cee5ace4c4f772ca05d6e1c60706",
+    "mtime": 1784093974.0712466,
+    "ast_hash": "dcde77a161df6cbaf7494c899adda078",
     "semantic_hash": ""
   },
   "PharmaShift/Services/PracticeEngine.swift": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "DESIGN.md": {
-    "mtime": 1784090097.7634819,
-    "ast_hash": "e45833db0158cd8bff870d6ab4396f7a",
+    "mtime": 1784093578.3418994,
+    "ast_hash": "1313073c3adc258bb9f50839a1a55ecf",
     "semantic_hash": ""
   },
   "PharmaShift/Services/DeepSeekLearningService.swift": {

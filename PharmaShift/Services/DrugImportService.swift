@@ -267,8 +267,8 @@ enum DrugImportError: LocalizedError, Equatable {
     case aiReturnedEmpty
     case unresolvedLocalBrand
     case deepSeekHTTPStatus(Int)
-    case missingGeminiKey
-    case geminiHTTPStatus(Int)
+    case missingOpenRouterKey
+    case openRouterHTTPStatus(Int, String)
     case packageRecognitionFailed
 
     var errorDescription: String? {
@@ -282,9 +282,12 @@ enum DrugImportError: LocalizedError, Equatable {
         case .aiReturnedEmpty: "DeepSeek returned an empty response. Retry generation."
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
-        case .missingGeminiKey: "Add your Gemini API key in Settings before scanning a package."
-        case .geminiHTTPStatus(let status): "Gemini package recognition failed (HTTP \(status)). Check the saved key and try again."
-        case .packageRecognitionFailed: "Gemini could not identify enough package facts. Retake clear front and back photos or enter the medicine manually."
+        case .missingOpenRouterKey: "Add your OpenRouter API key in Settings before scanning a package."
+        case .openRouterHTTPStatus(let status, let detail):
+            detail.isEmpty
+                ? "OpenRouter package recognition failed (HTTP \(status)). Check the saved key and model slug, then try again."
+                : "OpenRouter package recognition failed (HTTP \(status)): \(detail)"
+        case .packageRecognitionFailed: "The vision model could not identify enough package facts. Retake clear front and back photos or enter the medicine manually."
         }
     }
 }
@@ -491,27 +494,29 @@ protocol DrugPackageRecognizing: Sendable {
     func recognize(images: [Data]) async throws -> PackageRecognitionResult
 }
 
-actor GeminiPackageVisionService: DrugPackageRecognizing {
-    static let model = "gemini-2.5-flash"
-    static let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1/interactions")!
+actor OpenRouterPackageVisionService: DrugPackageRecognizing {
+    static let defaultModel = "google/gemini-2.5-flash"
+    static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
     private let session: URLSession
-    private let keyStore: GeminiKeyStore
+    private let keyStore: OpenRouterKeyStore
 
-    init(session: URLSession = .shared, keyStore: GeminiKeyStore = .shared) {
+    init(session: URLSession = .shared, keyStore: OpenRouterKeyStore = .shared) {
         self.session = session
         self.keyStore = keyStore
     }
 
     func recognize(images: [Data]) async throws -> PackageRecognitionResult {
-        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
+        guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingOpenRouterKey }
         guard !images.isEmpty else { throw DrugImportError.packageRecognitionFailed }
-        let request = try Self.makeRequest(apiKey: apiKey, images: images)
+        let request = try Self.makeRequest(apiKey: apiKey, model: keyStore.modelID(), images: images)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.packageRecognitionFailed }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
-        let envelope = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
-        guard let text = envelope.steps.last(where: { $0.type == "model_output" })?.content?.first(where: { $0.type == "text" })?.text,
-              let json = text.data(using: .utf8),
+        guard (200..<300).contains(http.statusCode) else {
+            throw DrugImportError.openRouterHTTPStatus(http.statusCode, Self.errorDetail(from: data))
+        }
+        let envelope = try JSONDecoder().decode(OpenRouterChatResponse.self, from: data)
+        guard let text = envelope.choices.first?.message.content,
+              let json = try? DeepSeekJSONSanitizer.objectData(from: text),
               let result = try? JSONDecoder().decode(PackageRecognitionResult.self, from: json),
               !result.tradeName.trimmed.isEmpty || !result.ingredients.isEmpty else {
             throw DrugImportError.packageRecognitionFailed
@@ -519,20 +524,35 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         return result
     }
 
-    static func makeRequest(apiKey: String, images: [Data]) throws -> URLRequest {
-        var input: [[String: Any]] = images.map { ["type": "image", "mime_type": "image/jpeg", "data": $0.base64EncodedString()] }
-        input.append(["type": "text", "text": Self.prompt])
+    static func makeRequest(apiKey: String, model: String, images: [Data]) throws -> URLRequest {
+        var content: [[String: Any]] = [["type": "text", "text": Self.prompt]]
+        content.append(contentsOf: images.map {
+            ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\($0.base64EncodedString())"]]
+        })
         let body: [String: Any] = [
-            "model": Self.model,
-            "input": input,
-            "response_format": ["type": "text", "mime_type": "application/json", "schema": Self.schema]
+            "model": model.trimmed.isEmpty ? Self.defaultModel : model.trimmed,
+            "messages": [["role": "user", "content": content]],
+            "response_format": [
+                "type": "json_schema",
+                "json_schema": ["name": "drug_package", "strict": true, "schema": Self.schema]
+            ],
+            "provider": ["require_parameters": true],
+            "temperature": 0,
+            "stream": false
         ]
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("https://github.com/omarballawi/Pharmashift", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("Renlyst", forHTTPHeaderField: "X-Title")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    static func errorDetail(from data: Data) -> String {
+        guard let envelope = try? JSONDecoder().decode(OpenRouterErrorEnvelope.self, from: data) else { return "" }
+        return String(envelope.error.message.replacingOccurrences(of: "\n", with: " ").trimmed.prefix(300))
     }
 
     static let prompt = """
@@ -558,16 +578,20 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
     ]
 }
 
-private struct GeminiInteractionResponse: Decodable {
-    struct Step: Decodable {
-        struct Content: Decodable { var type: String; var text: String? }
-        var type: String
-        var content: [Content]?
-    }
-    var steps: [Step]
+private struct OpenRouterErrorEnvelope: Decodable {
+    struct APIError: Decodable { var message: String }
+    var error: APIError
 }
 
-actor MockGeminiPackageVisionService: DrugPackageRecognizing {
+private struct OpenRouterChatResponse: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable { var content: String }
+        var message: Message
+    }
+    var choices: [Choice]
+}
+
+actor MockOpenRouterPackageVisionService: DrugPackageRecognizing {
     func recognize(images: [Data]) async throws -> PackageRecognitionResult {
         guard !images.isEmpty else { throw DrugImportError.packageRecognitionFailed }
         return PackageRecognitionResult(
@@ -955,14 +979,40 @@ protocol DrugImportFormattingService: Sendable {
 }
 
 enum ProfileGenerationGroup: String, CaseIterable, Sendable {
-    case identityAndDosing = "identity, uses, dosage forms, and indication-specific dosing"
-    case interactionsAndWarnings = "contraindications, warnings, cautions, and the complete categorized interaction list"
+    case identityAndUses = "identity, drug class, uses, and mechanism summary"
+    case dosageFormsAndDosing = "dosage forms, strengths, and indication-specific dosing"
+    case interactions = "the complete categorized interaction list"
+    case warningsAndContraindications = "contraindications, warnings, toxicity, renal cautions, and hepatic cautions"
     case adverseEffects = "common and serious adverse effects, preserving percentages"
-    case reproductiveAndPharmacology = "pregnancy, lactation, mechanism, pharmacokinetics, absorption, distribution, metabolism, and elimination"
+    case reproductiveSafety = "pregnancy and lactation"
+    case pharmacology = "pharmacokinetics, active-drug or prodrug status, absorption, distribution, metabolism, and elimination"
     case counselingAndLearning = "counseling, concise Arabic notes, memorization, and source quality"
 
     var instruction: String {
-        "Generate only the \(rawValue) group. Keep every other top-level field present using empty values from the schema. Do not shorten a named-drug list just because it is long."
+        let precisionRule: String
+        switch self {
+        case .identityAndUses:
+            precisionRule = "Keep the confirmed drug name unchanged, assign exactly one valid system/chapter, and infer class, dosage form, and route when the user left them blank. Include only well-established uses and distinguish the pharmacologic mechanism from clinical indications."
+        case .dosageFormsAndDosing:
+            precisionRule = "Always populate dosageFormGroups. Separate marketed dosage forms and strengths from clinical regimens. If the captured product form or strength is missing, provide the commonly marketed forms and strengths of the active ingredient. Never infer a clinical dose from package strength. Separate every indication and population."
+        case .interactions:
+            precisionRule = "List clinically meaningful interacting medicines by generic name, include all known contraindicated and serious-use-alternative medicines, and do not duplicate names."
+        case .warningsAndContraindications:
+            precisionRule = "Do not mix adverse effects or interactions into this slice. Distinguish absolute contraindications from warnings and organ-specific cautions."
+        case .adverseEffects:
+            precisionRule = "Keep common and serious effects distinct. For every commonly reported non-serious effect, include the established incidence or incidence range and always format it with the % symbol. Do not substitute vague words such as common for a percentage."
+        case .reproductiveSafety:
+            precisionRule = "Keep pregnancy and lactation separate. State uncertainty explicitly and do not convert limited evidence into a safety claim."
+        case .pharmacology:
+            precisionRule = "This slice is required: populate tablet/capsule active-drug or prodrug status, pharmacokinetics, eliminationInfo, mechanismOfAction, and every ADME section (absorption, distribution, metabolism, elimination). Use qualitative established facts when an exact number is unavailable. Name the main organ/pathway that removes the drug. Do not confuse plasma half-life with duration of effect."
+        case .counselingAndLearning:
+            precisionRule = "Use only stable facts already implied by the confirmed drug identity; avoid adding new doses, contraindications, or interaction claims in this slice."
+        }
+        return "Generate only the \(rawValue) slice. \(precisionRule) Keep every other top-level field present using empty values from the schema. Do not shorten a named-drug list just because it is long."
+    }
+
+    var aiOnlyInstruction: String {
+        "\(instruction) This is AI-only generation: keep sourceIDs empty, do not invent citations, and set sourceQuality to Generated with AI with needsReview true."
     }
 }
 
@@ -971,14 +1021,23 @@ private extension TrustedDrugSourcePacket {
         guard let group else { return self }
         var value = self
         switch group {
-        case .identityAndDosing:
+        case .identityAndUses:
             value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""
-        case .interactionsAndWarnings:
+            value.dosageText = ""; value.dosageFormsText = ""
+        case .dosageFormsAndDosing:
+            value.indicationsText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""
+        case .interactions:
             value.indicationsText = ""; value.dosageText = ""; value.adverseReactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
+            value.contraindicationsText = ""; value.warningsText = ""
+        case .warningsAndContraindications:
+            value.indicationsText = ""; value.dosageText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
         case .adverseEffects:
             value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
-        case .reproductiveAndPharmacology:
+        case .reproductiveSafety:
+            value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.dosageFormsText = ""
+        case .pharmacology:
             value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.dosageFormsText = ""
+            value.warningsText = ""; value.pregnancyText = ""
         case .counselingAndLearning:
             value.contraindicationsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
         }
@@ -992,20 +1051,35 @@ private extension ImportedDrugInfo {
         identity: UserConfirmedDrugIdentity,
         packet: TrustedDrugSourcePacket? = nil
     ) -> ImportedDrugInfo {
-        var result = parts[.identityAndDosing] ?? parts.values.first!
-        if let value = parts[.interactionsAndWarnings] {
-            result.safety = value.safety
+        var result = parts[.identityAndUses] ?? parts[.dosageFormsAndDosing] ?? parts.values.first!
+        if let value = parts[.dosageFormsAndDosing] {
+            result.doseRegimens = value.doseRegimens
+            result.dosageFormGroups = value.dosageFormGroups
+            result.clinicalDoses = value.clinicalDoses
+        }
+        if let value = parts[.interactions] {
+            result.safety.interactions = value.safety.interactions
             result.interactionEntries = value.interactionEntries
+        }
+        if let value = parts[.warningsAndContraindications] {
+            result.safety.contraindications = value.safety.contraindications
+            result.safety.toxicity = value.safety.toxicity
+            result.safety.warnings = value.safety.warnings
+            result.safety.renalCaution = value.safety.renalCaution
+            result.safety.hepaticCaution = value.safety.hepaticCaution
         }
         if let value = parts[.adverseEffects] {
             result.adverseEffects = value.adverseEffects
             result.adverseEffectEntries = value.adverseEffectEntries
         }
-        if let value = parts[.reproductiveAndPharmacology] {
+        if let value = parts[.reproductiveSafety] {
+            result.reproductiveSafety = value.reproductiveSafety
+            result.safety.pregnancyCaution = value.safety.pregnancyCaution
+        }
+        if let value = parts[.pharmacology] {
             result.pharmacokinetics = value.pharmacokinetics
             result.prodrugInfo = value.prodrugInfo
             result.eliminationInfo = value.eliminationInfo
-            result.reproductiveSafety = value.reproductiveSafety
             result.pharmacologyProfile = value.pharmacologyProfile
         }
         if let value = parts[.counselingAndLearning] {
@@ -1022,6 +1096,36 @@ private extension ImportedDrugInfo {
         result.identity.tradeNames = identity.tradeNames
         result.identity.activeIngredients = identity.ingredients.isEmpty ? result.identity.activeIngredients : identity.ingredients
         result.identity.marketedStrengthLabel = identity.marketedStrengthLabel.trimmed.isEmpty ? result.identity.marketedStrengthLabel : identity.marketedStrengthLabel
+        if result.dosageFormGroups?.isEmpty != false, !result.identity.dosageForm.trimmed.isEmpty {
+            let strengths = [result.identity.strength.trimmed].filter { !$0.isEmpty }.map { FormStrength(strength: $0) }
+            result.dosageFormGroups = [DosageFormGroup(dosageForm: result.identity.dosageForm.trimmed, strengths: strengths)]
+        }
+        if result.eliminationInfo == nil {
+            let pathway: EliminationPathway = switch result.pharmacokinetics.excretionRoute {
+            case .renal: .renalUrine
+            case .hepatic: .biliaryFecal
+            case .mixed: .mixed
+            case .other: .other
+            case .unknown: .unknown
+            }
+            let summary = [result.pharmacokinetics.metabolism, result.pharmacokinetics.excretionNotes]
+                .compactMap { $0?.trimmed }.filter { !$0.isEmpty }.joined(separator: "\n")
+            if pathway != .unknown || !summary.isEmpty {
+                result.eliminationInfo = EliminationInfo(
+                    metabolismSite: result.pharmacokinetics.metabolism?.trimmed ?? "",
+                    routes: [EliminationRouteInfo(pathway: pathway, detail: summary)],
+                    dominantPathway: pathway,
+                    summary: summary
+                )
+            }
+        }
+        var pharmacology = result.pharmacologyProfile ?? PharmacologyProfile()
+        if pharmacology.mechanismOfAction.trimmed.isEmpty { pharmacology.mechanismOfAction = result.usesMechanism.simpleMechanismArabic.trimmed }
+        if pharmacology.metabolism.isEmpty, let metabolism = result.pharmacokinetics.metabolism?.trimmed, !metabolism.isEmpty { pharmacology.metabolism = [metabolism] }
+        if pharmacology.elimination.isEmpty, let elimination = result.eliminationInfo?.summary.trimmed, !elimination.isEmpty { pharmacology.elimination = [elimination] }
+        if !([pharmacology.mechanismOfAction] + pharmacology.absorption + pharmacology.distribution + pharmacology.metabolism + pharmacology.elimination).allSatisfy({ $0.trimmed.isEmpty }) {
+            result.pharmacologyProfile = pharmacology
+        }
         result.memorization.reviewQuestions = LocalReviewQuestionBuilder.questions(for: result)
         return result
     }
@@ -1100,7 +1204,7 @@ protocol FastDrugGatheringService: Sendable {
 actor MockFastDrugGatherService: FastDrugGatheringService {
     func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
         var info = try await MockDeepSeekDrugImportService().format(packet: .empty, identity: identity)
-        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: false, missingImportantFields: [], notes: "Mock standalone AI card")
+        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: true, missingImportantFields: [], notes: "Mock standalone AI card")
         return info
     }
 }
@@ -1157,7 +1261,7 @@ actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
             model: DeepSeekDrugImportService.model,
             messages: [
                 .init(role: "system", content: FastGatherPromptBuilder.systemPrompt),
-                .init(role: "user", content: [FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText), group?.instruction].compactMap { $0 }.joined(separator: "\n\n"))
+                .init(role: "user", content: [FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText), group?.aiOnlyInstruction].compactMap { $0 }.joined(separator: "\n\n"))
             ],
             thinking: .init(type: "disabled"),
             responseFormat: .init(type: "json_object"),
@@ -1250,7 +1354,7 @@ enum PromptBuilder {
         Marketed package strength: \(identity.marketedStrengthLabel.isEmpty ? identity.strength : identity.marketedStrengthLabel)
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
-        System/chapter: \(identity.system)
+        System/chapter: assign exactly one of \(Chapter.allCases.map(\.rawValue).joined(separator: ", ")). The user does not choose this in AI-only mode.
         Class: derive from the active ingredient and trusted source when confident; otherwise leave it empty and mark source quality for review.
 
         Trusted source packet:
@@ -1332,7 +1436,7 @@ enum PromptBuilder {
           "dosageFormGroups": [{"dosageForm": "", "strengths": [{"strength": "", "tradeNames": []}]}],
           "clinicalDoses": [{"indication": "", "population": "Adult", "doseText": "", "route": "", "frequency": "", "duration": "", "adjuncts": [], "considerations": [], "sourceIDs": []}],
           "interactionEntries": [{"drugName": "", "category": "unknown", "effect": "", "management": "", "sourceIDs": []}],
-          "adverseEffectEntries": [{"name": "", "incidence": "", "isSerious": false, "sourceIDs": []}],
+          "adverseEffectEntries": [{"name": "", "incidence": "7%", "isSerious": false, "sourceIDs": []}],
           "reproductiveSafety": {"pregnancy": "", "lactation": "", "pregnancyArabicNote": "", "lactationArabicNote": "", "sourceIDs": []},
           "pharmacologyProfile": {"mechanismOfAction": "", "absorption": [], "distribution": [], "metabolism": [], "elimination": [], "sourceIDs": []},
           "sourceQuality": {"sourceName": "", "sourceURL": "", "needsReview": true, "missingImportantFields": [], "notes": ""}
@@ -1341,15 +1445,23 @@ enum PromptBuilder {
     }
 private enum FastGatherPromptBuilder {
     static let systemPrompt = """
-    You create complete, practical pharmacy learning cards from a confirmed medicine identity and supplied package or leaflet text.
-    Fill every relevant field: identity, class, uses, mechanism, indication- and population-specific dose regimens, pharmacokinetics, dosing frequency, precise active-drug/prodrug status, organ/pathway of elimination, adverse effects, safety, and counseling. Never treat package strength as a standard dose. Use "unknown" only when a fact genuinely cannot be established. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+    You create practical pharmacy learning-card drafts using your established pharmaceutical knowledge. No trusted-source text, web results, or citations are supplied.
+
+    Accuracy rules:
+    - Treat the user-confirmed identity and package component strengths as fixed inputs.
+    - Prefer widely established facts over obscure details. If a detail is uncertain, formulation-dependent, country-dependent, or not established, leave it empty or say "unknown" instead of guessing.
+    - Never invent citations, source IDs, interaction names, dose values, or claims of source verification. Report an adverse-effect percentage only when it is an established incidence from your pharmaceutical knowledge; otherwise mark it as not established.
+    - Never treat package strength as a clinical dose. Keep combination-drug component strengths separate from the marketed total.
+    - Clinical dose regimens must name the indication and population. Do not provide patient-specific advice.
+    - Return only the requested slice while keeping the full JSON shape valid so Renlyst can merge the slices locally.
+    - Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
 
     Keep the response compact. Do not create reviewQuestions; Renlyst builds those locally from the completed card so the clinical card cannot be lost to a long response.
     """
 
     static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
         """
-        Create a complete, compact pharmacy learning card draft. Trusted source lookup did not return a usable page, so mark unsupported facts for verification.
+        Create one focused slice of an experimental AI-only pharmacy learning card. Do not claim that any fact was verified against a trusted source.
 
         Confirmed fields:
         Scientific name: \(identity.scientificName)
@@ -1358,9 +1470,9 @@ private enum FastGatherPromptBuilder {
         Marketed package strength: \(identity.marketedStrengthLabel.isEmpty ? identity.strength : identity.marketedStrengthLabel)
         Dosage form: \(identity.dosageForm)
         Route: \(identity.route)
-        System/chapter: \(identity.system)
+        System/chapter: assign exactly one of \(Chapter.allCases.map(\.rawValue).joined(separator: ", ")). The user does not choose this in AI-only mode.
 
-        Optional package facts recognized by Gemini or pasted leaflet details:
+        Optional package facts recognized by the package vision model or pasted leaflet details:
         \(packageText.prefix(2_000))
 
         Generate the most complete card possible for the confirmed medicine. Keep formulation-dependent claims tied to the confirmed strength, form, and route when those are present. Include exactly three concise Must-Know facts and up to four short flashcards. Set memorization.reviewQuestions to an empty array; Renlyst creates eight review questions locally after decoding.
@@ -1409,21 +1521,85 @@ enum DrugImportValidator {
         let data = try DeepSeekJSONSanitizer.normalizedCardData(from: jsonString)
         guard var info = try? JSONDecoder().decode(ImportedDrugInfo.self, from: data) else { throw DrugImportError.invalidAIJSON }
         info.doseRegimens = info.doseRegimens?.filter { !$0.indication.trimmed.isEmpty }
+        info.dosageFormGroups = info.dosageFormGroups?.compactMap { group in
+            let form = group.dosageForm.trimmed
+            let strengths = group.strengths.filter { !$0.strength.trimmed.isEmpty }
+            guard !form.isEmpty else { return nil }
+            return DosageFormGroup(dosageForm: form, strengths: strengths)
+        }
+        info.clinicalDoses = info.clinicalDoses?.filter { !$0.indication.trimmed.isEmpty && !$0.doseText.trimmed.isEmpty }
+        info.interactionEntries = info.interactionEntries?.filter { !$0.drugName.trimmed.isEmpty }
+        normalizeAdverseEffects(&info)
+        if let value = info.prodrugInfo,
+           value.classification == .unknown,
+           [value.administeredCompound, value.activeCompound, value.activationSite, value.activationPathway, value.explanation].allSatisfy({ $0.trimmed.isEmpty }) {
+            info.prodrugInfo = nil
+        }
+        if var value = info.eliminationInfo {
+            value.routes = value.routes.filter { $0.pathway != .unknown || !$0.detail.trimmed.isEmpty || $0.percentage != nil }
+            let hasContent = !value.metabolismSite.trimmed.isEmpty || !value.metabolismEnzymes.isEmpty || !value.routes.isEmpty || value.dominantPathway != .unknown || !value.summary.trimmed.isEmpty
+            info.eliminationInfo = hasContent ? value : nil
+        }
+        if let value = info.pharmacologyProfile,
+           ([value.mechanismOfAction] + value.absorption + value.distribution + value.metabolism + value.elimination).allSatisfy({ $0.trimmed.isEmpty }) {
+            info.pharmacologyProfile = nil
+        }
         return info
     }
 
+    private static func normalizeAdverseEffects(_ info: inout ImportedDrugInfo) {
+        var entries = (info.adverseEffectEntries ?? []).filter { !$0.name.trimmed.isEmpty }
+        if entries.isEmpty {
+            entries = info.adverseEffects.common.map { adverseEntry(from: $0, isSerious: false) }
+                + info.adverseEffects.serious.map { adverseEntry(from: $0, isSerious: true) }
+            entries = entries.filter { !$0.name.trimmed.isEmpty }
+        } else {
+            entries = entries.map { entry in
+                var value = entry
+                let incidence = value.incidence.trimmed
+                if !incidence.isEmpty, !incidence.contains("%"), Double(incidence) != nil { value.incidence = "\(incidence)%" }
+                return value
+            }
+        }
+        info.adverseEffectEntries = entries
+    }
+
+    private static func adverseEntry(from rawValue: String, isSerious: Bool) -> AdverseEffectEntry {
+        let raw = rawValue.trimmed
+        let pattern = #"\(?\s*(<?\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*%)\s*\)?"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+              let wholeRange = Range(match.range(at: 0), in: raw),
+              let incidenceRange = Range(match.range(at: 1), in: raw) else {
+            return AdverseEffectEntry(name: raw, isSerious: isSerious)
+        }
+        let name = raw.replacingCharacters(in: wholeRange, with: "").trimmingCharacters(in: CharacterSet(charactersIn: " -–—,:;()"))
+        return AdverseEffectEntry(name: name, incidence: String(raw[incidenceRange]).replacingOccurrences(of: " ", with: ""), isSerious: isSerious)
+    }
+
     private static func applyingConfirmedIdentity(to imported: ImportedIdentity, confirmedIdentity identity: UserConfirmedDrugIdentity) -> ImportedIdentity {
-        ImportedIdentity(
+        let requestedSystem = identity.system.trimmed
+        let generatedSystem = normalizedChapter(imported.system)
+        return ImportedIdentity(
             scientificName: identity.scientificName,
             tradeNames: identity.tradeNames,
-            system: identity.system,
+            system: requestedSystem.isEmpty || requestedSystem == Chapter.other.rawValue ? generatedSystem : requestedSystem,
             class: imported.class.trimmed,
-            dosageForm: identity.dosageForm,
-            strength: identity.strength,
-            route: identity.route,
+            dosageForm: identity.dosageForm.trimmed.isEmpty ? imported.dosageForm.trimmed : identity.dosageForm.trimmed,
+            strength: identity.strength.trimmed.isEmpty ? imported.strength.trimmed : identity.strength.trimmed,
+            route: identity.route.trimmed.isEmpty ? imported.route.trimmed : identity.route.trimmed,
             activeIngredients: identity.ingredients.isEmpty ? imported.activeIngredients : identity.ingredients,
             marketedStrengthLabel: identity.marketedStrengthLabel.trimmed.isEmpty ? imported.marketedStrengthLabel : identity.marketedStrengthLabel
         )
+    }
+
+    private static func normalizedChapter(_ value: String) -> String {
+        let normalized = IngredientIdentity.normalize(value)
+        guard !normalized.isEmpty else { return Chapter.other.rawValue }
+        return Chapter.allCases.first { chapter in
+            let candidate = IngredientIdentity.normalize(chapter.rawValue)
+            return normalized == candidate || normalized.contains(candidate) || candidate.contains(normalized)
+        }?.rawValue ?? Chapter.other.rawValue
     }
 
     private static func ensureLearningContent(_ info: inout ImportedDrugInfo) {
@@ -1692,13 +1868,17 @@ enum DrugImportApplier {
     static func defaultSelection(info: ImportedDrugInfo, drug: Drug?) -> ImportSelection {
         guard let drug else { return ImportSelection(sections: Set(ImportSection.allCases)) }
         var sections: Set<ImportSection> = [.sourceQuality]
-        if drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty { sections.insert(.identity) }
+        if (drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty) || drug.chapter == .other || drug.dosageFormGroups.isEmpty { sections.insert(.identity) }
         if drug.indications.isEmpty && drug.mechanism.trimmed.isEmpty { sections.insert(.usesMechanism) }
-        if drug.halfLifeText.trimmed.isEmpty && drug.halfLifeBand == .unknown { sections.insert(.pharmacokinetics) }
+        let pharmacology = drug.pharmacologyProfile
+        let missingADME = pharmacology.mechanismOfAction.trimmed.isEmpty || pharmacology.absorption.isEmpty || pharmacology.distribution.isEmpty || pharmacology.metabolism.isEmpty || pharmacology.elimination.isEmpty
+        let elimination = drug.eliminationInfo
+        let missingElimination = elimination.dominantPathway == .unknown || (elimination.summary.trimmed.isEmpty && elimination.routes.isEmpty)
+        if (drug.halfLifeText.trimmed.isEmpty && drug.halfLifeBand == .unknown) || missingADME || missingElimination || drug.prodrugInfo.classification == .unknown { sections.insert(.pharmacokinetics) }
         if drug.warnings.isEmpty && drug.contraindications.isEmpty { sections.insert(.safety) }
         if drug.counselingSentence.trimmed.isEmpty { sections.insert(.counseling) }
         if drug.arabicExplanation.trimmed.isEmpty { sections.insert(.arabicExplanation) }
-        if drug.commonSideEffects.isEmpty { sections.insert(.adverseEffects) }
+        if drug.adverseEffectEntries.isEmpty || drug.adverseEffectEntries.filter({ !$0.isSerious }).allSatisfy({ $0.incidence.trimmed.isEmpty }) { sections.insert(.adverseEffects) }
         if drug.mustKnow.isEmpty && drug.flashcards.isEmpty { sections.insert(.memorization) }
         return ImportSelection(sections: sections)
     }
@@ -2197,41 +2377,56 @@ final class DeepSeekKeyStore: @unchecked Sendable {
     private func deletePreferences() { preferences.removeObject(forKey: preferenceKey) }
 }
 
-final class GeminiKeyStore: @unchecked Sendable {
-    static let shared = GeminiKeyStore()
+final class OpenRouterKeyStore: @unchecked Sendable {
+    static let shared = OpenRouterKeyStore()
     private let storage: DeepSeekKeyStore
+    private let preferences: UserDefaults
+    private let modelPreferenceKey: String
 
     init(storage: DeepSeekKeyStore = DeepSeekKeyStore(
-        service: "com.renlyst.gemini",
+        service: "com.renlyst.openrouter",
         account: "api-key",
         fallbackDirectory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("gemini", isDirectory: true)
-    )) {
+            .appendingPathComponent("openrouter", isDirectory: true)
+    ), preferences: UserDefaults = .standard, modelPreferenceKey: String = "openrouter.vision-model") {
         self.storage = storage
+        self.preferences = preferences
+        self.modelPreferenceKey = modelPreferenceKey
     }
 
     func apiKey() -> String? { storage.apiKey() }
 
+    func modelID() -> String {
+        let saved = preferences.string(forKey: modelPreferenceKey)?.trimmed ?? ""
+        return saved.isEmpty ? OpenRouterPackageVisionService.defaultModel : saved
+    }
+
+    func saveModelID(_ modelID: String) {
+        let normalized = modelID.trimmed
+        preferences.set(normalized.isEmpty ? OpenRouterPackageVisionService.defaultModel : normalized, forKey: modelPreferenceKey)
+    }
+
     func savedKeyStatusDescription() -> String {
-        storage.maskedKeyDescription() ?? "No Gemini key saved"
+        storage.maskedKeyDescription() ?? "No OpenRouter key saved"
     }
 
     @discardableResult
     func save(apiKey: String) throws -> DeepSeekKeyStore.StorageLocation {
-        guard !apiKey.normalizedAPIKey.isEmpty else { throw DrugImportError.missingGeminiKey }
+        guard !apiKey.normalizedAPIKey.isEmpty else { throw DrugImportError.missingOpenRouterKey }
         return try storage.save(apiKey: apiKey)
     }
 
     func delete() { storage.delete() }
 
     func testConnection(session: URLSession = .shared) async throws -> String {
-        guard let apiKey = apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
-        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models")!)
-        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
-        let (_, response) = try await session.data(for: request)
+        guard let apiKey = apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingOpenRouterKey }
+        let request = try OpenRouterPackageVisionService.makeRequest(apiKey: apiKey, model: modelID(), images: [])
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
-        return "Gemini 2.5 Flash connection is ready"
+        guard (200..<300).contains(http.statusCode) else {
+            throw DrugImportError.openRouterHTTPStatus(http.statusCode, OpenRouterPackageVisionService.errorDetail(from: data))
+        }
+        return "OpenRouter is ready with \(modelID())"
     }
 }
 

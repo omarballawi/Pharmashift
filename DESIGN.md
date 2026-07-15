@@ -50,17 +50,17 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 ## Core component inventory
 
 - Focus card: one primary action, current metrics, no competing CTA.
-- Drug profile: one vertically scrolling page with expandable primary rows for overview, brands, dosage forms, indication dosing, uses, interactions, adverse effects, warnings, reproductive safety, pharmacology, counseling, and notes/mastery. Expand/collapse state is local to the screen.
+- Drug profile: a horizontally selectable, swipeable tab set for overview, brands, dosage forms, indication dosing, uses, interactions, adverse effects, warnings, reproductive safety, pharmacology, counseling, and notes/mastery. Each tab scrolls independently; there are no expand/collapse rows. Brands and package images retain their dedicated management page.
 - Brands: the active-ingredient set is the stable profile identity; every brand independently owns editable package images, trade name, company, component strengths, marketed total strength, form, country, shelf, and leaflet.
 - Dosing: component strengths, marketed package strength, common dosage forms/strengths, clinical regimens, and calculator regimens are distinct data. Calculator results always show the equation, estimate status, maximum caps, and cautions; entered person variables are never persisted.
 - Pharmacology logarithmic meter/timeline and a knowledge-completeness map. Clinical cautions use labeled cards, never a pseudo-quantitative risk radar.
 - Smart Session: one recommended mixed session; individual modes live under Quick practice and Choose a mode.
 - Practice questions default to MCQ, True/False, matching/sorting, and short selection interactions. Text entry is reserved for scientific/trade-name spelling.
 - AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
-- AI package recognition: Gemini 2.5 Flash receives package photos and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
-- AI clinical generation: DeepSeek V4 Flash uses five focused section requests for identity/dosing, interactions/warnings, adverse effects, reproductive safety/pharmacology, and counseling/learning. Altibbi-first trusted aggregation with RxNorm/DailyMed/openFDA support, leaflet override, field review, editable questions, and `Not found` instead of silent gaps remain available.
+- AI package recognition: OpenRouter sends package photos to a user-configurable vision model, defaulting to `google/gemini-2.5-flash`, and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
+- AI clinical generation: the full-card button skips trusted-source lookup and uses eight focused DeepSeek V4 Flash requests for identity/uses, forms/dosing, interactions, warnings/contraindications, adverse effects with percentage incidence, reproductive safety, complete pharmacology/ADME/elimination, and counseling/learning. AI assigns the system/chapter. Missing package form or strength falls back to commonly marketed active-ingredient forms and strengths. The slices are normalized and merged locally, while the separate trusted-import flow remains available when explicitly chosen.
 - System paths: class lessons advance through Recognize, Understand, Safety, Counsel, and Apply, then a system checkpoint.
-- Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, atomic linked notes, mechanism builder, PK timeline, safety sort, counseling builder, and voice counseling simulator.
+- Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, and atomic linked notes remain available. Drug-profile mechanism, PK timeline, safety-sort, counseling-builder, and voice-counseling lesson actions are not shown.
 - Crystal facets reflect repeated recall/application; they do not reward raw data entry or punish decay.
 - Local-brand resolution confirmation row: AI suggests an ingredient only after trusted-source lookup fails; the learner must confirm before continuing.
 - Backup metadata preview with merge as default and destructive replace confirmation.
@@ -84,7 +84,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 
 ## Last updated
 
-2026-07-15 — Gemini 2.5 Flash semantic package recognition, grouped DeepSeek clinical generation, combination-component strengths, editable brand media, and a one-page expandable drug profile with rich forms, doses, interactions, adverse effects, reproductive safety, and ADME.
+2026-07-15 — Restored swipeable drug-profile tabs; AI now assigns chapter and preserves generated form/route, generalizes common forms and strengths, requires adverse-effect percentages and complete ADME/elimination, and the profile no longer exposes the mechanism, PK timeline, safety-sort, counseling-builder, or voice-counseling lessons.
 
 2026-07-14 — ingredient-centered profiles and product variants, seven-page swipeable Drug Card, Altibbi-first source aggregation, product leaflet updates, structured standard regimens and dose calculator, WHO pediatric median estimates through age 10, detailed prodrug/elimination, library relationship refresh, and full question refresh.
 

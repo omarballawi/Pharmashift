@@ -146,10 +146,11 @@ private struct LearningSettingsView: View {
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
     @State private var keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
-    @State private var geminiKey = ""
-    @State private var geminiStatus = GeminiKeyStore.shared.savedKeyStatusDescription()
+    @State private var openRouterKey = ""
+    @State private var openRouterModel = OpenRouterKeyStore.shared.modelID()
+    @State private var openRouterStatus = OpenRouterKeyStore.shared.savedKeyStatusDescription()
     @State private var checkingConnection = false
-    @State private var checkingGeminiConnection = false
+    @State private var checkingOpenRouterConnection = false
     @State private var showsKeyStatus = false
 
     var body: some View {
@@ -195,35 +196,42 @@ private struct LearningSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Gemini package recognition") {
-                SecureField("Gemini API key", text: $geminiKey)
+            Section("OpenRouter package recognition") {
+                SecureField("OpenRouter API key", text: $openRouterKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
-                    .accessibilityIdentifier("gemini.keyField")
+                    .accessibilityIdentifier("openRouter.keyField")
                 PasteButton(payloadType: String.self) { strings in
-                    geminiKey = strings.first?.normalizedAPIKey ?? ""
+                    openRouterKey = strings.first?.normalizedAPIKey ?? ""
                 }
                 .buttonStyle(.bordered)
-                Button { saveGeminiKey() } label: {
-                    Label("Save Gemini key", systemImage: "key.fill")
+                TextField("Vision model slug", text: $openRouterModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("openRouter.modelField")
+                Text("Default: \(OpenRouterPackageVisionService.defaultModel). Replace it with any OpenRouter model slug that supports image input and structured output.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button { saveOpenRouterConfiguration() } label: {
+                    Label("Save OpenRouter configuration", systemImage: "key.fill")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(geminiKey.normalizedAPIKey.isEmpty)
-                Button(role: .destructive) { clearGeminiKey() } label: {
-                    Label("Clear Gemini key", systemImage: "trash")
+                .disabled(openRouterModel.trimmed.isEmpty || (openRouterKey.normalizedAPIKey.isEmpty && OpenRouterKeyStore.shared.apiKey() == nil))
+                Button(role: .destructive) { clearOpenRouterKey() } label: {
+                    Label("Clear OpenRouter key", systemImage: "trash")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.bordered)
-                Button { checkGeminiConnection() } label: {
-                    Label(checkingGeminiConnection ? "Checking Gemini" : "Check Gemini connection", systemImage: "network")
+                Button { checkOpenRouterConnection() } label: {
+                    Label(checkingOpenRouterConnection ? "Checking OpenRouter" : "Check OpenRouter connection", systemImage: "network")
                 }
-                .disabled(checkingGeminiConnection)
-                Text(geminiStatus)
+                .disabled(checkingOpenRouterConnection)
+                Text(openRouterStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Medicine package photos are sent to Google Gemini 2.5 Flash to identify visible product facts and component strengths. Clinical profile generation remains with DeepSeek.")
+                Text("Medicine package photos are sent through OpenRouter to the selected vision model to identify visible product facts and component strengths. Clinical profile generation remains with DeepSeek.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -283,37 +291,46 @@ private struct LearningSettingsView: View {
 
     private func refreshKeyStatus() {
         keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
-        geminiStatus = GeminiKeyStore.shared.savedKeyStatusDescription()
+        openRouterStatus = OpenRouterKeyStore.shared.savedKeyStatusDescription()
+        openRouterModel = OpenRouterKeyStore.shared.modelID()
     }
 
-    private func saveGeminiKey() {
+    private func saveOpenRouterConfiguration() {
         do {
-            let location = try GeminiKeyStore.shared.save(apiKey: geminiKey)
-            guard GeminiKeyStore.shared.apiKey() == geminiKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
-            geminiStatus = "Saved key ••••\(geminiKey.normalizedAPIKey.suffix(4)) via \(location.label)"
+            OpenRouterKeyStore.shared.saveModelID(openRouterModel)
+            openRouterModel = OpenRouterKeyStore.shared.modelID()
+            if !openRouterKey.normalizedAPIKey.isEmpty {
+                let location = try OpenRouterKeyStore.shared.save(apiKey: openRouterKey)
+                guard OpenRouterKeyStore.shared.apiKey() == openRouterKey.normalizedAPIKey else { throw DeepSeekKeyStore.KeyStoreError.readBackFailed }
+                openRouterStatus = "Saved key ••••\(openRouterKey.normalizedAPIKey.suffix(4)) via \(location.label) • \(openRouterModel)"
+            } else {
+                openRouterStatus = "Saved model • \(openRouterModel)"
+            }
         } catch {
-            geminiStatus = "Could not save Gemini key: \(error.localizedDescription)"
+            openRouterStatus = "Could not save OpenRouter configuration: \(error.localizedDescription)"
         }
-        keyStatus = geminiStatus
+        keyStatus = openRouterStatus
         showsKeyStatus = true
     }
 
-    private func clearGeminiKey() {
-        GeminiKeyStore.shared.delete()
-        geminiKey = ""
-        geminiStatus = "No Gemini key saved"
-        keyStatus = geminiStatus
+    private func clearOpenRouterKey() {
+        OpenRouterKeyStore.shared.delete()
+        openRouterKey = ""
+        openRouterStatus = "No OpenRouter key saved • model \(OpenRouterKeyStore.shared.modelID())"
+        keyStatus = openRouterStatus
         showsKeyStatus = true
     }
 
-    private func checkGeminiConnection() {
-        checkingGeminiConnection = true
+    private func checkOpenRouterConnection() {
+        OpenRouterKeyStore.shared.saveModelID(openRouterModel)
+        openRouterModel = OpenRouterKeyStore.shared.modelID()
+        checkingOpenRouterConnection = true
         Task {
             do {
-                let status = try await GeminiKeyStore.shared.testConnection()
-                await MainActor.run { geminiStatus = status; keyStatus = status; checkingGeminiConnection = false; showsKeyStatus = true }
+                let status = try await OpenRouterKeyStore.shared.testConnection()
+                await MainActor.run { openRouterStatus = status; keyStatus = status; checkingOpenRouterConnection = false; showsKeyStatus = true }
             } catch {
-                await MainActor.run { geminiStatus = "Gemini connection failed: \(error.localizedDescription)"; keyStatus = geminiStatus; checkingGeminiConnection = false; showsKeyStatus = true }
+                await MainActor.run { openRouterStatus = "OpenRouter connection failed: \(error.localizedDescription)"; keyStatus = openRouterStatus; checkingOpenRouterConnection = false; showsKeyStatus = true }
             }
         }
     }

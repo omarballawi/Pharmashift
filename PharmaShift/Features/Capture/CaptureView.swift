@@ -44,9 +44,9 @@ struct CaptureView: View {
             Section {
                 Button { showsAIGenerator = true } label: {
                     VStack(alignment: .leading, spacing: 5) {
-                        Label("Generate complete card with AI", systemImage: "sparkles.rectangle.stack.fill")
+                        Label("Generate full card with AI only", systemImage: "sparkles.rectangle.stack.fill")
                             .font(.headline)
-                        Text("Enter a name, review every section, then save the facts and questions you want.")
+                        Text("No trusted-source lookup. Eight focused AI requests are merged into one reviewable card.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -62,7 +62,7 @@ struct CaptureView: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("capture.trustedImport")
-                Text("Gemini 2.5 Flash identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
+                Text("Your selected OpenRouter vision model identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: { Text("Choose how to add") }

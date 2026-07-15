@@ -118,11 +118,14 @@ final class DrugImportServiceTests: XCTestCase {
             ]
         ])
         let outboundRequest = try GeminiPackageVisionService.makeRequest(apiKey: "gemini-test-key", images: [Data([1, 2, 3])])
-        let outboundBody = String(decoding: try XCTUnwrap(outboundRequest.httpBody), as: UTF8.self)
+        let outboundBody = try XCTUnwrap(outboundRequest.httpBody)
+        let outboundJSON = try XCTUnwrap(try JSONSerialization.jsonObject(with: outboundBody) as? [String: Any])
+        let outboundInput = try XCTUnwrap(outboundJSON["input"] as? [[String: Any]])
+        let responseFormat = try XCTUnwrap(outboundJSON["response_format"] as? [String: Any])
         XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
-        XCTAssertTrue(outboundBody.contains("gemini-2.5-flash"))
-        XCTAssertTrue(outboundBody.contains(Data([1, 2, 3]).base64EncodedString()))
-        XCTAssertTrue(outboundBody.contains("application/json"))
+        XCTAssertEqual(outboundJSON["model"] as? String, "gemini-2.5-flash")
+        XCTAssertEqual(outboundInput.first?["data"] as? String, Data([1, 2, 3]).base64EncodedString())
+        XCTAssertEqual(responseFormat["mime_type"] as? String, "application/json")
         DeepSeekURLProtocolStub.requestHandler = { request in
             XCTAssertEqual(request.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
             return (try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)), responseBody)

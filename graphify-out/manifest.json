@@ -20,8 +20,8 @@
     "semantic_hash": ""
   },
   "PharmaShiftUITests/PharmaShiftUITests.swift": {
-    "mtime": 1784084300.0749931,
-    "ast_hash": "7d2c27a340ec6310a4280a2607c6f09b",
+    "mtime": 1784085170.9591973,
+    "ast_hash": "372a22daaf1955387d505d883de951ad",
     "semantic_hash": ""
   },
   "PharmaShift/App/AppShell.swift": {
@@ -165,8 +165,8 @@
     "semantic_hash": ""
   },
   "PharmaShiftTests/DrugImportServiceTests.swift": {
-    "mtime": 1784084239.7205553,
-    "ast_hash": "2a1ac210565b3c8480ce8ec51b229844",
+    "mtime": 1784084739.0016732,
+    "ast_hash": "dcb3250a81af55369736a53a2b8722a7",
     "semantic_hash": ""
   },
   "PharmaShiftTests/MigrationFixtureTests.swift": {

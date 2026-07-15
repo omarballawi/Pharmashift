@@ -63,7 +63,10 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(scientific.waitForExistence(timeout: 10))
         scientific.tap(); scientific.typeText("Metformin")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["DailyMed"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
@@ -157,7 +160,10 @@ final class PharmaShiftUITests: XCTestCase {
         scientific.tap()
         scientific.typeText("Mock Drug")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
         let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
@@ -175,7 +181,10 @@ final class PharmaShiftUITests: XCTestCase {
         scientific.tap()
         scientific.typeText("Mock Drug")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         let scientificField = app.switches["import.field.identity.scientific"]
         XCTAssertEqual(scientificField.value as? String, "1")

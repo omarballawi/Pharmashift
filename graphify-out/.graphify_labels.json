@@ -68,12 +68,16 @@
   "66": "DeepSeekURLProtocolStub",
   "67": "DosingFrequency",
   "68": "DrugBackupDTO",
+  "69": "String",
   "70": "EliminationPathway",
   "71": "BackupImportPreviewView",
   "72": "ExcretionRoute",
-  "74": "SaveAction",
+  "73": "String",
+  "74": "AppTheme",
   "75": "BackupImportPreviewView",
-  "82": "BackupError",
-  "83": "FocusField",
-  "86": "SafetyRadar"
+  "76": "ReportFile.swift",
+  "77": "DrugMigrationPlan",
+  "78": "DrugEvidenceQuality",
+  "79": "SaveAction",
+  "80": "VerificationStatus"
 }

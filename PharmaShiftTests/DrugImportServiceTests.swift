@@ -122,8 +122,10 @@ final class DrugImportServiceTests: XCTestCase {
         let outboundJSON = try XCTUnwrap(try JSONSerialization.jsonObject(with: outboundBody) as? [String: Any])
         let outboundInput = try XCTUnwrap(outboundJSON["input"] as? [[String: Any]])
         let responseFormat = try XCTUnwrap(outboundJSON["response_format"] as? [String: Any])
+        XCTAssertEqual(outboundRequest.url?.absoluteString, "https://generativelanguage.googleapis.com/v1beta/interactions")
         XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
         XCTAssertEqual(outboundJSON["model"] as? String, "gemini-2.5-flash")
+        XCTAssertEqual(outboundJSON["store"] as? Bool, false)
         XCTAssertEqual(outboundInput.first?["data"] as? String, Data([1, 2, 3]).base64EncodedString())
         XCTAssertEqual(responseFormat["mime_type"] as? String, "application/json")
         DeepSeekURLProtocolStub.requestHandler = { request in
@@ -138,6 +140,18 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(result.tradeName, "Savesto")
         XCTAssertEqual(result.ingredients.map(\.strengthText), ["24 mg", "26 mg"])
         XCTAssertEqual(result.marketedStrengthLabel, "50 mg")
+
+        DeepSeekURLProtocolStub.requestHandler = { request in
+            let errorBody = try JSONSerialization.data(withJSONObject: ["error": ["message": "Invalid request payload"]])
+            return (try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil, headerFields: nil)), errorBody)
+        }
+        do {
+            _ = try await service.recognize(images: [Data([1, 2, 3])])
+            XCTFail("Expected Gemini HTTP failure")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("HTTP 400"))
+            XCTAssertTrue(error.localizedDescription.contains("Invalid request payload"))
+        }
     }
 
     func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {

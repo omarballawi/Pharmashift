@@ -268,7 +268,7 @@ enum DrugImportError: LocalizedError, Equatable {
     case unresolvedLocalBrand
     case deepSeekHTTPStatus(Int)
     case missingGeminiKey
-    case geminiHTTPStatus(Int)
+    case geminiHTTPStatus(Int, String)
     case packageRecognitionFailed
 
     var errorDescription: String? {
@@ -283,7 +283,10 @@ enum DrugImportError: LocalizedError, Equatable {
         case .unresolvedLocalBrand: "We could not safely identify this local trade name. Enter its active ingredient or ask your pharmacist."
         case .deepSeekHTTPStatus(let status): "DeepSeek connection failed (HTTP \(status)). Check that the key is active and has API access."
         case .missingGeminiKey: "Add your Gemini API key in Settings before scanning a package."
-        case .geminiHTTPStatus(let status): "Gemini package recognition failed (HTTP \(status)). Check the saved key and try again."
+        case .geminiHTTPStatus(let status, let detail):
+            detail.isEmpty
+                ? "Gemini package recognition failed (HTTP \(status)). Check the saved key and try again."
+                : "Gemini package recognition failed (HTTP \(status)): \(detail)"
         case .packageRecognitionFailed: "Gemini could not identify enough package facts. Retake clear front and back photos or enter the medicine manually."
         }
     }
@@ -493,7 +496,7 @@ protocol DrugPackageRecognizing: Sendable {
 
 actor GeminiPackageVisionService: DrugPackageRecognizing {
     static let model = "gemini-2.5-flash"
-    static let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1/interactions")!
+    static let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/interactions")!
     private let session: URLSession
     private let keyStore: GeminiKeyStore
 
@@ -508,7 +511,9 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         let request = try Self.makeRequest(apiKey: apiKey, images: images)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.packageRecognitionFailed }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw DrugImportError.geminiHTTPStatus(http.statusCode, Self.errorDetail(from: data))
+        }
         let envelope = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
         guard let text = envelope.steps.last(where: { $0.type == "model_output" })?.content?.first(where: { $0.type == "text" })?.text,
               let json = text.data(using: .utf8),
@@ -525,6 +530,7 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         let body: [String: Any] = [
             "model": Self.model,
             "input": input,
+            "store": false,
             "response_format": ["type": "text", "mime_type": "application/json", "schema": Self.schema]
         ]
         var request = URLRequest(url: Self.endpoint)
@@ -533,6 +539,11 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    static func errorDetail(from data: Data) -> String {
+        guard let envelope = try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data) else { return "" }
+        return String(envelope.error.message.replacingOccurrences(of: "\n", with: " ").trimmed.prefix(300))
     }
 
     static let prompt = """
@@ -556,6 +567,11 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         "required": ["tradeName", "manufacturer", "ingredients", "marketedStrengthLabel", "dosageForm", "route", "country", "confidence", "ambiguities"],
         "additionalProperties": false
     ]
+}
+
+private struct GeminiErrorEnvelope: Decodable {
+    struct APIError: Decodable { var message: String }
+    var error: APIError
 }
 
 private struct GeminiInteractionResponse: Decodable {
@@ -2228,9 +2244,11 @@ final class GeminiKeyStore: @unchecked Sendable {
         guard let apiKey = apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
         var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models")!)
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
-        let (_, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw DrugImportError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw DrugImportError.geminiHTTPStatus(http.statusCode, GeminiPackageVisionService.errorDetail(from: data))
+        }
         return "Gemini 2.5 Flash connection is ready"
     }
 }

@@ -66,18 +66,10 @@
   "64": "MemoryReviewGrade",
   "65": "Bool",
   "66": "DeepSeekURLProtocolStub",
-  "67": "DosingFrequency",
   "68": "DrugBackupDTO",
   "69": "String",
-  "70": "EliminationPathway",
   "71": "BackupImportPreviewView",
   "72": "ExcretionRoute",
-  "73": "String",
   "74": "AppTheme",
-  "75": "BackupImportPreviewView",
-  "76": "ReportFile.swift",
-  "77": "DrugMigrationPlan",
-  "78": "DrugEvidenceQuality",
-  "79": "SaveAction",
   "80": "VerificationStatus"
 }

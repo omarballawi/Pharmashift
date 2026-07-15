@@ -117,12 +117,14 @@ final class DrugImportServiceTests: XCTestCase {
                 ["type": "model_output", "content": [["type": "text", "text": resultJSON]]]
             ]
         ])
+        let outboundRequest = try GeminiPackageVisionService.makeRequest(apiKey: "gemini-test-key", images: [Data([1, 2, 3])])
+        let outboundBody = String(decoding: try XCTUnwrap(outboundRequest.httpBody), as: UTF8.self)
+        XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
+        XCTAssertTrue(outboundBody.contains("gemini-2.5-flash"))
+        XCTAssertTrue(outboundBody.contains(Data([1, 2, 3]).base64EncodedString()))
+        XCTAssertTrue(outboundBody.contains("application/json"))
         DeepSeekURLProtocolStub.requestHandler = { request in
             XCTAssertEqual(request.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
-            let body = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
-            XCTAssertTrue(body.contains("gemini-2.5-flash"))
-            XCTAssertTrue(body.contains(Data([1, 2, 3]).base64EncodedString()))
-            XCTAssertTrue(body.contains("application/json"))
             return (try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)), responseBody)
         }
         defer { DeepSeekURLProtocolStub.requestHandler = nil }

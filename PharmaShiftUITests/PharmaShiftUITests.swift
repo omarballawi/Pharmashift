@@ -15,10 +15,13 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["safety.banner"].exists)
         app.tabBars.buttons["Add"].tap()
         let scientific = app.textFields["capture.scientificName"]
-        XCTAssertTrue(scientific.waitForExistence(timeout: 3))
+        scrollToHittable(scientific, in: app, maximumSwipes: 4)
+        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()
         scientific.typeText("Metformin")
-        XCTAssertTrue(app.buttons["capture.saveOpen"].isEnabled)
+        let save = app.buttons["capture.saveOpen"]
+        scrollToHittable(save, in: app, maximumSwipes: 4)
+        XCTAssertTrue(save.isEnabled)
     }
 
     func testOnePageDrugProfileExpandsPharmacologyAndSafety() {
@@ -26,11 +29,12 @@ final class PharmaShiftUITests: XCTestCase {
         app.launch()
         app.tabBars.buttons["Add"].tap()
         let scientific = app.textFields["capture.scientificName"]
+        scrollToHittable(scientific, in: app, maximumSwipes: 4)
         XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()
         scientific.typeText("Phase Two Test Drug")
-        app.swipeUp()
         let save = app.buttons["capture.saveOpen"]
+        scrollToHittable(save, in: app, maximumSwipes: 4)
         XCTAssertTrue(save.waitForExistence(timeout: 3))
         save.tap()
 

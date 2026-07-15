@@ -505,6 +505,21 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
     func recognize(images: [Data]) async throws -> PackageRecognitionResult {
         guard let apiKey = keyStore.apiKey(), !apiKey.trimmed.isEmpty else { throw DrugImportError.missingGeminiKey }
         guard !images.isEmpty else { throw DrugImportError.packageRecognitionFailed }
+        let request = try Self.makeRequest(apiKey: apiKey, images: images)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DrugImportError.packageRecognitionFailed }
+        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
+        let envelope = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
+        guard let text = envelope.steps.last(where: { $0.type == "model_output" })?.content?.first(where: { $0.type == "text" })?.text,
+              let json = text.data(using: .utf8),
+              let result = try? JSONDecoder().decode(PackageRecognitionResult.self, from: json),
+              !result.tradeName.trimmed.isEmpty || !result.ingredients.isEmpty else {
+            throw DrugImportError.packageRecognitionFailed
+        }
+        return result
+    }
+
+    static func makeRequest(apiKey: String, images: [Data]) throws -> URLRequest {
         var input: [[String: Any]] = images.map { ["type": "image", "mime_type": "image/jpeg", "data": $0.base64EncodedString()] }
         input.append(["type": "text", "text": Self.prompt])
         let body: [String: Any] = [
@@ -517,17 +532,7 @@ actor GeminiPackageVisionService: DrugPackageRecognizing {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw DrugImportError.packageRecognitionFailed }
-        guard (200..<300).contains(http.statusCode) else { throw DrugImportError.geminiHTTPStatus(http.statusCode) }
-        let envelope = try JSONDecoder().decode(GeminiInteractionResponse.self, from: data)
-        guard let text = envelope.steps.last(where: { $0.type == "model_output" })?.content?.first(where: { $0.type == "text" })?.text,
-              let json = text.data(using: .utf8),
-              let result = try? JSONDecoder().decode(PackageRecognitionResult.self, from: json),
-              !result.tradeName.trimmed.isEmpty || !result.ingredients.isEmpty else {
-            throw DrugImportError.packageRecognitionFailed
-        }
-        return result
+        return request
     }
 
     static let prompt = """

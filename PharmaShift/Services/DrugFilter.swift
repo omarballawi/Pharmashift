@@ -26,8 +26,12 @@ struct DrugFilter {
             }.joined(separator: " ")
         ]
             .joined(separator: " ")
+        let searchTerms = searchText.trimmed.split(whereSeparator: \.isWhitespace)
+        let searchMatches = searchTerms.isEmpty || searchTerms.allSatisfy { term in
+            haystack.localizedCaseInsensitiveContains(String(term))
+        }
         let dueBoundary = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
-        return (searchText.trimmed.isEmpty || haystack.localizedCaseInsensitiveContains(searchText.trimmed))
+        return searchMatches
             && (chapter.isEmpty || drug.chapterRaw == chapter)
             && (confidence.isEmpty || drug.confidenceRaw == confidence)
             && (drugClass.trimmed.isEmpty || drug.drugClass.localizedCaseInsensitiveContains(drugClass.trimmed))

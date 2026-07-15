@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T05:42:13.251438+00:00",
+  "generated_at": "2026-07-15T05:44:53.422339+00:00",
   "nodes": {
     "pharmashift_features_library_drugdetailview_drugdetailview": {
       "code_fingerprint": "dccd732284221ac10e508e532ae602a6dffef65ffc853aebcb055fce6ad92467",
@@ -12,7 +12,7 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.834449912,
+      "score": 0.834414171,
       "source_file": "PharmaShift/Features/Library/DrugDetailView.swift",
       "status": "tentative",
       "uses": 1
@@ -28,7 +28,7 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.834449912,
+      "score": 0.834414171,
       "source_file": "PharmaShift/Features/Library/DrugEditorView.swift",
       "status": "tentative",
       "uses": 1
@@ -44,7 +44,7 @@
           "q": "What should PharmaShift do after Phase 1?"
         }
       ],
-      "score": 0.834449912,
+      "score": 0.834414171,
       "source_file": "PharmaShift/Features/Practice/PracticeView.swift",
       "status": "tentative",
       "uses": 1

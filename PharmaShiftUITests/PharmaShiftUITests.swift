@@ -15,29 +15,37 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["safety.banner"].exists)
         app.tabBars.buttons["Add"].tap()
         let scientific = app.textFields["capture.scientificName"]
-        XCTAssertTrue(scientific.waitForExistence(timeout: 3))
+        scrollToHittable(scientific, in: app, maximumSwipes: 4)
+        XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()
         scientific.typeText("Metformin")
-        XCTAssertTrue(app.buttons["capture.saveOpen"].isEnabled)
+        let save = app.buttons["capture.saveOpen"]
+        scrollToHittable(save, in: app, maximumSwipes: 4)
+        XCTAssertTrue(save.isEnabled)
     }
 
-    func testFivePageDrugCardNavigatesThroughLearnAndSafety() {
+    func testOnePageDrugProfileExpandsPharmacologyAndSafety() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["Add"].tap()
         let scientific = app.textFields["capture.scientificName"]
+        scrollToHittable(scientific, in: app, maximumSwipes: 4)
         XCTAssertTrue(scientific.waitForExistence(timeout: 5))
         scientific.tap()
         scientific.typeText("Phase Two Test Drug")
-        app.swipeUp()
         let save = app.buttons["capture.saveOpen"]
+        scrollToHittable(save, in: app, maximumSwipes: 4)
         XCTAssertTrue(save.waitForExistence(timeout: 3))
         save.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.identity"].waitForExistence(timeout: 5))
-        app.buttons["Learn"].tap()
+        let pharmacology = app.buttons["Pharmacology"]
+        scrollToHittable(pharmacology, in: app, maximumSwipes: 10)
+        pharmacology.tap()
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.pharmacology"].waitForExistence(timeout: 5))
-        app.buttons["Safety"].tap()
+        let safety = app.buttons["Warnings & contraindications"]
+        scrollToHittable(safety, in: app, maximumSwipes: 10)
+        safety.tap()
         XCTAssertTrue(app.descendants(matching: .any)["drugCard.safety"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Source"].exists)
     }
@@ -55,7 +63,10 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(scientific.waitForExistence(timeout: 10))
         scientific.tap(); scientific.typeText("Metformin")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["DailyMed"].exists)
         XCTAssertFalse(app.buttons["Source"].exists)
@@ -102,7 +113,7 @@ final class PharmaShiftUITests: XCTestCase {
         field.typeText("ui-test-key-1234")
         app.buttons["deepSeek.saveKey"].tap()
 
-        let alert = app.alerts["DeepSeek key"]
+        let alert = app.alerts["AI key"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Saved key")).firstMatch.exists)
         alert.buttons["OK"].tap()
@@ -128,7 +139,7 @@ final class PharmaShiftUITests: XCTestCase {
     }
 
     private func dismissDeepSeekAlert(in app: XCUIApplication) {
-        let alert = app.alerts["DeepSeek key"]
+        let alert = app.alerts["AI key"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.buttons["OK"].tap()
     }
@@ -149,7 +160,10 @@ final class PharmaShiftUITests: XCTestCase {
         scientific.tap()
         scientific.typeText("Mock Drug")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.source"].waitForExistence(timeout: 5))
         let formulation = app.buttons["trustedImport.result.mock-label"]
         XCTAssertTrue(formulation.waitForExistence(timeout: 5))
@@ -167,7 +181,10 @@ final class PharmaShiftUITests: XCTestCase {
         scientific.tap()
         scientific.typeText("Mock Drug")
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
-        app.buttons["trustedImport.continue"].tap()
+        let continueButton = app.buttons["trustedImport.continue"]
+        scrollToHittable(continueButton, in: app, maximumSwipes: 5)
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+        continueButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trustedImport.preview"].waitForExistence(timeout: 15))
         let scientificField = app.switches["import.field.identity.scientific"]
         XCTAssertEqual(scientificField.value as? String, "1")

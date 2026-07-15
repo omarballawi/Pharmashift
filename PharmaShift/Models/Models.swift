@@ -310,6 +310,115 @@ enum DoseFormulaKind: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
+struct IngredientComponent: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var name: String
+    var saltForm: String = ""
+    var strengthValue: Double? = nil
+    var strengthUnit: String = ""
+    var displayStrength: String = ""
+
+    var id: String {
+        [name, saltForm, displayStrength, strengthValue?.description ?? "", strengthUnit]
+            .map(IngredientIdentity.normalize)
+            .joined(separator: "|")
+    }
+
+    var strengthText: String {
+        if !displayStrength.trimmed.isEmpty { return displayStrength.trimmed }
+        guard let strengthValue else { return "" }
+        return [strengthValue.formatted(.number.precision(.fractionLength(0...3))), strengthUnit.trimmed]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+}
+
+struct FormStrength: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var strength: String
+    var tradeNames: [String] = []
+    var id: String { IngredientIdentity.normalize(strength + "|" + tradeNames.joined(separator: "|")) }
+}
+
+struct DosageFormGroup: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var dosageForm: String
+    var strengths: [FormStrength]
+    var id: String { IngredientIdentity.normalize(dosageForm) }
+}
+
+struct ClinicalDoseEntry: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var indication: String
+    var population: String
+    var doseText: String
+    var route: String = ""
+    var frequency: String = ""
+    var duration: String = ""
+    var adjuncts: [String] = []
+    var considerations: [String] = []
+    var sourceIDs: [String] = []
+    var id: String {
+        [indication, population, doseText, route, frequency]
+            .map(IngredientIdentity.normalize)
+            .joined(separator: "|")
+    }
+}
+
+enum InteractionCategory: String, Codable, CaseIterable, Identifiable, Sendable {
+    case contraindicated = "Contraindicated"
+    case seriousUseAlternative = "Serious - Use Alternative"
+    case monitorClosely = "Monitor Closely"
+    case minor = "Minor"
+    case unknown = "Uncategorized"
+    var id: String { rawValue }
+
+    init(from decoder: Decoder) throws {
+        let value = (try? decoder.singleValueContainer().decode(String.self)) ?? ""
+        let normalized = IngredientIdentity.normalize(value)
+        if normalized.contains("contraindicated") { self = .contraindicated }
+        else if normalized.contains("serious") || normalized.contains("alternative") { self = .seriousUseAlternative }
+        else if normalized.contains("monitor") { self = .monitorClosely }
+        else if normalized.contains("minor") { self = .minor }
+        else { self = .unknown }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+struct DrugInteractionEntry: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var drugName: String
+    var category: InteractionCategory
+    var effect: String = ""
+    var management: String = ""
+    var sourceIDs: [String] = []
+    var id: String { IngredientIdentity.normalize(category.rawValue + "|" + drugName) }
+}
+
+struct AdverseEffectEntry: Identifiable, Codable, Equatable, Hashable, Sendable {
+    var name: String
+    var incidence: String = ""
+    var isSerious: Bool = false
+    var sourceIDs: [String] = []
+    var id: String { IngredientIdentity.normalize((isSerious ? "serious|" : "common|") + name + "|" + incidence) }
+}
+
+struct ReproductiveSafetyProfile: Codable, Equatable, Hashable, Sendable {
+    var pregnancy: String = ""
+    var lactation: String = ""
+    var pregnancyArabicNote: String = ""
+    var lactationArabicNote: String = ""
+    var sourceIDs: [String] = []
+}
+
+struct PharmacologyProfile: Codable, Equatable, Hashable, Sendable {
+    var mechanismOfAction: String = ""
+    var absorption: [String] = []
+    var distribution: [String] = []
+    var metabolism: [String] = []
+    var elimination: [String] = []
+    var sourceIDs: [String] = []
+}
+
 struct DoseRegimen: Identifiable, Codable, Equatable, Sendable {
     var indication: String
     var population: DosePopulation
@@ -584,6 +693,12 @@ final class Drug {
     var prodrugInfoJSON: String = ""
     var eliminationInfoJSON: String = ""
     var fieldEvidenceJSON: String = ""
+    var dosageFormGroupsJSON: String = ""
+    var clinicalDosesJSON: String = ""
+    var interactionEntriesJSON: String = ""
+    var adverseEffectEntriesJSON: String = ""
+    var reproductiveSafetyJSON: String = ""
+    var pharmacologyProfileJSON: String = ""
     var lastKnowledgeRefreshAt: Date? = nil
     @Relationship(deleteRule: .cascade, inverse: \DrugProduct.profile) var products: [DrugProduct] = []
 
@@ -743,6 +858,68 @@ final class Drug {
         get { Self.decode([DoseRegimen].self, from: doseRegimensJSON) ?? [] }
         set { doseRegimensJSON = Self.encode(newValue) }
     }
+    var dosageFormGroups: [DosageFormGroup] {
+        get {
+            if let value = Self.decode([DosageFormGroup].self, from: dosageFormGroupsJSON), !value.isEmpty { return value }
+            guard !dosageForms.isEmpty else { return [] }
+            return dosageForms.map { form in
+                DosageFormGroup(dosageForm: form, strengths: strengths.map { FormStrength(strength: $0) })
+            }
+        }
+        set {
+            dosageFormGroupsJSON = Self.encode(newValue)
+            dosageForms = newValue.map(\.dosageForm).filter { !$0.trimmed.isEmpty }
+            strengths = newValue.flatMap(\.strengths).map(\.strength).reduce(into: [String]()) { values, item in
+                if !values.contains(where: { $0.localizedCaseInsensitiveCompare(item) == .orderedSame }) { values.append(item) }
+            }
+        }
+    }
+    var clinicalDoses: [ClinicalDoseEntry] {
+        get { Self.decode([ClinicalDoseEntry].self, from: clinicalDosesJSON) ?? [] }
+        set { clinicalDosesJSON = Self.encode(newValue) }
+    }
+    var interactionEntries: [DrugInteractionEntry] {
+        get {
+            if let value = Self.decode([DrugInteractionEntry].self, from: interactionEntriesJSON), !value.isEmpty { return value }
+            return interactions.filter { !$0.trimmed.isEmpty }.map { DrugInteractionEntry(drugName: $0, category: .unknown) }
+        }
+        set {
+            interactionEntriesJSON = Self.encode(newValue)
+            interactions = newValue.map(\.drugName)
+        }
+    }
+    var adverseEffectEntries: [AdverseEffectEntry] {
+        get {
+            if let value = Self.decode([AdverseEffectEntry].self, from: adverseEffectEntriesJSON), !value.isEmpty { return value }
+            return commonSideEffects.map { AdverseEffectEntry(name: $0) }
+                + seriousSideEffects.map { AdverseEffectEntry(name: $0, isSerious: true) }
+        }
+        set {
+            adverseEffectEntriesJSON = Self.encode(newValue)
+            commonSideEffects = newValue.filter { !$0.isSerious }.map(\.name)
+            seriousSideEffects = newValue.filter(\.isSerious).map(\.name)
+        }
+    }
+    var reproductiveSafety: ReproductiveSafetyProfile {
+        get {
+            Self.decode(ReproductiveSafetyProfile.self, from: reproductiveSafetyJSON)
+                ?? ReproductiveSafetyProfile(pregnancy: pregnancyCaution, pregnancyArabicNote: pregnancyCaution)
+        }
+        set {
+            reproductiveSafetyJSON = Self.encode(newValue)
+            pregnancyCaution = newValue.pregnancyArabicNote.trimmed.isEmpty ? newValue.pregnancy : newValue.pregnancyArabicNote
+        }
+    }
+    var pharmacologyProfile: PharmacologyProfile {
+        get {
+            Self.decode(PharmacologyProfile.self, from: pharmacologyProfileJSON)
+                ?? PharmacologyProfile(mechanismOfAction: mechanism, metabolism: excretionNotes.trimmed.isEmpty ? [] : [excretionNotes])
+        }
+        set {
+            pharmacologyProfileJSON = Self.encode(newValue)
+            mechanism = newValue.mechanismOfAction
+        }
+    }
     var prodrugInfo: ProdrugInfo {
         get {
             if let value = Self.decode(ProdrugInfo.self, from: prodrugInfoJSON) { return value }
@@ -890,6 +1067,8 @@ final class DrugProduct {
     var tradeName: String
     var manufacturer: String
     var strength: String
+    var marketedStrengthLabel: String = ""
+    var ingredientComponentsJSON: String = ""
     var dosageForm: String
     var route: String
     var country: String
@@ -911,6 +1090,8 @@ final class DrugProduct {
         tradeName: String,
         manufacturer: String = "",
         strength: String = "",
+        marketedStrengthLabel: String = "",
+        ingredientComponents: [IngredientComponent] = [],
         dosageForm: String = "",
         route: String = "",
         country: String = "",
@@ -931,6 +1112,8 @@ final class DrugProduct {
         self.tradeName = tradeName
         self.manufacturer = manufacturer
         self.strength = strength
+        self.marketedStrengthLabel = marketedStrengthLabel.trimmed.isEmpty ? strength : marketedStrengthLabel
+        self.ingredientComponentsJSON = Self.encode(ingredientComponents)
         self.dosageForm = dosageForm
         self.route = route
         self.country = country
@@ -948,6 +1131,20 @@ final class DrugProduct {
     }
 
     var packageImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
+    var ingredientComponents: [IngredientComponent] {
+        get { Self.decode([IngredientComponent].self, from: ingredientComponentsJSON) ?? [] }
+        set { ingredientComponentsJSON = Self.encode(newValue) }
+    }
+
+    private static func encode<T: Encodable>(_ value: T) -> String {
+        guard let data = try? JSONEncoder().encode(value) else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private static func decode<T: Decodable>(_ type: T.Type, from string: String) -> T? {
+        guard let data = string.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
 }
 
 @Model
@@ -1125,35 +1322,61 @@ enum DoseCalculator {
 @MainActor
 enum DrugLibraryMigrationService {
     private static let migrationKey = "ingredient-product-migration-v1"
+    private static let richProfileMigrationKey = "rich-profile-migration-v1"
 
     static func runIfNeeded(context: ModelContext) throws {
-        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        if !UserDefaults.standard.bool(forKey: migrationKey) {
+            let drugs = try context.fetch(FetchDescriptor<Drug>())
+            let reviews = try context.fetch(FetchDescriptor<ReviewLog>())
+            var owners: [String: Drug] = [:]
+            for drug in drugs.sorted(by: { $0.dateAdded < $1.dateAdded }) {
+                if drug.activeIngredients.isEmpty, !drug.scientificName.trimmed.isEmpty { drug.activeIngredients = [drug.scientificName] }
+                let key = IngredientIdentity.canonicalKey(names: drug.ingredientNames, rxNormIDs: drug.rxNormConceptIDs)
+                drug.canonicalIngredientKey = key
+                let product = makeLegacyProduct(from: drug, ingredientKey: key)
+                if let owner = owners[key], !key.hasSuffix("ingredient:") {
+                    merge(drug, into: owner)
+                    if let product, !owner.products.contains(where: { $0.productKey == product.productKey }) { product.profile = owner; owner.products.append(product); context.insert(product) }
+                    for review in reviews where review.drug?.id == drug.id { review.drug = owner }
+                    context.delete(drug)
+                } else {
+                    owners[key] = drug
+                    if let product, !drug.products.contains(where: { $0.productKey == product.productKey }) { product.profile = drug; drug.products.append(product); context.insert(product) }
+                }
+            }
+            try context.save()
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        }
+        try backfillRichProfilesIfNeeded(context: context)
+    }
+
+    private static func backfillRichProfilesIfNeeded(context: ModelContext) throws {
+        guard !UserDefaults.standard.bool(forKey: richProfileMigrationKey) else { return }
         let drugs = try context.fetch(FetchDescriptor<Drug>())
-        let reviews = try context.fetch(FetchDescriptor<ReviewLog>())
-        var owners: [String: Drug] = [:]
-        for drug in drugs.sorted(by: { $0.dateAdded < $1.dateAdded }) {
-            if drug.activeIngredients.isEmpty, !drug.scientificName.trimmed.isEmpty { drug.activeIngredients = [drug.scientificName] }
-            let key = IngredientIdentity.canonicalKey(names: drug.ingredientNames, rxNormIDs: drug.rxNormConceptIDs)
-            drug.canonicalIngredientKey = key
-            let product = makeLegacyProduct(from: drug, ingredientKey: key)
-            if let owner = owners[key], !key.hasSuffix("ingredient:") {
-                merge(drug, into: owner)
-                if let product, !owner.products.contains(where: { $0.productKey == product.productKey }) { product.profile = owner; owner.products.append(product); context.insert(product) }
-                for review in reviews where review.drug?.id == drug.id { review.drug = owner }
-                context.delete(drug)
-            } else {
-                owners[key] = drug
-                if let product, !drug.products.contains(where: { $0.productKey == product.productKey }) { product.profile = drug; drug.products.append(product); context.insert(product) }
+        for drug in drugs {
+            if drug.dosageFormGroupsJSON.trimmed.isEmpty { drug.dosageFormGroups = drug.dosageFormGroups }
+            if drug.interactionEntriesJSON.trimmed.isEmpty { drug.interactionEntries = drug.interactionEntries }
+            if drug.adverseEffectEntriesJSON.trimmed.isEmpty { drug.adverseEffectEntries = drug.adverseEffectEntries }
+            if drug.reproductiveSafetyJSON.trimmed.isEmpty { drug.reproductiveSafety = drug.reproductiveSafety }
+            if drug.pharmacologyProfileJSON.trimmed.isEmpty { drug.pharmacologyProfile = drug.pharmacologyProfile }
+            for product in drug.products {
+                if product.marketedStrengthLabel.trimmed.isEmpty { product.marketedStrengthLabel = product.strength }
+                if product.ingredientComponents.isEmpty {
+                    let components = drug.ingredientNames.map { IngredientComponent(name: $0, displayStrength: drug.ingredientNames.count == 1 ? product.strength : "") }
+                    product.ingredientComponents = components
+                }
             }
         }
         try context.save()
-        UserDefaults.standard.set(true, forKey: migrationKey)
+        UserDefaults.standard.set(true, forKey: richProfileMigrationKey)
     }
 
     private static func makeLegacyProduct(from drug: Drug, ingredientKey: String) -> DrugProduct? {
         guard !drug.tradeNames.isEmpty || drug.imageData != nil || !drug.strengths.isEmpty || !drug.dosageForms.isEmpty else { return nil }
         let trade = drug.tradeNames.first ?? drug.displayName
-        return DrugProduct(productKey: IngredientIdentity.productKey(tradeName: trade, manufacturer: "", strength: drug.strengths.first ?? "", dosageForm: drug.dosageForms.first ?? "", ingredientKey: ingredientKey), tradeName: trade, strength: drug.strengths.first ?? "", dosageForm: drug.dosageForms.first ?? "", route: drug.routes.first ?? "", shelfLocation: drug.shelfLocation, imageData: drug.imageData, additionalImageData: drug.additionalImageData, thumbnailData: drug.thumbnailData, additionalThumbnailData: drug.additionalThumbnailData, sourceName: drug.importedSourceName, sourceURL: drug.sourceURL, dateAdded: drug.dateAdded)
+        let strength = drug.strengths.first ?? ""
+        let components = drug.ingredientNames.map { IngredientComponent(name: $0, displayStrength: drug.ingredientNames.count == 1 ? strength : "") }
+        return DrugProduct(productKey: IngredientIdentity.productKey(tradeName: trade, manufacturer: "", strength: strength, dosageForm: drug.dosageForms.first ?? "", ingredientKey: ingredientKey), tradeName: trade, strength: strength, marketedStrengthLabel: strength, ingredientComponents: components, dosageForm: drug.dosageForms.first ?? "", route: drug.routes.first ?? "", shelfLocation: drug.shelfLocation, imageData: drug.imageData, additionalImageData: drug.additionalImageData, thumbnailData: drug.thumbnailData, additionalThumbnailData: drug.additionalThumbnailData, sourceName: drug.importedSourceName, sourceURL: drug.sourceURL, dateAdded: drug.dateAdded)
     }
 
     private static func merge(_ duplicate: Drug, into owner: Drug) {

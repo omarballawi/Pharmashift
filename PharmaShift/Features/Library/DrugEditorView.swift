@@ -126,7 +126,7 @@ struct DrugEditorView: View {
             }
             Section("Identity / الهوية") {
                 Button { showsImport = true } label: {
-                    Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
+                    Label("AI package scan + trusted import", systemImage: "camera.viewfinder")
                 }
                 .accessibilityIdentifier("drugEditor.import")
                 Toggle("Unknown drug", isOn: binding(\.isUnknown))

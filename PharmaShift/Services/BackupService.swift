@@ -29,7 +29,7 @@ struct BackupRecordCounts: Codable, Equatable {
 }
 
 struct PharmaShiftBackup: Codable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
 
     var schemaVersion: Int
     var exportedAt: Date
@@ -151,6 +151,12 @@ struct DrugBackupDTO: Codable {
     var prodrugInfoJSON: String?
     var eliminationInfoJSON: String?
     var fieldEvidenceJSON: String?
+    var dosageFormGroupsJSON: String?
+    var clinicalDosesJSON: String?
+    var interactionEntriesJSON: String?
+    var adverseEffectEntriesJSON: String?
+    var reproductiveSafetyJSON: String?
+    var pharmacologyProfileJSON: String?
     var lastKnowledgeRefreshAt: Date?
 
     init(_ drug: Drug, includesImages: Bool) {
@@ -258,6 +264,12 @@ struct DrugBackupDTO: Codable {
         prodrugInfoJSON = drug.prodrugInfoJSON
         eliminationInfoJSON = drug.eliminationInfoJSON
         fieldEvidenceJSON = drug.fieldEvidenceJSON
+        dosageFormGroupsJSON = drug.dosageFormGroupsJSON
+        clinicalDosesJSON = drug.clinicalDosesJSON
+        interactionEntriesJSON = drug.interactionEntriesJSON
+        adverseEffectEntriesJSON = drug.adverseEffectEntriesJSON
+        reproductiveSafetyJSON = drug.reproductiveSafetyJSON
+        pharmacologyProfileJSON = drug.pharmacologyProfileJSON
         lastKnowledgeRefreshAt = drug.lastKnowledgeRefreshAt
     }
 
@@ -373,6 +385,12 @@ struct DrugBackupDTO: Codable {
         drug.prodrugInfoJSON = prodrugInfoJSON ?? ""
         drug.eliminationInfoJSON = eliminationInfoJSON ?? ""
         drug.fieldEvidenceJSON = fieldEvidenceJSON ?? ""
+        drug.dosageFormGroupsJSON = dosageFormGroupsJSON ?? ""
+        drug.clinicalDosesJSON = clinicalDosesJSON ?? ""
+        drug.interactionEntriesJSON = interactionEntriesJSON ?? ""
+        drug.adverseEffectEntriesJSON = adverseEffectEntriesJSON ?? ""
+        drug.reproductiveSafetyJSON = reproductiveSafetyJSON ?? ""
+        drug.pharmacologyProfileJSON = pharmacologyProfileJSON ?? ""
         drug.lastKnowledgeRefreshAt = lastKnowledgeRefreshAt
     }
 }
@@ -384,6 +402,8 @@ struct DrugProductBackupDTO: Codable {
     var tradeName: String
     var manufacturer: String
     var strength: String
+    var marketedStrengthLabel: String?
+    var ingredientComponentsJSON: String?
     var dosageForm: String
     var route: String
     var country: String
@@ -400,7 +420,7 @@ struct DrugProductBackupDTO: Codable {
 
     init(_ model: DrugProduct, includesImages: Bool) {
         id = model.id; profileID = model.profile?.id; productKey = model.productKey; tradeName = model.tradeName
-        manufacturer = model.manufacturer; strength = model.strength; dosageForm = model.dosageForm; route = model.route
+        manufacturer = model.manufacturer; strength = model.strength; marketedStrengthLabel = model.marketedStrengthLabel; ingredientComponentsJSON = model.ingredientComponentsJSON; dosageForm = model.dosageForm; route = model.route
         country = model.country; shelfLocation = model.shelfLocation
         imageData = includesImages ? model.imageData : nil; additionalImageData = includesImages ? model.additionalImageData : []
         thumbnailData = includesImages ? model.thumbnailData : nil; additionalThumbnailData = includesImages ? model.additionalThumbnailData : []
@@ -408,7 +428,11 @@ struct DrugProductBackupDTO: Codable {
     }
 
     func makeModel(profile: Drug?, includesImages: Bool) -> DrugProduct {
-        DrugProduct(id: id, productKey: productKey, tradeName: tradeName, manufacturer: manufacturer, strength: strength, dosageForm: dosageForm, route: route, country: country, shelfLocation: shelfLocation, imageData: includesImages ? imageData : nil, additionalImageData: includesImages ? additionalImageData : [], thumbnailData: includesImages ? thumbnailData : nil, additionalThumbnailData: includesImages ? additionalThumbnailData : [], leafletText: leafletText, leafletUpdatedAt: leafletUpdatedAt, sourceName: sourceName, sourceURL: sourceURL, dateAdded: dateAdded, profile: profile)
+        let components = ingredientComponentsJSON.flatMap { value -> [IngredientComponent]? in
+            guard let data = value.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode([IngredientComponent].self, from: data)
+        } ?? []
+        return DrugProduct(id: id, productKey: productKey, tradeName: tradeName, manufacturer: manufacturer, strength: strength, marketedStrengthLabel: marketedStrengthLabel ?? strength, ingredientComponents: components, dosageForm: dosageForm, route: route, country: country, shelfLocation: shelfLocation, imageData: includesImages ? imageData : nil, additionalImageData: includesImages ? additionalImageData : [], thumbnailData: includesImages ? thumbnailData : nil, additionalThumbnailData: includesImages ? additionalThumbnailData : [], leafletText: leafletText, leafletUpdatedAt: leafletUpdatedAt, sourceName: sourceName, sourceURL: sourceURL, dateAdded: dateAdded, profile: profile)
     }
 }
 

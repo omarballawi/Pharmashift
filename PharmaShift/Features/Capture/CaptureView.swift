@@ -57,12 +57,12 @@ struct CaptureView: View {
                 .accessibilityIdentifier("capture.generateAI")
 
                 Button { showsTrustedImport = true } label: {
-                    Label("Trusted photo/OCR import", systemImage: "camera.viewfinder")
+                    Label("AI package scan + trusted import", systemImage: "camera.viewfinder")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("capture.trustedImport")
-                Text("Use this when you want OCR, trusted-source search, DeepSeek formatting, preview, and a memory challenge.")
+                Text("Gemini 2.5 Flash identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: { Text("Choose how to add") }

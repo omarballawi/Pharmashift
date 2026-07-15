@@ -8,16 +8,16 @@ struct ResolvedDrugIdentity: Codable, Equatable, Sendable {
 }
 
 protocol DrugIdentityResolving: Sendable {
-    func resolve(identity: UserConfirmedDrugIdentity, ocrText: String) async throws -> ResolvedDrugIdentity
+    func resolve(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ResolvedDrugIdentity
 }
 
 actor DeepSeekIdentityResolver: DrugIdentityResolving {
-    func resolve(identity: UserConfirmedDrugIdentity, ocrText: String) async throws -> ResolvedDrugIdentity {
+    func resolve(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ResolvedDrugIdentity {
         let prompt = """
-        Return JSON only. Identify a medicine package from the names and OCR text below. Return a scientificName only if you are confident. dosageForm and route may be empty. Do not provide dosing, treatment, or safety advice.
+        Return JSON only. Resolve a medicine identity from the confirmed names and package facts below. Return a scientificName only if you are confident. dosageForm and route may be empty. Do not provide dosing, treatment, or safety advice.
         {"scientificName":"","dosageForm":"","route":"","confidence":"low|medium|high"}
         Names: \(identity.tradeNames.joined(separator: ", ")) \(identity.scientificName)
-        OCR: \(ocrText.prefix(1200))
+        Package facts: \(packageText.prefix(1200))
         """
         let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 220)
         let result = try JSONDecoder().decode(ResolvedDrugIdentity.self, from: data)

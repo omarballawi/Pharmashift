@@ -4,18 +4,24 @@ import XCTest
 
 @MainActor
 final class DrugImportServiceTests: XCTestCase {
-    func testOCRCandidateExtractionIsConservative() {
-        let candidate = OCRService.candidate(from: [
-            "Coversyl",
-            "Perindopril arginine",
-            "5 mg tablets",
-            "Servier"
-        ])
-        XCTAssertEqual(candidate.possibleTradeName, "Coversyl")
-        XCTAssertEqual(candidate.possibleScientificName, "Perindopril arginine")
-        XCTAssertEqual(candidate.possibleStrength, "5 mg tablets")
-        XCTAssertEqual(candidate.possibleDosageForm, "5 mg tablets")
-        XCTAssertTrue(candidate.rawText.contains("Coversyl"))
+    func testPackageRecognitionKeepsCombinationComponentsSeparateFromMarketedStrength() {
+        let result = PackageRecognitionResult(
+            tradeName: "Savesto",
+            manufacturer: "",
+            ingredients: [
+                IngredientComponent(name: "Sacubitril", strengthValue: 24, strengthUnit: "mg"),
+                IngredientComponent(name: "Valsartan", strengthValue: 26, strengthUnit: "mg")
+            ],
+            marketedStrengthLabel: "50 mg",
+            dosageForm: "Tablet",
+            route: "Oral",
+            country: "",
+            confidence: 0.95,
+            ambiguities: []
+        )
+        XCTAssertEqual(result.scientificName, "Sacubitril + Valsartan")
+        XCTAssertEqual(result.ingredients.map(\.strengthText), ["24 mg", "26 mg"])
+        XCTAssertEqual(result.marketedStrengthLabel, "50 mg")
     }
 
     func testSPLParserBuildsTrustedPacketAndTrimsUsefulSections() throws {
@@ -50,6 +56,17 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertLessThanOrEqual(packet.warningsText.count, TrustedDrugSourcePacketExtractor.sectionLimit)
     }
 
+    func testTrustedPacketExtractorPreservesLongNamedInteractionLists() {
+        let names = (1...160).map { "InteractionDrug\($0)" }.joined(separator: ", ")
+        let packet = TrustedDrugSourcePacketExtractor.packet(
+            sourceName: "Test",
+            sourceURL: "https://example.test",
+            sections: ["interactions": names]
+        )
+        XCTAssertTrue(packet.interactionsText.contains("InteractionDrug160"))
+        XCTAssertGreaterThan(packet.interactionsText.count, TrustedDrugSourcePacketExtractor.sectionLimit)
+    }
+
     func testConsistencyNormalizerDerivesBandsAndFixesOralTypo() {
         let drug = Drug(scientificName: "Example")
         drug.routes = ["Orak"]
@@ -79,10 +96,54 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertFalse(text.localizedCaseInsensitiveContains("base64"))
     }
 
+    func testGeminiPackageRecognitionSendsImagesAndReadsOnlyModelOutput() async throws {
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: "GeminiTests.\(UUID().uuidString)"))
+        let storage = DeepSeekKeyStore(
+            service: "gemini.\(UUID().uuidString)",
+            fallbackDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+            allowsKeychain: false,
+            allowsProtectedFile: false,
+            preferences: preferences
+        )
+        let keyStore = GeminiKeyStore(storage: storage)
+        try keyStore.save(apiKey: "gemini-test-key")
+        defer { keyStore.delete() }
+        let resultJSON = """
+        {"tradeName":"Savesto","manufacturer":"","ingredients":[{"name":"Sacubitril","saltForm":"","strengthValue":24,"strengthUnit":"mg","displayStrength":"24 mg"},{"name":"Valsartan","saltForm":"","strengthValue":26,"strengthUnit":"mg","displayStrength":"26 mg"}],"marketedStrengthLabel":"50 mg","dosageForm":"Tablet","route":"Oral","country":"Iraq","confidence":0.98,"ambiguities":[]}
+        """
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "steps": [
+                ["type": "user_input", "content": [["type": "text", "text": "This must not be decoded"]]],
+                ["type": "model_output", "content": [["type": "text", "text": resultJSON]]]
+            ]
+        ])
+        let outboundRequest = try GeminiPackageVisionService.makeRequest(apiKey: "gemini-test-key", images: [Data([1, 2, 3])])
+        let outboundBody = try XCTUnwrap(outboundRequest.httpBody)
+        let outboundJSON = try XCTUnwrap(try JSONSerialization.jsonObject(with: outboundBody) as? [String: Any])
+        let outboundInput = try XCTUnwrap(outboundJSON["input"] as? [[String: Any]])
+        let responseFormat = try XCTUnwrap(outboundJSON["response_format"] as? [String: Any])
+        XCTAssertEqual(outboundRequest.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
+        XCTAssertEqual(outboundJSON["model"] as? String, "gemini-2.5-flash")
+        XCTAssertEqual(outboundInput.first?["data"] as? String, Data([1, 2, 3]).base64EncodedString())
+        XCTAssertEqual(responseFormat["mime_type"] as? String, "application/json")
+        DeepSeekURLProtocolStub.requestHandler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-goog-api-key"), "gemini-test-key")
+            return (try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)), responseBody)
+        }
+        defer { DeepSeekURLProtocolStub.requestHandler = nil }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DeepSeekURLProtocolStub.self]
+        let service = GeminiPackageVisionService(session: URLSession(configuration: configuration), keyStore: keyStore)
+        let result = try await service.recognize(images: [Data([1, 2, 3])])
+        XCTAssertEqual(result.tradeName, "Savesto")
+        XCTAssertEqual(result.ingredients.map(\.strengthText), ["24 mg", "26 mg"])
+        XCTAssertEqual(result.marketedStrengthLabel, "50 mg")
+    }
+
     func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {
         let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.")
         let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
-        XCTAssertTrue(text.contains("\"max_tokens\":4500"))
+        XCTAssertTrue(text.contains("\"max_tokens\":4000"))
         XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
         XCTAssertTrue(text.contains("Trusted source lookup did not return a usable page"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
@@ -93,7 +154,7 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(info.identity.scientificName, "Perindopril arginine")
         XCTAssertEqual(info.sourceQuality.sourceName, "Generated with AI")
         XCTAssertEqual(info.sourceQuality.sourceURL, "")
-        XCTAssertFalse(info.sourceQuality.needsReview)
+        XCTAssertTrue(info.sourceQuality.needsReview)
         XCTAssertTrue(info.sourceQuality.notes.contains("editable"))
     }
 
@@ -232,6 +293,40 @@ final class DrugImportServiceTests: XCTestCase {
         XCTAssertEqual(info.prodrugInfo?.classification, .activeDrug)
         XCTAssertEqual(info.eliminationInfo?.dominantPathway, .renalUrine)
         XCTAssertEqual(info.memorization.reviewQuestions?.count, 8)
+    }
+
+    func testValidatorDecodesCompleteClinicalListsAndCombinationIdentity() throws {
+        let json = """
+        {
+          "identity": {"activeIngredients":[{"name":"Sacubitril","saltForm":"","strengthValue":24,"strengthUnit":"mg","displayStrength":"24 mg"},{"name":"Valsartan","saltForm":"","strengthValue":26,"strengthUnit":"mg","displayStrength":"26 mg"}],"marketedStrengthLabel":"50 mg"},
+          "dosageFormGroups":[{"dosageForm":"Tablet","strengths":[{"strength":"50 mg","tradeNames":["Savesto"]}]}],
+          "clinicalDoses":[{"indication":"Heart failure","population":"Adult","doseText":"Use the sourced titration regimen","route":"Oral","frequency":"Twice daily","duration":"","adjuncts":[],"considerations":["Verify current guideline"],"sourceIDs":[]}],
+          "interactionEntries":[{"drugName":"Aliskiren","category":"Contraindicated","effect":"Increased risk","management":"Avoid","sourceIDs":[]}],
+          "adverseEffectEntries":[{"name":"Hypotension","incidence":"18%","isSerious":false,"sourceIDs":[]}],
+          "reproductiveSafety":{"pregnancy":"Fetal toxicity warning","lactation":"Data are limited","pregnancyArabicNote":"تجنب أثناء الحمل","lactationArabicNote":"راجع الطبيب","sourceIDs":[]},
+          "pharmacologyProfile":{"mechanismOfAction":"ARNI combination","absorption":["Rapid absorption"],"distribution":[],"metabolism":[],"elimination":["Renal and fecal"],"sourceIDs":[]}
+        }
+        """
+        let identity = UserConfirmedDrugIdentity(
+            scientificName: "Sacubitril + Valsartan",
+            tradeNames: ["Savesto"],
+            strength: "50 mg",
+            dosageForm: "Tablet",
+            route: "Oral",
+            system: "Cardiovascular",
+            drugClass: "ARNI",
+            ingredients: [IngredientComponent(name: "Sacubitril", displayStrength: "24 mg"), IngredientComponent(name: "Valsartan", displayStrength: "26 mg")],
+            marketedStrengthLabel: "50 mg"
+        )
+        let info = try DrugImportValidator.parseAIDraft(jsonString: json, confirmedIdentity: identity, packageText: "")
+        XCTAssertEqual(info.identity.activeIngredients?.count, 2)
+        XCTAssertEqual(info.identity.marketedStrengthLabel, "50 mg")
+        XCTAssertEqual(info.dosageFormGroups?.first?.strengths.first?.strength, "50 mg")
+        XCTAssertEqual(info.clinicalDoses?.first?.indication, "Heart failure")
+        XCTAssertEqual(info.interactionEntries?.first?.category, .contraindicated)
+        XCTAssertEqual(info.adverseEffectEntries?.first?.incidence, "18%")
+        XCTAssertEqual(info.reproductiveSafety?.lactation, "Data are limited")
+        XCTAssertEqual(info.pharmacologyProfile?.mechanismOfAction, "ARNI combination")
     }
 
     func testJSONSanitizerHandlesBracesInsideStrings() throws {

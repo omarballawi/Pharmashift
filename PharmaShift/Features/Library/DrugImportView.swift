@@ -8,7 +8,7 @@ private enum ImportStage: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .photo: "Photo + OCR"
+        case .photo: "Package AI"
         case .confirm: "Confirm"
         case .source: "Source"
         case .preview: "Preview"
@@ -40,6 +40,7 @@ struct DrugImportView: View {
     let drug: Drug?
     let providers: [any DrugSourceProvider]
     let aiService: any DrugImportFormattingService
+    let packageRecognizer: any DrugPackageRecognizing
     let startsInAIMode: Bool
 
     @State private var stage: ImportStage = .photo
@@ -50,7 +51,7 @@ struct DrugImportView: View {
     @State private var thumbnailData: Data?
     @State private var additionalImageData: [Data] = []
     @State private var additionalThumbnailData: [Data] = []
-    @State private var ocrCandidate = OCRDrugCandidate(rawText: "")
+    @State private var packageRecognition = PackageRecognitionResult.empty
     @State private var detectedText = ""
     @State private var identity: UserConfirmedDrugIdentity
     @State private var results: [DrugSearchResult] = []
@@ -73,6 +74,7 @@ struct DrugImportView: View {
         drug: Drug? = nil,
         providers: [any DrugSourceProvider] = DrugSourceProviderFactory.appDefault(),
         aiService: any DrugImportFormattingService = DrugSourceProviderFactory.aiDefault(),
+        packageRecognizer: any DrugPackageRecognizing = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockGeminiPackageVisionService() : GeminiPackageVisionService(),
         fastGatherService: any FastDrugGatheringService = ProcessInfo.processInfo.arguments.contains("-mockDrugImport") ? MockFastDrugGatherService() : DeepSeekFastDrugGatherService(),
         startsInAIMode: Bool = false,
         initialLeafletText: String = ""
@@ -80,6 +82,7 @@ struct DrugImportView: View {
         self.drug = drug
         self.providers = providers
         self.aiService = aiService
+        self.packageRecognizer = packageRecognizer
         self.fastGatherService = fastGatherService
         self.startsInAIMode = startsInAIMode
         let skipsPhotoInTests = ProcessInfo.processInfo.arguments.contains("-mockDrugImportSkipPhoto")
@@ -120,7 +123,7 @@ struct DrugImportView: View {
         .fullScreenCover(item: cropPresentation) { draft in
             ImageEditorView(draft: draft) { payload in
                 appendPhoto(payload)
-                runOCR(from: payload.imageData)
+                recognizePackage()
             }
             .interactiveDismissDisabled()
         }
@@ -149,13 +152,13 @@ struct DrugImportView: View {
         switch stage {
         case .photo: ImportFromPhotoView(
             images: currentImages,
-            ocrCandidate: ocrCandidate,
+            recognition: packageRecognition,
             detectedText: $detectedText,
             onCamera: { beginImageFlow(.camera) },
             onLibrary: { beginImageFlow(.library) },
             onRemovePhoto: removePhoto,
             onUseCurrent: {
-                prefillIdentityFromOCR()
+                prefillIdentityFromRecognition()
                 stage = .confirm
             }
         )
@@ -288,37 +291,37 @@ struct DrugImportView: View {
     private func loadPhotoItems() async {
         guard !photoItems.isEmpty else { return }
         do {
-            var firstPayloadForOCR: DrugImagePayload?
             for item in photoItems {
                 guard let data = try await item.loadTransferable(type: Data.self) else { continue }
                 let image = try ImageCompressor.image(from: data)
                 let payload = try ImageCompressor.payload(from: image)
-                if firstPayloadForOCR == nil { firstPayloadForOCR = payload }
                 await MainActor.run { appendPhoto(payload) }
             }
             await MainActor.run { photoItems = [] }
-            if let firstPayloadForOCR { await MainActor.run { runOCR(from: firstPayloadForOCR.imageData) } }
+            await MainActor.run { recognizePackage() }
         } catch {
             await MainActor.run { message = error.localizedDescription; photoItems = [] }
         }
     }
 
-    private func runOCR(from data: Data) {
-        guard let image = UIImage(data: data) else { return }
+    private func recognizePackage() {
+        let images = currentImages
+        guard !images.isEmpty else { return }
         isLoading = true
+        loadingMessage = "Gemini 2.5 Flash is identifying the package and ingredient strengths..."
         Task {
             do {
-                let candidate = try await OCRService().recognize(image: image)
+                let recognition = try await packageRecognizer.recognize(images: images)
                 await MainActor.run {
-                    ocrCandidate = candidate
-                    detectedText = candidate.rawText
-                    prefillIdentityFromOCR()
+                    packageRecognition = recognition
+                    if detectedText.trimmed.isEmpty { detectedText = recognition.packageEvidenceText }
+                    prefillIdentityFromRecognition()
                     stage = .confirm
                     isLoading = false
                 }
             } catch {
                 await MainActor.run {
-                    message = "OCR could not read this image. You can still type the fields manually."
+                    message = error.localizedDescription
                     stage = .confirm
                     isLoading = false
                 }
@@ -326,11 +329,14 @@ struct DrugImportView: View {
         }
     }
 
-    private func prefillIdentityFromOCR() {
-        if identity.scientificName.trimmed.isEmpty { identity.scientificName = ocrCandidate.possibleScientificName ?? "" }
-        if identity.tradeNames.isEmpty, let trade = ocrCandidate.possibleTradeName { identity.tradeNames = [trade] }
-        if identity.strength.trimmed.isEmpty { identity.strength = ocrCandidate.possibleStrength ?? "" }
-        if identity.dosageForm.trimmed.isEmpty { identity.dosageForm = ocrCandidate.possibleDosageForm ?? "" }
+    private func prefillIdentityFromRecognition() {
+        if identity.scientificName.trimmed.isEmpty { identity.scientificName = packageRecognition.scientificName }
+        if identity.tradeNames.isEmpty, !packageRecognition.tradeName.trimmed.isEmpty { identity.tradeNames = [packageRecognition.tradeName] }
+        if identity.strength.trimmed.isEmpty { identity.strength = packageRecognition.marketedStrengthLabel }
+        if identity.dosageForm.trimmed.isEmpty { identity.dosageForm = packageRecognition.dosageForm }
+        if identity.route.trimmed.isEmpty { identity.route = packageRecognition.route }
+        identity.ingredients = packageRecognition.ingredients
+        identity.marketedStrengthLabel = packageRecognition.marketedStrengthLabel
     }
 
     private func searchTrustedSources() {
@@ -339,7 +345,7 @@ struct DrugImportView: View {
         results = []
         Task {
             var collected: [DrugSearchResult] = []
-            let queryCandidates = [identity.scientificName] + identity.tradeNames
+            let queryCandidates = identity.ingredients.map(\.name) + [identity.scientificName] + identity.tradeNames
             let usableQueries = queryCandidates.filter { !$0.trimmed.isEmpty }
             for provider in providers {
                 for query in usableQueries where collected.filter({ $0.sourceName == provider.sourceName }).isEmpty {
@@ -350,7 +356,7 @@ struct DrugImportView: View {
             }
             if collected.isEmpty {
                 do {
-                    let resolution = try await identityResolver.resolve(identity: identity, ocrText: detectedText)
+                    let resolution = try await identityResolver.resolve(identity: identity, packageText: detectedText)
                     await MainActor.run { resolvedIdentity = resolution; isLoading = false }
                     return
                 } catch {
@@ -380,7 +386,7 @@ struct DrugImportView: View {
         selectedProviderName = result.sourceName
         guard let provider = providers.first(where: { $0.sourceName == result.sourceName }) else { return }
         isLoading = true
-        loadingMessage = "Reading the selected source, then formatting one compact card..."
+        loadingMessage = "Reading the selected source, then generating five focused clinical sections..."
         Task {
             do {
                 let packet = try await provider.fetchDrugDetails(id: result.id)
@@ -404,7 +410,7 @@ struct DrugImportView: View {
 
     private func retryAI() {
         isLoading = true
-        loadingMessage = "Retrying one compact AI request..."
+        loadingMessage = "Retrying the focused clinical section requests..."
         Task {
             do {
                 let info: ImportedDrugInfo
@@ -432,8 +438,8 @@ struct DrugImportView: View {
                 let packets = await gatherTrustedPackets()
                 await MainActor.run {
                     loadingMessage = packets.isEmpty
-                        ? "Generating a compact card from the confirmed drug..."
-                        : "Generating a compact card from trusted evidence..."
+                        ? "Generating five focused sections from the confirmed drug..."
+                        : "Generating five focused sections from trusted evidence..."
                 }
                 let packet = mergedPacket(packets, leafletText: detectedText)
                 let info = packets.isEmpty
@@ -454,7 +460,7 @@ struct DrugImportView: View {
     }
 
     private func gatherTrustedPackets() async -> [TrustedDrugSourcePacket] {
-        let queries = ([identity.scientificName] + identity.tradeNames).filter { !$0.trimmed.isEmpty }
+        let queries = (identity.ingredients.map(\.name) + [identity.scientificName] + identity.tradeNames).filter { !$0.trimmed.isEmpty }
         let packets = await withTaskGroup(of: TrustedDrugSourcePacket?.self, returning: [TrustedDrugSourcePacket].self) { group in
             for provider in providers {
                 group.addTask { await Self.firstPacket(from: provider, queries: queries) }
@@ -493,19 +499,19 @@ struct DrugImportView: View {
     }
 
     private func mergedPacket(_ packets: [TrustedDrugSourcePacket], leafletText: String) -> TrustedDrugSourcePacket {
-        func joined(_ value: (TrustedDrugSourcePacket) -> String) -> String {
+        func joined(_ value: (TrustedDrugSourcePacket) -> String, limit: Int = 2_800) -> String {
             let sourced = packets.compactMap { packet -> String? in
                 let text = value(packet).trimmed
                 guard !text.isEmpty else { return nil }
                 return "[\(packet.sourceName)] \(text)"
             }.joined(separator: "\n\n")
-            return TrustedDrugSourcePacketExtractor.compact(sourced, limit: 2_800)
+            return TrustedDrugSourcePacketExtractor.compact(sourced, limit: limit)
         }
         let primary = packets.first(where: { $0.sourceName == "Altibbi" }) ?? packets.first
         return TrustedDrugSourcePacket(
             sourceName: packets.map(\.sourceName).joined(separator: " + "), sourceURL: primary?.sourceURL ?? "",
             indicationsText: joined(\.indicationsText), dosageText: joined(\.dosageText), contraindicationsText: joined(\.contraindicationsText),
-            warningsText: joined(\.warningsText), adverseReactionsText: joined(\.adverseReactionsText), interactionsText: joined(\.interactionsText),
+            warningsText: joined(\.warningsText), adverseReactionsText: joined(\.adverseReactionsText), interactionsText: joined(\.interactionsText, limit: 12_000),
             pharmacokineticsText: joined(\.pharmacokineticsText), pregnancyText: joined(\.pregnancyText), dosageFormsText: joined(\.dosageFormsText),
             routeText: joined(\.routeText), activeIngredientText: joined(\.activeIngredientText), lastUpdatedText: nil,
             isTruncated: packets.contains(where: \.isTruncated), leafletText: String(leafletText.prefix(4_000))
@@ -514,7 +520,9 @@ struct DrugImportView: View {
 
     private func saveImport() {
         guard let importedInfo else { return }
-        let ingredientKey = IngredientIdentity.canonicalKey(names: [importedInfo.identity.scientificName])
+        let components = importedInfo.identity.activeIngredients ?? identity.ingredients
+        let ingredientNames = components.map(\.name).filter { !$0.trimmed.isEmpty }
+        let ingredientKey = IngredientIdentity.canonicalKey(names: ingredientNames.isEmpty ? [importedInfo.identity.scientificName] : ingredientNames)
         let existing = (try? context.fetch(FetchDescriptor<Drug>()))?.first { $0.canonicalIngredientKey == ingredientKey || IngredientIdentity.canonicalKey(names: $0.ingredientNames) == ingredientKey }
         let target = drug ?? existing ?? Drug(dateAdded: .now, nextReviewDate: .now)
         if drug == nil && existing == nil { context.insert(target) }
@@ -525,7 +533,7 @@ struct DrugImportView: View {
         let tradeName = importedInfo.identity.tradeNames.first ?? target.firstTradeName
         let productKey = IngredientIdentity.productKey(tradeName: tradeName, manufacturer: "", strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, ingredientKey: target.canonicalIngredientKey)
         if !target.products.contains(where: { $0.productKey == productKey }) {
-            let product = DrugProduct(productKey: productKey, tradeName: tradeName, strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, route: importedInfo.identity.route, imageData: imageData, additionalImageData: additionalImageData, thumbnailData: thumbnailData, additionalThumbnailData: additionalThumbnailData, leafletText: detectedText, leafletUpdatedAt: detectedText.trimmed.isEmpty ? nil : .now, sourceName: importedInfo.sourceQuality.sourceName, sourceURL: importedInfo.sourceQuality.sourceURL, profile: target)
+            let product = DrugProduct(productKey: productKey, tradeName: tradeName, manufacturer: packageRecognition.manufacturer, strength: importedInfo.identity.strength, marketedStrengthLabel: importedInfo.identity.marketedStrengthLabel ?? identity.marketedStrengthLabel, ingredientComponents: components, dosageForm: importedInfo.identity.dosageForm, route: importedInfo.identity.route, country: packageRecognition.country, imageData: imageData, additionalImageData: additionalImageData, thumbnailData: thumbnailData, additionalThumbnailData: additionalThumbnailData, leafletText: detectedText, leafletUpdatedAt: detectedText.trimmed.isEmpty ? nil : .now, sourceName: importedInfo.sourceQuality.sourceName, sourceURL: importedInfo.sourceQuality.sourceURL, profile: target)
             context.insert(product)
             target.products.append(product)
         }
@@ -542,7 +550,7 @@ struct DrugImportView: View {
 
 private struct ImportFromPhotoView: View {
     let images: [Data]
-    let ocrCandidate: OCRDrugCandidate
+    let recognition: PackageRecognitionResult
     @Binding var detectedText: String
     let onCamera: () -> Void
     let onLibrary: () -> Void
@@ -562,17 +570,28 @@ private struct ImportFromPhotoView: View {
                         .buttonStyle(.bordered)
                 }
             } footer: {
-                Text("OCR runs locally with iOS Vision. The image is not sent to DeepSeek.")
+                Text("Package photos are sent to Gemini 2.5 Flash for semantic medicine-package recognition. They are not sent to DeepSeek.")
             }
-            Section("Detected text") {
+            Section("Recognized package") {
+                if recognition.confidence > 0 {
+                    LabeledContent("Confidence", value: recognition.confidence.formatted(.percent.precision(.fractionLength(0))))
+                }
                 TextEditor(text: $detectedText)
-                    .frame(minHeight: 160)
+                    .frame(minHeight: 100)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                candidateRow("Scientific", ocrCandidate.possibleScientificName)
-                candidateRow("Trade", ocrCandidate.possibleTradeName)
-                candidateRow("Strength", ocrCandidate.possibleStrength)
-                candidateRow("Form", ocrCandidate.possibleDosageForm)
+                candidateRow("Ingredients", recognition.scientificName)
+                ForEach(recognition.ingredients) { component in
+                    candidateRow(component.name, component.strengthText)
+                }
+                candidateRow("Trade", recognition.tradeName)
+                candidateRow("Marketed strength", recognition.marketedStrengthLabel)
+                candidateRow("Form", recognition.dosageForm)
+                candidateRow("Manufacturer", recognition.manufacturer)
+                ForEach(recognition.ambiguities, id: \.self) { ambiguity in
+                    Label(ambiguity, systemImage: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                }
             }
             Section {
                 Button { onUseCurrent() } label: {
@@ -613,7 +632,7 @@ private struct ConfirmDrugIdentityView: View {
                     .accessibilityIdentifier("trustedImport.scientificName")
                 TextField("Trade name(s), one per line", text: tradeNamesText, axis: .vertical)
                     .lineLimit(2...5)
-                TextField("Strength (optional)", text: $identity.strength)
+                TextField("Marketed package strength (optional)", text: $identity.strength)
                 TextField("Dosage form (optional)", text: $identity.dosageForm)
                 TextField("Route (optional)", text: $identity.route)
                 Picker("System / Chapter", selection: $identity.system) {
@@ -626,6 +645,30 @@ private struct ConfirmDrugIdentityView: View {
                      ? "Enter a scientific or trade name. No source is required; AI will build the complete card and you choose what to save."
                      : "Form and route help rank a product. Class is derived from the selected trusted source and stays editable later.")
             }
+            Section {
+                ForEach(identity.ingredients.indices, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Active ingredient", text: $identity.ingredients[index].name)
+                        TextField("Component strength (for example 24 mg)", text: $identity.ingredients[index].displayStrength)
+                        TextField("Salt form (optional)", text: $identity.ingredients[index].saltForm)
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) { identity.ingredients.remove(at: index) } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+                Button {
+                    identity.ingredients.append(IngredientComponent(name: ""))
+                } label: {
+                    Label("Add active ingredient", systemImage: "plus.circle")
+                }
+                TextField("Printed total / marketed strength", text: $identity.marketedStrengthLabel)
+            } header: {
+                Text("Combination ingredients")
+            } footer: {
+                Text("Keep each ingredient strength separate. A printed total such as 50 mg stays a product label, not a clinical dose.")
+            }
             if isAIMode {
                 Section("Package image (optional)") {
                     Button(action: onAddPhoto) {
@@ -635,7 +678,13 @@ private struct ConfirmDrugIdentityView: View {
                 }
             }
             Section {
-                Button(action: onContinue) {
+                Button {
+                    let componentNames = identity.ingredients.map(\.name).filter { !$0.trimmed.isEmpty }
+                    if !componentNames.isEmpty { identity.scientificName = componentNames.joined(separator: " + ") }
+                    if identity.marketedStrengthLabel.trimmed.isEmpty { identity.marketedStrengthLabel = identity.strength }
+                    if identity.strength.trimmed.isEmpty { identity.strength = identity.marketedStrengthLabel }
+                    onContinue()
+                } label: {
                     Label(actionTitle, systemImage: actionIcon).frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent)
@@ -774,6 +823,9 @@ private struct ImportPreviewView: View {
             sectionToggle(.adverseEffects) {
                 fieldToggle("effects.common", "Common", info.adverseEffects.common.joined(separator: " • "))
                 fieldToggle("effects.serious", "Serious", info.adverseEffects.serious.joined(separator: " • "))
+                if let effects = info.adverseEffectEntries {
+                    previewList("Structured adverse effects", effects.map { [$0.name, $0.incidence].filter { !$0.trimmed.isEmpty }.joined(separator: " ") })
+                }
             }
             sectionToggle(.memorization) {
                 fieldToggle("memory.mustKnow", "Must know", info.memorization.mustKnow.joined(separator: " • "))
@@ -819,6 +871,16 @@ private struct ImportPreviewView: View {
             fieldToggle("identity.strength", "Strength", info.identity.strength)
             fieldToggle("identity.form", "Form", info.identity.dosageForm)
             fieldToggle("identity.route", "Route", info.identity.route)
+            if let components = info.identity.activeIngredients {
+                previewList("Ingredient components", components.map { "\($0.name) \($0.strengthText)" })
+            }
+            if let marketed = info.identity.marketedStrengthLabel { fieldToggle("identity.strength", "Marketed strength", marketed) }
+            if let groups = info.dosageFormGroups {
+                previewList("Dosage forms & strengths", groups.map { "\($0.dosageForm): \($0.strengths.map(\.strength).joined(separator: ", "))" })
+            }
+            if let doses = info.clinicalDoses {
+                previewList("Dosing by indication", doses.map { "\($0.indication): \($0.doseText)" })
+            }
         }
     }
 
@@ -831,6 +893,9 @@ private struct ImportPreviewView: View {
             fieldToggle("pk.prodrug", "Prodrug", info.pharmacokinetics.prodrugStatus.rawValue)
             fieldToggle("pk.excretion", "Metabolism & excretion", [info.pharmacokinetics.metabolism, info.pharmacokinetics.excretionRoute.rawValue, info.pharmacokinetics.excretionNotes].compactMap { $0 }.joined(separator: " • "))
             fieldToggle("pk.memory", "PK memory line", info.pharmacokinetics.pkMemoryLineArabic)
+            if let profile = info.pharmacologyProfile {
+                previewList("Clinical pharmacology", [profile.mechanismOfAction] + profile.absorption + profile.distribution + profile.metabolism + profile.elimination)
+            }
         }
         .font(.subheadline)
     }
@@ -844,6 +909,12 @@ private struct ImportPreviewView: View {
             safetyNote("Renal", info.safety.renalCaution.severity, info.safety.renalCaution.note)
             safetyNote("Hepatic", info.safety.hepaticCaution.severity, info.safety.hepaticCaution.note)
             safetyNote("Pregnancy", info.safety.pregnancyCaution.severity, info.safety.pregnancyCaution.simpleNoteArabic)
+            if let interactions = info.interactionEntries {
+                previewList("Categorized interactions", interactions.map { "\($0.category.rawValue): \($0.drugName)" })
+            }
+            if let reproductive = info.reproductiveSafety {
+                previewList("Pregnancy & lactation", [reproductive.pregnancy, reproductive.lactation, reproductive.pregnancyArabicNote, reproductive.lactationArabicNote])
+            }
         }
     }
 

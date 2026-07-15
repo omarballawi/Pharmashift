@@ -165,11 +165,15 @@ final class DrugImportServiceTests: XCTestCase {
     }
 
     func testFastGatherRequestUsesPackageTextWithoutTrustedProviders() throws {
-        let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.")
+        XCTAssertEqual(ProfileGenerationGroup.allCases.count, 8)
+        let request = try DeepSeekFastDrugGatherService.makeRequest(apiKey: "secret", identity: confirmedIdentity(), packageText: "Coversyl 5 mg tablet. Oral.", group: .interactions)
         let text = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
         XCTAssertTrue(text.contains("\"max_tokens\":4000"))
         XCTAssertTrue(text.contains("Coversyl 5 mg tablet"))
-        XCTAssertTrue(text.contains("Trusted source lookup did not return a usable page"))
+        XCTAssertTrue(text.contains("experimental AI-only"))
+        XCTAssertTrue(text.contains("complete categorized interaction list"))
+        XCTAssertTrue(text.contains("keep sourceIDs empty"))
+        XCTAssertFalse(text.contains("Trusted source packet:"))
         XCTAssertFalse(text.localizedCaseInsensitiveContains("imageData"))
     }
 

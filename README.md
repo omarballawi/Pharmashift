@@ -1,6 +1,6 @@
 # Renlyst
 
-Renlyst is an offline-first iPhone training companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, cloud sync, or dispensing logic. Saved Drug Cards remain fully offline; network features are explicit, user-started trusted-source imports, configurable OpenRouter vision package recognition (defaulting to `google/gemini-2.5-flash`), and optional DeepSeek learning assistance.
+Renlyst is an offline-first iPhone training companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, cloud sync, or dispensing logic. Saved Drug Cards remain fully offline; network features are explicit, user-started trusted-source imports, configurable OpenRouter vision package recognition (defaulting to `google/gemini-2.5-flash`), and an experimental AI-only full-card generator split into eight focused DeepSeek requests.
 
 Open `PharmaShift.xcodeproj` in Xcode, select the `PharmaShift` scheme and an iOS 17+ iPhone simulator, then Build & Run. Unit and UI tests are included in the shared scheme.
 

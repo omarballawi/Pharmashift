@@ -165,7 +165,7 @@ struct DrugImportView: View {
         case .confirm: ConfirmDrugIdentityView(
             identity: $identity,
             canContinue: identity.isComplete,
-            actionTitle: startsInAIMode ? "Generate complete card" : "Search trusted sources",
+            actionTitle: startsInAIMode ? "Generate with AI only" : "Search trusted sources",
             actionIcon: startsInAIMode ? "sparkles.rectangle.stack.fill" : "checkmark.seal.fill",
             isAIMode: startsInAIMode,
             hasImages: !currentImages.isEmpty,
@@ -386,7 +386,7 @@ struct DrugImportView: View {
         selectedProviderName = result.sourceName
         guard let provider = providers.first(where: { $0.sourceName == result.sourceName }) else { return }
         isLoading = true
-        loadingMessage = "Reading the selected source, then generating five focused clinical sections..."
+        loadingMessage = "Reading the selected source, then generating eight focused clinical sections..."
         Task {
             do {
                 let packet = try await provider.fetchDrugDetails(id: result.id)
@@ -431,25 +431,16 @@ struct DrugImportView: View {
     private func fastGather() {
         guard identity.isComplete else { message = "Confirm the drug name before creating an AI draft."; return }
         isLoading = true
-        loadingMessage = "Checking trusted sources in parallel (maximum 8 seconds)..."
+        loadingMessage = "Generating eight focused AI sections with no trusted-source lookup..."
         importMode = .aiDraft
+        trustedPacket = nil
         Task {
             do {
-                let packets = await gatherTrustedPackets()
+                let info = try await fastGatherService.gather(identity: identity, packageText: detectedText)
                 await MainActor.run {
-                    loadingMessage = packets.isEmpty
-                        ? "Generating five focused sections from the confirmed drug..."
-                        : "Generating five focused sections from trusted evidence..."
-                }
-                let packet = mergedPacket(packets, leafletText: detectedText)
-                let info = packets.isEmpty
-                    ? try await fastGatherService.gather(identity: identity, packageText: detectedText)
-                    : try await formatWithRetry(packet: packet)
-                await MainActor.run {
-                    trustedPacket = packets.isEmpty ? nil : packet
                     importedInfo = info
                     selection = DrugImportApplier.defaultSelection(info: info, drug: drug)
-                    importMode = packets.isEmpty ? .aiDraft : .trusted
+                    importMode = .aiDraft
                     stage = .preview
                     isLoading = false
                 }
@@ -457,65 +448,6 @@ struct DrugImportView: View {
                 await MainActor.run { message = error.localizedDescription; isLoading = false }
             }
         }
-    }
-
-    private func gatherTrustedPackets() async -> [TrustedDrugSourcePacket] {
-        let queries = (identity.ingredients.map(\.name) + [identity.scientificName] + identity.tradeNames).filter { !$0.trimmed.isEmpty }
-        let packets = await withTaskGroup(of: TrustedDrugSourcePacket?.self, returning: [TrustedDrugSourcePacket].self) { group in
-            for provider in providers {
-                group.addTask { await Self.firstPacket(from: provider, queries: queries) }
-            }
-            var values: [TrustedDrugSourcePacket] = []
-            for await packet in group {
-                if let packet { values.append(packet) }
-            }
-            return values
-        }
-        let priority = ["Altibbi": 0, "DailyMed": 1, "RxNorm": 2, "openFDA": 3]
-        return packets.sorted { priority[$0.sourceName, default: 9] < priority[$1.sourceName, default: 9] }
-    }
-
-    private static func firstPacket(from provider: any DrugSourceProvider, queries: [String]) async -> TrustedDrugSourcePacket? {
-        await withTaskGroup(of: TrustedDrugSourcePacket?.self, returning: TrustedDrugSourcePacket?.self) { group in
-            group.addTask {
-                for query in queries {
-                    guard !Task.isCancelled else { return nil }
-                    if let results = try? await provider.searchDrug(query: query),
-                       let result = results.first,
-                       let packet = try? await provider.fetchDrugDetails(id: result.id) {
-                        return packet
-                    }
-                }
-                return nil
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(8))
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-    }
-
-    private func mergedPacket(_ packets: [TrustedDrugSourcePacket], leafletText: String) -> TrustedDrugSourcePacket {
-        func joined(_ value: (TrustedDrugSourcePacket) -> String, limit: Int = 2_800) -> String {
-            let sourced = packets.compactMap { packet -> String? in
-                let text = value(packet).trimmed
-                guard !text.isEmpty else { return nil }
-                return "[\(packet.sourceName)] \(text)"
-            }.joined(separator: "\n\n")
-            return TrustedDrugSourcePacketExtractor.compact(sourced, limit: limit)
-        }
-        let primary = packets.first(where: { $0.sourceName == "Altibbi" }) ?? packets.first
-        return TrustedDrugSourcePacket(
-            sourceName: packets.map(\.sourceName).joined(separator: " + "), sourceURL: primary?.sourceURL ?? "",
-            indicationsText: joined(\.indicationsText), dosageText: joined(\.dosageText), contraindicationsText: joined(\.contraindicationsText),
-            warningsText: joined(\.warningsText), adverseReactionsText: joined(\.adverseReactionsText), interactionsText: joined(\.interactionsText, limit: 12_000),
-            pharmacokineticsText: joined(\.pharmacokineticsText), pregnancyText: joined(\.pregnancyText), dosageFormsText: joined(\.dosageFormsText),
-            routeText: joined(\.routeText), activeIngredientText: joined(\.activeIngredientText), lastUpdatedText: nil,
-            isTruncated: packets.contains(where: \.isTruncated), leafletText: String(leafletText.prefix(4_000))
-        )
     }
 
     private func saveImport() {
@@ -717,7 +649,7 @@ private struct ImportSourceSearchView: View {
                 Text("Source priority: your confirmed name, RxNorm normalization, DailyMed labels, then openFDA fallback. Iraqi local trade names may not match perfectly.")
             }
             Section {
-                Text("Paste the package or leaflet details below. Renlyst will use these details plus the confirmed fields to create a full AI draft without contacting the trusted-source providers.")
+                Text("Paste optional package details below. Renlyst sends only the confirmed identity and this text to eight focused AI requests; it does not contact trusted-source providers for this draft.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextEditor(text: $packageText)
@@ -725,13 +657,13 @@ private struct ImportSourceSearchView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button(action: onFastGather) {
-                    Label("Create AI draft from package details", systemImage: "sparkles")
+                    Label("Generate with AI only", systemImage: "sparkles")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("fastGatherButton")
             } header: {
-                Text("Fast AI Gather — review required")
+                Text("AI-only generation — review required")
             } footer: {
                 Text("Every result is marked AI-generated and needs verification against the product leaflet or a pharmacist before use.")
             }

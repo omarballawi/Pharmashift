@@ -50,7 +50,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 ## Core component inventory
 
 - Focus card: one primary action, current metrics, no competing CTA.
-- Drug profile: one vertically scrolling page with expandable primary rows for overview, brands, dosage forms, indication dosing, uses, interactions, adverse effects, warnings, reproductive safety, pharmacology, counseling, and notes/mastery. Expand/collapse state is local to the screen.
+- Drug profile: one vertically scrolling page with expandable primary rows for overview, dosage forms, indication dosing, uses, interactions, adverse effects, warnings, reproductive safety, pharmacology, counseling, and notes/mastery. Brands and package images open as a dedicated profile page. Expand/collapse state is local to the screen.
 - Brands: the active-ingredient set is the stable profile identity; every brand independently owns editable package images, trade name, company, component strengths, marketed total strength, form, country, shelf, and leaflet.
 - Dosing: component strengths, marketed package strength, common dosage forms/strengths, clinical regimens, and calculator regimens are distinct data. Calculator results always show the equation, estimate status, maximum caps, and cautions; entered person variables are never persisted.
 - Pharmacology logarithmic meter/timeline and a knowledge-completeness map. Clinical cautions use labeled cards, never a pseudo-quantitative risk radar.
@@ -58,7 +58,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 - Practice questions default to MCQ, True/False, matching/sorting, and short selection interactions. Text entry is reserved for scientific/trade-name spelling.
 - AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
 - AI package recognition: OpenRouter sends package photos to a user-configurable vision model, defaulting to `google/gemini-2.5-flash`, and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
-- AI clinical generation: DeepSeek V4 Flash uses five focused section requests for identity/dosing, interactions/warnings, adverse effects, reproductive safety/pharmacology, and counseling/learning. Altibbi-first trusted aggregation with RxNorm/DailyMed/openFDA support, leaflet override, field review, editable questions, and `Not found` instead of silent gaps remain available.
+- AI clinical generation: the full-card button skips trusted-source lookup and uses eight focused DeepSeek V4 Flash requests for identity/uses, forms/dosing, interactions, warnings/contraindications, adverse effects, reproductive safety, pharmacology, and counseling/learning. The slices are merged locally, uncertain facts remain review-marked, and the separate trusted-import flow remains available when explicitly chosen.
 - System paths: class lessons advance through Recognize, Understand, Safety, Counsel, and Apply, then a system checkpoint.
 - Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, atomic linked notes, mechanism builder, PK timeline, safety sort, counseling builder, and voice counseling simulator.
 - Crystal facets reflect repeated recall/application; they do not reward raw data entry or punish decay.
@@ -84,7 +84,7 @@ The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic sha
 
 ## Last updated
 
-2026-07-15 — OpenRouter vision package recognition with configurable model slug and Gemini 2.5 Flash default; grouped DeepSeek clinical generation, combination-component strengths, editable brand media, and a one-page expandable drug profile with rich forms, doses, interactions, adverse effects, reproductive safety, and ADME.
+2026-07-15 — AI-only full-card generation split into eight focused requests with no automatic trusted-source lookup; brands and package media moved to a dedicated profile page; OpenRouter vision remains configurable with Gemini 2.5 Flash as the default.
 
 2026-07-14 — ingredient-centered profiles and product variants, seven-page swipeable Drug Card, Altibbi-first source aggregation, product leaflet updates, structured standard regimens and dose calculator, WHO pediatric median estimates through age 10, detailed prodrug/elimination, library relationship refresh, and full question refresh.
 

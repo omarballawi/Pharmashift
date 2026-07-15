@@ -979,14 +979,40 @@ protocol DrugImportFormattingService: Sendable {
 }
 
 enum ProfileGenerationGroup: String, CaseIterable, Sendable {
-    case identityAndDosing = "identity, uses, dosage forms, and indication-specific dosing"
-    case interactionsAndWarnings = "contraindications, warnings, cautions, and the complete categorized interaction list"
+    case identityAndUses = "identity, drug class, uses, and mechanism summary"
+    case dosageFormsAndDosing = "dosage forms, strengths, and indication-specific dosing"
+    case interactions = "the complete categorized interaction list"
+    case warningsAndContraindications = "contraindications, warnings, toxicity, renal cautions, and hepatic cautions"
     case adverseEffects = "common and serious adverse effects, preserving percentages"
-    case reproductiveAndPharmacology = "pregnancy, lactation, mechanism, pharmacokinetics, absorption, distribution, metabolism, and elimination"
+    case reproductiveSafety = "pregnancy and lactation"
+    case pharmacology = "pharmacokinetics, active-drug or prodrug status, absorption, distribution, metabolism, and elimination"
     case counselingAndLearning = "counseling, concise Arabic notes, memorization, and source quality"
 
     var instruction: String {
-        "Generate only the \(rawValue) group. Keep every other top-level field present using empty values from the schema. Do not shorten a named-drug list just because it is long."
+        let precisionRule: String
+        switch self {
+        case .identityAndUses:
+            precisionRule = "Keep the confirmed identity unchanged. Include only well-established uses and distinguish the pharmacologic mechanism from clinical indications."
+        case .dosageFormsAndDosing:
+            precisionRule = "Separate marketed dosage forms and strengths from clinical regimens. Never infer a clinical dose from package strength. Separate every indication and population."
+        case .interactions:
+            precisionRule = "List clinically meaningful interacting medicines by generic name, include all known contraindicated and serious-use-alternative medicines, and do not duplicate names."
+        case .warningsAndContraindications:
+            precisionRule = "Do not mix adverse effects or interactions into this slice. Distinguish absolute contraindications from warnings and organ-specific cautions."
+        case .adverseEffects:
+            precisionRule = "Keep common and serious effects distinct. Include an incidence only when you are confident in the reported value; otherwise leave incidence empty."
+        case .reproductiveSafety:
+            precisionRule = "Keep pregnancy and lactation separate. State uncertainty explicitly and do not convert limited evidence into a safety claim."
+        case .pharmacology:
+            precisionRule = "Keep mechanism, absorption, distribution, metabolism, and elimination separate. Do not confuse plasma half-life with duration of effect."
+        case .counselingAndLearning:
+            precisionRule = "Use only stable facts already implied by the confirmed drug identity; avoid adding new doses, contraindications, or interaction claims in this slice."
+        }
+        return "Generate only the \(rawValue) slice. \(precisionRule) Keep every other top-level field present using empty values from the schema. Do not shorten a named-drug list just because it is long."
+    }
+
+    var aiOnlyInstruction: String {
+        "\(instruction) This is AI-only generation: keep sourceIDs empty, do not invent citations, and set sourceQuality to Generated with AI with needsReview true."
     }
 }
 
@@ -995,14 +1021,23 @@ private extension TrustedDrugSourcePacket {
         guard let group else { return self }
         var value = self
         switch group {
-        case .identityAndDosing:
+        case .identityAndUses:
             value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""
-        case .interactionsAndWarnings:
+            value.dosageText = ""; value.dosageFormsText = ""
+        case .dosageFormsAndDosing:
+            value.indicationsText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""
+        case .interactions:
             value.indicationsText = ""; value.dosageText = ""; value.adverseReactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
+            value.contraindicationsText = ""; value.warningsText = ""
+        case .warningsAndContraindications:
+            value.indicationsText = ""; value.dosageText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
         case .adverseEffects:
             value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
-        case .reproductiveAndPharmacology:
+        case .reproductiveSafety:
+            value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.warningsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.dosageFormsText = ""
+        case .pharmacology:
             value.indicationsText = ""; value.dosageText = ""; value.contraindicationsText = ""; value.adverseReactionsText = ""; value.interactionsText = ""; value.dosageFormsText = ""
+            value.warningsText = ""; value.pregnancyText = ""
         case .counselingAndLearning:
             value.contraindicationsText = ""; value.interactionsText = ""; value.pharmacokineticsText = ""; value.pregnancyText = ""; value.dosageFormsText = ""
         }
@@ -1016,20 +1051,35 @@ private extension ImportedDrugInfo {
         identity: UserConfirmedDrugIdentity,
         packet: TrustedDrugSourcePacket? = nil
     ) -> ImportedDrugInfo {
-        var result = parts[.identityAndDosing] ?? parts.values.first!
-        if let value = parts[.interactionsAndWarnings] {
-            result.safety = value.safety
+        var result = parts[.identityAndUses] ?? parts[.dosageFormsAndDosing] ?? parts.values.first!
+        if let value = parts[.dosageFormsAndDosing] {
+            result.doseRegimens = value.doseRegimens
+            result.dosageFormGroups = value.dosageFormGroups
+            result.clinicalDoses = value.clinicalDoses
+        }
+        if let value = parts[.interactions] {
+            result.safety.interactions = value.safety.interactions
             result.interactionEntries = value.interactionEntries
+        }
+        if let value = parts[.warningsAndContraindications] {
+            result.safety.contraindications = value.safety.contraindications
+            result.safety.toxicity = value.safety.toxicity
+            result.safety.warnings = value.safety.warnings
+            result.safety.renalCaution = value.safety.renalCaution
+            result.safety.hepaticCaution = value.safety.hepaticCaution
         }
         if let value = parts[.adverseEffects] {
             result.adverseEffects = value.adverseEffects
             result.adverseEffectEntries = value.adverseEffectEntries
         }
-        if let value = parts[.reproductiveAndPharmacology] {
+        if let value = parts[.reproductiveSafety] {
+            result.reproductiveSafety = value.reproductiveSafety
+            result.safety.pregnancyCaution = value.safety.pregnancyCaution
+        }
+        if let value = parts[.pharmacology] {
             result.pharmacokinetics = value.pharmacokinetics
             result.prodrugInfo = value.prodrugInfo
             result.eliminationInfo = value.eliminationInfo
-            result.reproductiveSafety = value.reproductiveSafety
             result.pharmacologyProfile = value.pharmacologyProfile
         }
         if let value = parts[.counselingAndLearning] {
@@ -1124,7 +1174,7 @@ protocol FastDrugGatheringService: Sendable {
 actor MockFastDrugGatherService: FastDrugGatheringService {
     func gather(identity: UserConfirmedDrugIdentity, packageText: String) async throws -> ImportedDrugInfo {
         var info = try await MockDeepSeekDrugImportService().format(packet: .empty, identity: identity)
-        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: false, missingImportantFields: [], notes: "Mock standalone AI card")
+        info.sourceQuality = SourceQuality(sourceName: "Generated with AI", sourceURL: "", needsReview: true, missingImportantFields: [], notes: "Mock standalone AI card")
         return info
     }
 }
@@ -1181,7 +1231,7 @@ actor DeepSeekFastDrugGatherService: FastDrugGatheringService {
             model: DeepSeekDrugImportService.model,
             messages: [
                 .init(role: "system", content: FastGatherPromptBuilder.systemPrompt),
-                .init(role: "user", content: [FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText), group?.instruction].compactMap { $0 }.joined(separator: "\n\n"))
+                .init(role: "user", content: [FastGatherPromptBuilder.userPrompt(identity: identity, packageText: packageText), group?.aiOnlyInstruction].compactMap { $0 }.joined(separator: "\n\n"))
             ],
             thinking: .init(type: "disabled"),
             responseFormat: .init(type: "json_object"),
@@ -1365,15 +1415,23 @@ enum PromptBuilder {
     }
 private enum FastGatherPromptBuilder {
     static let systemPrompt = """
-    You create complete, practical pharmacy learning cards from a confirmed medicine identity and supplied package or leaflet text.
-    Fill every relevant field: identity, class, uses, mechanism, indication- and population-specific dose regimens, pharmacokinetics, dosing frequency, precise active-drug/prodrug status, organ/pathway of elimination, adverse effects, safety, and counseling. Never treat package strength as a standard dose. Use "unknown" only when a fact genuinely cannot be established. Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
+    You create practical pharmacy learning-card drafts using your established pharmaceutical knowledge. No trusted-source text, web results, or citations are supplied.
+
+    Accuracy rules:
+    - Treat the user-confirmed identity and package component strengths as fixed inputs.
+    - Prefer widely established facts over obscure details. If a detail is uncertain, formulation-dependent, country-dependent, or not established, leave it empty or say "unknown" instead of guessing.
+    - Never invent citations, source IDs, percentages, interaction names, dose values, or claims of source verification.
+    - Never treat package strength as a clinical dose. Keep combination-drug component strengths separate from the marketed total.
+    - Clinical dose regimens must name the indication and population. Do not provide patient-specific advice.
+    - Return only the requested slice while keeping the full JSON shape valid so Renlyst can merge the slices locally.
+    - Keep Arabic explanations short and Iraqi/Arabic-friendly while retaining English medical terms. Return JSON only.
 
     Keep the response compact. Do not create reviewQuestions; Renlyst builds those locally from the completed card so the clinical card cannot be lost to a long response.
     """
 
     static func userPrompt(identity: UserConfirmedDrugIdentity, packageText: String) -> String {
         """
-        Create a complete, compact pharmacy learning card draft. Trusted source lookup did not return a usable page, so mark unsupported facts for verification.
+        Create one focused slice of an experimental AI-only pharmacy learning card. Do not claim that any fact was verified against a trusted source.
 
         Confirmed fields:
         Scientific name: \(identity.scientificName)

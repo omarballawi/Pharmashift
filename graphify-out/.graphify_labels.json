@@ -69,10 +69,14 @@
   "67": "VerificationStatus",
   "68": "DrugBackupDTO",
   "69": "String",
+  "70": "MemoryReviewGrade",
   "71": "BackupImportPreviewView",
   "72": "ExcretionRoute",
+  "73": "SafetyFlag",
   "74": "AppTheme",
   "75": "Double",
+  "76": "Components.swift",
   "80": "VerificationStatus",
+  "82": "VerificationStatus",
   "84": "String"
 }

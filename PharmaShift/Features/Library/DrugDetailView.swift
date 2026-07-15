@@ -33,7 +33,6 @@ private enum DrugDetailSheet: String, Identifiable {
 
 private enum DrugProfileSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
-    case brands = "Brands & package images"
     case forms = "Dosage forms & strengths"
     case doses = "Dosing by indication"
     case uses = "Uses"
@@ -49,7 +48,6 @@ private enum DrugProfileSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: "sparkles"
-        case .brands: "shippingbox.fill"
         case .forms: "pills.fill"
         case .doses: "list.number"
         case .uses: "cross.case.fill"
@@ -80,6 +78,7 @@ struct DrugDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 hero
+                brandsPageLink
                 HStack {
                     Button("Expand all") { withAnimation(reduceMotion ? nil : .snappy) { expandedSections = Set(DrugProfileSection.allCases) } }
                     Spacer()
@@ -150,8 +149,6 @@ struct DrugDetailView: View {
             mustKnowCard
             identityCard.accessibilityIdentifier("drugCard.identity")
             actions
-        case .brands:
-            brandsCard
         case .forms:
             dosageFormsAndStrengthsCard
         case .doses:
@@ -188,39 +185,26 @@ struct DrugDetailView: View {
         }
     }
 
-    private var brandsCard: some View {
-        card("Active ingredient & products", icon: "shippingbox.fill") {
-            value("Canonical ingredient", drug.ingredientNames.joined(separator: " + "))
-            if drug.products.isEmpty {
-                Text("No product variants saved yet.").foregroundStyle(.secondary)
-                Button { sheet = .regenerateReview } label: { Label("Add a brand or package", systemImage: "plus") }
-            } else {
-                ForEach(drug.products.sorted(by: { $0.tradeName < $1.tradeName })) { product in
-                    NavigationLink {
-                        ProductLeafletEditorView(product: product, drug: drug)
-                    } label: {
-                        HStack(spacing: 12) {
-                            if let data = product.thumbnailData ?? product.imageData, let image = UIImage(data: data) {
-                                Image(uiImage: image).resizable().scaledToFill().frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 12))
-                            } else {
-                                Image(systemName: "pills.fill").frame(width: 58, height: 58).background(theme.softTint, in: RoundedRectangle(cornerRadius: 12))
-                            }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
-                                Text([product.manufacturer, product.marketedStrengthLabel, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary)
-                                let components = product.ingredientComponents.map { [$0.name, $0.strengthText].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
-                                if !components.isEmpty { Text(components.joined(separator: " + ")).font(.caption2).foregroundStyle(.secondary) }
-                                Text(product.leafletText.trimmed.isEmpty ? "Leaflet not added" : "Leaflet saved").font(.caption2).foregroundStyle(product.leafletText.trimmed.isEmpty ? .orange : .green)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.secondary)
-                        }
-                        .padding(10).background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
+    private var brandsPageLink: some View {
+        NavigationLink {
+            DrugBrandsView(drug: drug)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "shippingbox.fill").foregroundStyle(theme.tint).frame(width: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Brands & package images").font(.headline).foregroundStyle(.primary)
+                    Text(drug.products.isEmpty ? "Add and manage brand products" : "\(drug.products.count) saved product\(drug.products.count == 1 ? "" : "s")")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
+                Spacer()
+                Image(systemName: "chevron.forward").font(.caption.bold()).foregroundStyle(.secondary)
             }
+            .frame(minHeight: 52)
+            .padding(.horizontal, 14)
+            .background(theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("drugProfile.brandsPage")
     }
 
     private var dosageFormsAndStrengthsCard: some View {
@@ -790,6 +774,83 @@ struct DrugDetailView: View {
     }
     private func severityColor(_ rawValue: String) -> Color {
         switch severity(rawValue) { case .low: .green; case .medium: .orange; case .high: .red; case .unknown: .secondary }
+    }
+}
+
+private enum DrugBrandsSheet: String, Identifiable {
+    case addProduct
+    var id: String { rawValue }
+}
+
+private struct DrugBrandsView: View {
+    @Environment(AppTheme.self) private var theme
+    let drug: Drug
+    @State private var sheet: DrugBrandsSheet?
+
+    var body: some View {
+        List {
+            Section("Active ingredient profile") {
+                LabeledContent("Canonical ingredient", value: drug.ingredientNames.joined(separator: " + "))
+                Text("Each brand below keeps its own package images, manufacturer, component strengths, marketed strength, dosage form, country, shelf location, and leaflet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Brands & package images") {
+                if drug.products.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("No brand products saved yet.").foregroundStyle(.secondary)
+                        Button { sheet = .addProduct } label: {
+                            Label("Add a brand or package", systemImage: "plus")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    ForEach(drug.products.sorted(by: { $0.tradeName < $1.tradeName })) { product in
+                        NavigationLink {
+                            ProductLeafletEditorView(product: product, drug: drug)
+                        } label: {
+                            HStack(spacing: 12) {
+                                if let data = product.thumbnailData ?? product.imageData, let image = UIImage(data: data) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 64, height: 64)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                } else {
+                                    Image(systemName: "pills.fill")
+                                        .frame(width: 64, height: 64)
+                                        .background(theme.softTint, in: RoundedRectangle(cornerRadius: 12))
+                                }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
+                                    let details = [product.manufacturer, product.marketedStrengthLabel, product.dosageForm].filter { !$0.trimmed.isEmpty }
+                                    if !details.isEmpty { Text(details.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) }
+                                    let components = product.ingredientComponents.map { [$0.name, $0.strengthText].filter { !$0.trimmed.isEmpty }.joined(separator: " ") }
+                                    if !components.isEmpty { Text(components.joined(separator: " + ")).font(.caption2).foregroundStyle(.secondary) }
+                                    Text(product.leafletText.trimmed.isEmpty ? "Leaflet not added" : "Leaflet saved")
+                                        .font(.caption2)
+                                        .foregroundStyle(product.leafletText.trimmed.isEmpty ? .orange : .green)
+                                }
+                            }
+                            .padding(.vertical, 5)
+                        }
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
+        .navigationTitle("Brands")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Button { sheet = .addProduct } label: { Label("Add brand", systemImage: "plus") }
+        }
+        .sheet(item: $sheet) { _ in
+            NavigationStack { DrugImportView(drug: drug, startsInAIMode: true) }
+        }
+        .accessibilityIdentifier("drugBrands.page")
     }
 }
 

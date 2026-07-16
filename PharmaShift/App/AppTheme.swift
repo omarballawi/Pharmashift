@@ -4,41 +4,74 @@ import SwiftUI
 @MainActor
 @Observable
 final class AppTheme {
-    let tint = Color(red: 0.02, green: 0.48, blue: 0.43)
-    let softTint = Color(red: 0.88, green: 0.96, blue: 0.94)
-    let background = Color(uiColor: .systemGroupedBackground)
-    let card = Color(uiColor: .secondarySystemGroupedBackground)
-    let warning = Color.red
-    let crystalCyan = Color(red: 0.30, green: 0.91, blue: 0.90)
-    let crystalViolet = Color(red: 0.51, green: 0.30, blue: 0.95)
-    let crystalInk = Color(red: 0.035, green: 0.055, blue: 0.095)
+    let coral = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.85, green: 0.40, blue: 0.33, alpha: 1)
+            : UIColor(red: 0.75, green: 0.27, blue: 0.20, alpha: 1)
+    })
+    let aqua = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.36, green: 0.66, blue: 0.65, alpha: 1)
+            : UIColor(red: 0.09, green: 0.47, blue: 0.49, alpha: 1)
+    })
+    let ink = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.84, green: 0.89, blue: 0.94, alpha: 1)
+            : UIColor(red: 0.08, green: 0.17, blue: 0.27, alpha: 1)
+    })
+    let inkSolid = Color(red: 0.08, green: 0.17, blue: 0.27)
+    let saffron = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.95, green: 0.68, blue: 0.28, alpha: 1)
+            : UIColor(red: 0.60, green: 0.36, blue: 0.05, alpha: 1)
+    })
 
-    var crystalGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.04, green: 0.30, blue: 0.34),
-                Color(red: 0.20, green: 0.13, blue: 0.43),
-                crystalInk
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    let background = Color(uiColor: .systemGroupedBackground)
+    let surface = Color(uiColor: .systemBackground)
+    let card = Color(uiColor: .secondarySystemGroupedBackground)
+    let raisedSurface = Color(uiColor: .tertiarySystemGroupedBackground)
+    let separator = Color(uiColor: .separator)
+    let warning = Color(uiColor: .systemRed)
+
+    let primaryAction = Color(red: 0.75, green: 0.27, blue: 0.20)
+    let secondaryAction = Color(red: 0.09, green: 0.47, blue: 0.49)
+
+    var tint: Color { primaryAction }
+    var softTint: Color { coral.opacity(0.11) }
+    var softAqua: Color { aqua.opacity(0.12) }
+
+    var orbitGradient: LinearGradient {
+        LinearGradient(colors: [coral, aqua], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     func colors(for chapter: Chapter) -> [Color] {
         switch chapter {
-        case .cardiovascular: [Color(red: 0.96, green: 0.28, blue: 0.36), Color(red: 0.72, green: 0.08, blue: 0.23)]
-        case .respiratory: [Color(red: 0.14, green: 0.70, blue: 0.76), Color(red: 0.03, green: 0.42, blue: 0.60)]
-        case .endocrine: [Color(red: 0.65, green: 0.40, blue: 0.94), Color(red: 0.39, green: 0.20, blue: 0.72)]
-        case .musculoskeletal: [Color(red: 0.96, green: 0.58, blue: 0.20), Color(red: 0.82, green: 0.30, blue: 0.11)]
-        case .eye: [Color(red: 0.22, green: 0.58, blue: 0.96), Color(red: 0.13, green: 0.32, blue: 0.78)]
-        case .earNoseOropharynx: [Color(red: 0.91, green: 0.42, blue: 0.67), Color(red: 0.65, green: 0.18, blue: 0.47)]
-        case .gastrointestinal: [Color(red: 0.22, green: 0.68, blue: 0.45), Color(red: 0.04, green: 0.42, blue: 0.28)]
-        case .dermatology: [Color(red: 0.94, green: 0.55, blue: 0.47), Color(red: 0.72, green: 0.28, blue: 0.24)]
-        case .antibiotics: [Color(red: 0.17, green: 0.55, blue: 0.55), Color(red: 0.03, green: 0.34, blue: 0.38)]
-        case .otc: [Color(red: 0.95, green: 0.70, blue: 0.18), Color(red: 0.83, green: 0.45, blue: 0.05)]
-        case .vitaminsSupplements: [Color(red: 0.47, green: 0.72, blue: 0.22), Color(red: 0.20, green: 0.50, blue: 0.12)]
-        case .other: [Color(red: 0.45, green: 0.48, blue: 0.58), Color(red: 0.25, green: 0.28, blue: 0.38)]
+        case .cardiovascular: [coral, Color.red]
+        case .respiratory: [aqua, Color.cyan]
+        case .endocrine: [Color.indigo, aqua]
+        case .musculoskeletal: [Color.orange, saffron]
+        case .eye: [Color.blue, aqua]
+        case .earNoseOropharynx: [Color.pink, coral]
+        case .gastrointestinal: [Color.green, aqua]
+        case .dermatology: [coral, Color.orange]
+        case .antibiotics: [aqua, Color.teal]
+        case .otc: [saffron, Color.orange]
+        case .vitaminsSupplements: [Color.green, saffron]
+        case .other: [Color.secondary, ink]
         }
     }
+}
+
+enum RenlystLayout {
+    static let pageInset: CGFloat = 18
+    static let sectionSpacing: CGFloat = 24
+    static let surfaceRadius: CGFloat = 16
+    static let compactRadius: CGFloat = 12
+    static let controlHeight: CGFloat = 48
+}
+
+enum RenlystMotion {
+    static let press = Animation.easeOut(duration: 0.16)
+    static let state = Animation.easeInOut(duration: 0.24)
+    static let celebration = Animation.spring(response: 0.42, dampingFraction: 0.86)
 }

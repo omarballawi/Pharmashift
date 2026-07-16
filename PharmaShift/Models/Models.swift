@@ -831,12 +831,12 @@ final class Drug {
 
     var isImported: Bool { !importedSourceName.trimmed.isEmpty }
     var isIncomplete: Bool {
-        isUnknown || scientificName.trimmed.isEmpty || tradeNames.isEmpty || dosageForms.isEmpty
+        isUnknown || scientificName.trimmed.isEmpty || effectiveTradeNames.isEmpty || dosageForms.isEmpty
     }
 
     var displayName: String {
         if !scientificName.trimmed.isEmpty { return scientificName.trimmed }
-        if let tradeName = tradeNames.first, !tradeName.trimmed.isEmpty { return tradeName.trimmed }
+        if let tradeName = effectiveTradeNames.first, !tradeName.trimmed.isEmpty { return tradeName.trimmed }
         return captureLabel.trimmed.isEmpty ? "Unknown drug" : captureLabel.trimmed
     }
 
@@ -852,6 +852,12 @@ final class Drug {
         let legacy = [imageData].compactMap { $0 } + additionalImageData
         let productImages = products.flatMap(\.packageImages)
         return legacy + productImages
+    }
+    var packageThumbnails: [Data] {
+        let legacy = [thumbnailData].compactMap { $0 } + additionalThumbnailData
+        let productThumbnails = products.flatMap(\.packageThumbnails)
+        let thumbnails = legacy + productThumbnails
+        return thumbnails.isEmpty ? packageImages : thumbnails
     }
     var ingredientNames: [String] { activeIngredients.isEmpty ? [scientificName].filter { !$0.trimmed.isEmpty } : activeIngredients }
     var doseRegimens: [DoseRegimen] {
@@ -1008,7 +1014,7 @@ final class Drug {
     }
 
     var reviewContentFingerprint: String {
-        [scientificName, tradeNames.joined(separator: "|"), drugClass, indications.joined(separator: "|"), mechanism,
+        [scientificName, effectiveTradeNames.joined(separator: "|"), drugClass, indications.joined(separator: "|"), mechanism,
          halfLifeText, onsetText, durationText, warnings.joined(separator: "|"), contraindications.joined(separator: "|"),
          interactions.joined(separator: "|"), counselingSentence, howToTake, foodInstruction].joined(separator: "¦")
     }
@@ -1131,6 +1137,10 @@ final class DrugProduct {
     }
 
     var packageImages: [Data] { [imageData].compactMap { $0 } + additionalImageData }
+    var packageThumbnails: [Data] {
+        let thumbnails = [thumbnailData].compactMap { $0 } + additionalThumbnailData
+        return thumbnails.isEmpty ? packageImages : thumbnails
+    }
     var ingredientComponents: [IngredientComponent] {
         get { Self.decode([IngredientComponent].self, from: ingredientComponentsJSON) ?? [] }
         set { ingredientComponentsJSON = Self.encode(newValue) }
@@ -1348,6 +1358,7 @@ enum DrugLibraryMigrationService {
             UserDefaults.standard.set(true, forKey: migrationKey)
         }
         try backfillRichProfilesIfNeeded(context: context)
+        try repairProductAuthority(context: context)
     }
 
     private static func backfillRichProfilesIfNeeded(context: ModelContext) throws {
@@ -1369,6 +1380,55 @@ enum DrugLibraryMigrationService {
         }
         try context.save()
         UserDefaults.standard.set(true, forKey: richProfileMigrationKey)
+    }
+
+    private static func repairProductAuthority(context: ModelContext) throws {
+        let drugs = try context.fetch(FetchDescriptor<Drug>())
+        for drug in drugs {
+            if drug.activeIngredients.isEmpty, !drug.scientificName.trimmed.isEmpty {
+                drug.activeIngredients = [drug.scientificName]
+            }
+            if drug.canonicalIngredientKey.trimmed.isEmpty {
+                drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.ingredientNames, rxNormIDs: drug.rxNormConceptIDs)
+            }
+
+            let legacyNames = drug.tradeNames.filter { !$0.trimmed.isEmpty }
+            for (index, tradeName) in legacyNames.enumerated() where !drug.products.contains(where: {
+                $0.tradeName.localizedCaseInsensitiveCompare(tradeName) == .orderedSame
+            }) {
+                let strength = drug.strengths.first ?? ""
+                let product = DrugProduct(
+                    productKey: IngredientIdentity.productKey(
+                        tradeName: tradeName,
+                        manufacturer: "",
+                        strength: strength,
+                        dosageForm: drug.dosageForms.first ?? "",
+                        ingredientKey: drug.canonicalIngredientKey
+                    ),
+                    tradeName: tradeName,
+                    strength: strength,
+                    marketedStrengthLabel: strength,
+                    ingredientComponents: drug.ingredientNames.map {
+                        IngredientComponent(name: $0, displayStrength: drug.ingredientNames.count == 1 ? strength : "")
+                    },
+                    dosageForm: drug.dosageForms.first ?? "",
+                    route: drug.routes.first ?? "",
+                    shelfLocation: drug.shelfLocation,
+                    imageData: index == 0 ? drug.imageData : nil,
+                    additionalImageData: index == 0 ? drug.additionalImageData : [],
+                    thumbnailData: index == 0 ? drug.thumbnailData : nil,
+                    additionalThumbnailData: index == 0 ? drug.additionalThumbnailData : [],
+                    sourceName: drug.importedSourceName,
+                    sourceURL: drug.sourceURL,
+                    dateAdded: drug.dateAdded,
+                    profile: drug
+                )
+                context.insert(product)
+                drug.products.append(product)
+            }
+            DrugBrandService.synchronizeCompatibilityCache(for: drug)
+        }
+        try context.save()
     }
 
     private static func makeLegacyProduct(from drug: Drug, ingredientKey: String) -> DrugProduct? {

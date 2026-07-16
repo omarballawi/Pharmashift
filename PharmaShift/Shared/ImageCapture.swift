@@ -447,7 +447,7 @@ struct DrugPhotoView: View {
                 ZStack {
                     LinearGradient(colors: [.teal.opacity(0.18), .blue.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     VStack(spacing: 8) {
-                        Image(systemName: "pills.fill").font(.system(size: 42))
+                        Image(systemName: "pills.fill").font(.largeTitle)
                         Text("Add a package photo").font(.caption.weight(.semibold))
                     }
                     .foregroundStyle(.secondary)

@@ -1,6 +1,6 @@
 # Renlyst
 
-Renlyst is an offline-first iPhone training companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, cloud sync, or dispensing logic. Saved Drug Cards remain fully offline; network features are explicit, user-started trusted-source imports, configurable OpenRouter vision package recognition (defaulting to `google/gemini-2.5-flash`), and an experimental AI-only full-card generator split into eight focused DeepSeek requests.
+Renlyst is an offline-first iPhone learning companion for a community-pharmacy student. It uses SwiftUI and SwiftData, targets iOS 17+, and contains no login, analytics, cloud sync, or dispensing logic. Saved drug profiles and brand products remain fully offline; network features are explicit, user-started trusted-source imports, configurable OpenRouter vision package recognition, and an experimental DeepSeek full-profile generator.
 
 Open `PharmaShift.xcodeproj` in Xcode, select the `PharmaShift` scheme and an iOS 17+ iPhone simulator, then Build & Run. Unit and UI tests are included in the shared scheme.
 
@@ -8,6 +8,6 @@ The optional starter pack is educational example content. It is deliberately mar
 
 Windows-only unsigned IPA build and free sideloading instructions are in [`WINDOWS_IPA.md`](WINDOWS_IPA.md). The included GitHub Actions workflow builds `PharmaShift.ipa` on a hosted Mac without uploading Apple credentials.
 
-Version 1.7 centers the library on active ingredients: many trade products and package photos share one evidence profile. Drug Cards are seven-page swipeable books with product leaflets, standard adult/child regimens, a transparent educational dose calculator, detailed prodrug and elimination explanations, sourced Altibbi/DailyMed/openFDA refresh, clickable in-library interactions, and full-library question regeneration. WHO median weight-for-age values may fill a missing pediatric weight only through age 10 and are always labeled as estimates.
+Version 2.0 centers the product around four calm sections: Today, Library, Practice, and You. Drug profiles open as a clear overview with focused topic screens instead of a dense swipeable tab strip. Each active ingredient can own many brand products and package photos. A brand can be added manually—with a required name and photo and no AI request—without changing the active-drug information, and brands or whole profiles can be deleted with explicit history handling.
 
-The app also includes native package-photo cropping, visual pharmacology and safety, versioned backup/restore/export, five-question adaptive practice, Focus Mode, streaks, badges, and in-app reminders. Development and release gates are documented in [`PHASE_ROADMAP.md`](PHASE_ROADMAP.md). The repository contains a persistent Graphify knowledge graph used before architecture work.
+The app also includes native package-photo cropping, product-scoped strengths and metadata, visual pharmacology and safety, educational dose calculations, versioned backup/restore/export, five-question adaptive practice, Focus Mode, streaks, badges, and in-app reminders. Development and release gates are documented in [`PHASE_ROADMAP.md`](PHASE_ROADMAP.md). The repository contains a persistent Graphify knowledge graph used before architecture work.

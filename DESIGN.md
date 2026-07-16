@@ -1,95 +1,109 @@
 # Design
 
-> Maintained as PharmaShift’s UI source of truth. Read this before changing screens, components, motion, or copy.
+> Renlyst 2 visual and interaction source of truth. Read this with `PRODUCT.md` before changing product UI.
 
-## Aesthetic direction
+## Direction
 
-Crystal learning field notebook — trustworthy enough for a pharmacy shift, playful enough to invite daily recall, bilingual, and focused on one achievable learning action at a time. Faceted cyan/violet crystal imagery represents knowledge becoming durable; it is reserved for journeys, missions, and achievements rather than ordinary data cards.
+Renlyst 2 is a warm native learning journal: Apple Journal’s editorial calm with Headspace-like approachability, translated through standard iOS structure. Its signature “knowledge orbit” uses layered coral, aqua, ink, and saffron forms to show individual facts becoming connected. The orbit appears in the app icon, Today, progress, and completion moments; it never replaces controls or semantic status.
 
 ## Dials
 
-- DESIGN_VARIANCE: 5 / 10
-- MOTION_INTENSITY: 3 / 10
-- VISUAL_DENSITY: 5 / 10
+- DESIGN_VARIANCE: 6 / 10
+- MOTION_INTENSITY: 4 / 10
+- VISUAL_DENSITY: 4 / 10
 
-## Type stack
+## Navigation
 
-- Display and body: Apple San Francisco through SwiftUI semantic styles (`largeTitle`, `title`, `headline`, `body`, `caption`).
-- Data: semantic font plus `monospacedDigit()` for counts, doses, dates, and progress.
-- Arabic: the system Arabic face, preserving Dynamic Type and right-to-left shaping.
-- Never hard-code point sizes for body copy; SF Symbols are the only icon family.
+- Four tab sections only: Today, Library, Practice, You.
+- Add is an action from Today and Library, presented as a focused sheet; it is never a tab.
+- Each tab owns a native `NavigationStack`. Topic detail uses push navigation; focused creation uses sheets.
+- Today presents one recommended action. Advanced tools live under Library Tools or You.
 
-The system typeface is intentional on iOS: it preserves Dynamic Type, Arabic shaping, legibility settings, and platform familiarity.
+## Typography
 
-## Color tokens
+- San Francisco through semantic SwiftUI styles for UI, labels, data, and long content.
+- System serif is reserved for the Today statement and active-drug name display moments.
+- Counts and progress use `monospacedDigit()`.
+- Arabic uses the system Arabic face, semantic styles, and right-to-left layout.
+- No fixed body sizes; 11 points is the visual floor for supporting text.
 
-- Accent: clinical teal, `Color(red: 0.02, green: 0.48, blue: 0.43)`.
-- Crystal cyan and violet are secondary brand highlights on near-black navy mission surfaces; they never replace semantic safety colors.
-- Background: `systemGroupedBackground`.
-- Card: `secondarySystemGroupedBackground`.
-- Success: system green; caution: system orange; destructive/high severity: system red.
-- Chapter colors are semantic wayfinding, not competing global accents.
-- Dark mode always uses semantic system surfaces; no pure hard-coded black or white page backgrounds.
+## Color
+
+- Primary action / coral: `#BF4533` in light mode, adaptively lifted in Dark Mode.
+- Knowledge / aqua: `#17797E` in light mode, adaptively lifted in Dark Mode.
+- Deep ink: `#142B46` for high-emphasis identity and app-icon ground.
+- Saffron: achievement and learning rhythm only.
+- Surfaces: `systemGroupedBackground`, `systemBackground`, `secondarySystemGroupedBackground`.
+- Safety: system red; caution: system orange; success: system green.
+- The accent is functional. No purple/cyan AI gradients, decorative full-screen color, or hand-rolled glass.
 
 ## Shape and spacing
 
-- Page horizontal inset: 16 pt.
-- Major vertical rhythm: 18–22 pt; card internals: 12–16 pt.
-- Primary cards: 20–26 pt continuous corners.
-- Compact chips/status controls: capsules.
-- Minimum interactive height: 44 pt; primary actions: 48 pt.
-- Avoid cards nested inside cards; metrics inside a hero use dividers rather than miniature cards.
+- Page inset: 18 points.
+- Section rhythm: 24 points; local spacing: 8–16 points.
+- Main surfaces: 16-point continuous corners.
+- Compact controls: 12-point continuous corners or native capsules when the control semantics call for one.
+- Minimum target: 44×44 points; primary control height: 48 points.
+- Use one containing surface per idea. Avoid cards nested inside cards.
 
-## Motion and haptics
+## Core flows
 
-- Use short SwiftUI spring/ease-out transitions only where state continuity matters.
-- Completion and grading may use one subtle notification haptic.
-- Crop controls may use selection/light impact haptics.
-- Respect `accessibilityReduceMotion`; no perpetual, bounce, or decorative motion.
+### Today
 
-## Core component inventory
+- Editorial orbit hero with concise bilingual learning line.
+- Exactly one recommended action from the focus engine.
+- Seven-day rhythm and recently studied product photos.
 
-- Focus card: one primary action, current metrics, no competing CTA.
-- Drug profile: a horizontally selectable, swipeable tab set for overview, brands, dosage forms, indication dosing, uses, interactions, adverse effects, warnings, reproductive safety, pharmacology, counseling, and notes/mastery. Each tab scrolls independently; there are no expand/collapse rows. Brands and package images retain their dedicated management page.
-- Brands: the active-ingredient set is the stable profile identity; every brand independently owns editable package images, trade name, company, component strengths, marketed total strength, form, country, shelf, and leaflet.
-- Dosing: component strengths, marketed package strength, common dosage forms/strengths, clinical regimens, and calculator regimens are distinct data. Calculator results always show the equation, estimate status, maximum caps, and cautions; entered person variables are never persisted.
-- Pharmacology logarithmic meter/timeline and a knowledge-completeness map. Clinical cautions use labeled cards, never a pseudo-quantitative risk radar.
-- Smart Session: one recommended mixed session; individual modes live under Quick practice and Choose a mode.
-- Practice questions default to MCQ, True/False, matching/sorting, and short selection interactions. Text entry is reserved for scientific/trade-name spelling.
-- AI Practice Pack: one manually refreshed, locally cached five-question session with explicit loading, error, and offline-ready states.
-- AI package recognition: OpenRouter sends package photos to a user-configurable vision model, defaulting to `google/gemini-2.5-flash`, and extracts visible product identity semantically; it never generates clinical facts. Every ingredient/component strength remains separate from the marketed total printed on a combination package.
-- AI clinical generation: the full-card button skips trusted-source lookup and uses eight focused DeepSeek V4 Flash requests for identity/uses, forms/dosing, interactions, warnings/contraindications, adverse effects with percentage incidence, reproductive safety, complete pharmacology/ADME/elimination, and counseling/learning. AI assigns the system/chapter. Missing package form or strength falls back to commonly marketed active-ingredient forms and strengths. The slices are normalized and merged locally, while the separate trusted-import flow remains available when explicitly chosen.
-- System paths: class lessons advance through Recognize, Understand, Safety, Counsel, and Apply, then a system checkpoint.
-- Knowledge graph, Compare Canvas, Daily Refresh, Mistake Vault, Shelf Quest, and atomic linked notes remain available. Drug-profile mechanism, PK timeline, safety-sort, counseling-builder, and voice-counseling lesson actions are not shown.
-- Crystal facets reflect repeated recall/application; they do not reward raw data entry or punish decay.
-- Local-brand resolution confirmation row: AI suggests an ingredient only after trusted-source lookup fails; the learner must confirm before continuing.
-- Backup metadata preview with merge as default and destructive replace confirmation.
-- Shared empty state, metric row, mastery badge, drug photo, and thumbnail.
+### Library
 
-## Brand voice
+- Native search, scopes, sorting, `List` reuse, swipe/context deletion, and calm empty state.
+- Product photos lead rows; active drug, brands, system, and mastery remain scannable.
+- Tools contains knowledge map, compare, shelf quest, and optional import/generation.
 
-- Direct, supportive, and concrete; short sentences and specific verbs.
-- English leads where necessary; Arabic companion copy is concise and natural.
-- Never imply clinical authority or patient-specific advice.
-- Avoid filler such as “elevate,” “seamless,” “unleash,” and “next-gen.”
+### Drug overview
+
+- No horizontal topic carousel.
+- Identity header, one memory summary, and pushed destinations for Brands, Uses, Forms & Dosing, Safety, Pharmacology, Counseling & Arabic, and Sources/Notes/Mastery.
+- Manual brand creation requires brand name and at least one package photo. Ingredient names are inherited and read-only; component strengths and all product metadata remain editable.
+- Manual brand creation never calls Gemini, DeepSeek, OpenRouter, or another network service.
+- A brand can be deleted without deleting its active-drug profile.
+- Whole-profile deletion asks Keep History or Erase History every time and defaults to Keep History.
+
+### Practice
+
+- One recommended Smart Five session.
+- Quick modes use familiar rows; all modes, Daily Refresh, Mistake Vault, and AI Practice Pack are secondary tools.
+- Completion uses a calm connected-knowledge illustration, not a trophy or confetti.
+
+### You
+
+- Learning rhythm, shift, report, backup/data, preferences/AI, and about/safety.
+- Settings-shaped content uses native grouped forms and lists.
+
+## Motion and feedback
+
+- Press feedback: 160 ms.
+- State change: 240 ms.
+- Completion motion: at most 450 ms.
+- Prefer system push/sheet transitions. No orchestrated page loads or perpetual movement.
+- Reduce Motion replaces spatial/custom movement with immediate state or crossfade.
+- Haptics are limited to save, delete confirmation, answer grading, and session completion.
+
+## Imagery and icons
+
+- Generated raster artwork is reserved for app identity, Today, meaningful empty states, manual-brand introduction, and session completion.
+- Product photos are real user content and take priority in Library and recents.
+- SF Symbols are the only control/icon family. Never use emoji as icons.
+- No rasterized UI text, crystal imagery, medical crosses, caduceus, or generic AI sparkles as identity.
 
 ## Accessibility floor
 
-- Dynamic Type and semantic fonts throughout.
-- System contrast in light and dark mode.
-- 44×44 pt minimum touch targets.
-- Explicit labels/hints for visual meters, crop gestures, provenance links, and icon-only controls.
-- Right-to-left layout for Arabic content blocks.
-- Text equivalents remain visible under every visual pharmacology shorthand.
+- Dynamic Type, VoiceOver grouping, semantic headings, and explicit icon-only labels.
+- System light/dark/high-contrast behavior and readable text contrast.
+- 44-point interactive targets and no gesture-only action.
+- Arabic learning blocks stay visible and correctly right-to-left.
+- Deletion, source state, estimated calculations, and AI use are explained in text.
 
 ## Last updated
 
-2026-07-15 — Restored swipeable drug-profile tabs; AI now assigns chapter and preserves generated form/route, generalizes common forms and strengths, requires adverse-effect percentages and complete ADME/elimination, and the profile no longer exposes the mechanism, PK timeline, safety-sort, counseling-builder, or voice-counseling lessons.
-
-2026-07-14 — ingredient-centered profiles and product variants, seven-page swipeable Drug Card, Altibbi-first source aggregation, product leaflet updates, structured standard regimens and dose calculator, WHO pediatric median estimates through age 10, detailed prodrug/elimination, library relationship refresh, and full question refresh.
-
-2026-07-13 — crystal learning system, Today mission, Smart Session, five-page Drug Card, field memory scheduling, AI complete-card generation/review, graph/compare, interactive lessons, atomic notes, quests, accessibility, and native generated art.
-
-2026-07-12 — verified DeepSeek settings status, optional import classification, local-brand confirmation, and offline AI Practice Pack.
-
-2026-07-07 — continuous Drug Card, native crop flow, PK/safety visuals, backup/import flows, five-question practice, Focus Mode, and bilingual consistency pass.
+2026-07-16 — Renlyst 2.0 complete product-shell and workflow redesign; manual product-scoped brands; brand/profile deletion; knowledge-orbit identity; four-section navigation.

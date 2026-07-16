@@ -251,4 +251,120 @@ final class ModelAndPersistenceTests: XCTestCase {
         let input = DosePatientInput(ageMonths: 24, sexAtBirth: .male, measuredWeightKG: nil, estimatedWeightKG: 12, heightCM: nil, renalFunction: "Normal", hepaticFunction: "Normal", isPregnant: false)
         XCTAssertThrowsError(try DoseCalculator.calculate(regimen: regimen, input: input)) { XCTAssertEqual($0 as? DoseCalculatorError, .weightRequired) }
     }
+
+    func testManualBrandAddPreservesActiveDrugKnowledgeAndRequiresPhoto() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let context = container.mainContext
+        let drug = Drug(scientificName: "Amoxicillin + Clavulanate", chapter: .antibiotics)
+        drug.activeIngredients = ["Amoxicillin", "Clavulanate"]
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients)
+        drug.mechanism = "Cell-wall inhibition plus beta-lactamase inhibition"
+        drug.warnings = ["Check penicillin allergy"]
+        context.insert(drug)
+
+        var missingPhoto = DrugBrandService.draft(for: drug)
+        missingPhoto.tradeName = "Augmentin"
+        XCTAssertThrowsError(try DrugBrandService.add(missingPhoto, to: drug, context: context)) {
+            XCTAssertEqual($0 as? DrugLibraryMutationError, .packagePhotoRequired)
+        }
+
+        var draft = missingPhoto
+        draft.manufacturer = "GSK"
+        draft.marketedStrengthLabel = "625 mg"
+        draft.ingredientComponents = [
+            IngredientComponent(name: "Amoxicillin", displayStrength: "500 mg"),
+            IngredientComponent(name: "Clavulanate", displayStrength: "125 mg")
+        ]
+        draft.dosageForm = "Tablet"
+        draft.imageData = Data([1, 2, 3])
+        let product = try DrugBrandService.add(draft, to: drug, context: context)
+
+        XCTAssertEqual(product.tradeName, "Augmentin")
+        XCTAssertEqual(product.ingredientComponents.map(\.displayStrength), ["500 mg", "125 mg"])
+        XCTAssertEqual(drug.effectiveTradeNames, ["Augmentin"])
+        XCTAssertEqual(drug.mechanism, "Cell-wall inhibition plus beta-lactamase inhibition")
+        XCTAssertEqual(drug.warnings, ["Check penicillin allergy"])
+        XCTAssertEqual(drug.activeIngredients, ["Amoxicillin", "Clavulanate"])
+    }
+
+    func testDeletingBrandLeavesProfileAndInvalidatesPracticePack() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let context = container.mainContext
+        let drug = Drug(scientificName: "Omeprazole")
+        drug.activeIngredients = ["Omeprazole"]
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.activeIngredients)
+        context.insert(drug)
+        var draft = DrugBrandService.draft(for: drug)
+        draft.tradeName = "Gasec"
+        draft.imageData = Data([9])
+        let product = try DrugBrandService.add(draft, to: drug, context: context)
+        AIPracticePackStore.save(AIPracticePack(generatedAt: .now, libraryFingerprint: "before-delete", questions: []))
+
+        try DrugBrandService.delete(product, from: drug, context: context)
+
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Drug>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<DrugProduct>()), 0)
+        XCTAssertTrue(drug.effectiveTradeNames.isEmpty)
+        XCTAssertNil(AIPracticePackStore.load())
+    }
+
+    func testLegacyTradeNamesBackfillToProductsIdempotently() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: configuration)
+        let context = container.mainContext
+        let drug = Drug(scientificName: "Cetirizine", tradeNames: ["Zyrtec", "Cetrin"], dosageForms: ["Tablet"], strengths: ["10 mg"])
+        context.insert(drug)
+        try context.save()
+
+        try DrugLibraryMigrationService.runIfNeeded(context: context)
+        try DrugLibraryMigrationService.runIfNeeded(context: context)
+
+        let products = try context.fetch(FetchDescriptor<DrugProduct>()).filter { $0.profile?.id == drug.id }
+        XCTAssertEqual(Set(products.map(\.tradeName)), Set(["Zyrtec", "Cetrin"]))
+        XCTAssertEqual(products.count, 2)
+        XCTAssertEqual(Set(drug.effectiveTradeNames), Set(["Zyrtec", "Cetrin"]))
+    }
+
+    func testProfileDeletionKeepsOrErasesLearningHistoryByPolicy() throws {
+        func makeContainer() throws -> ModelContainer {
+            try ModelContainer(for: Drug.self, DrugProduct.self, DrugRelationship.self, ReviewLog.self, ShiftLog.self, EncounterNote.self, TrainingReport.self, LearningProfile.self, DailyActivity.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        }
+
+        let keepContainer = try makeContainer()
+        let keepContext = keepContainer.mainContext
+        let keptDrug = Drug(scientificName: "Metformin")
+        let otherDrug = Drug(scientificName: "Cimetidine")
+        let relationship = DrugRelationship(relationshipKey: "metformin-cimetidine", kind: .interaction, summary: "Example", sourceDrug: keptDrug, targetDrug: otherDrug)
+        let review = ReviewLog(drug: keptDrug, drugNameSnapshot: keptDrug.displayName, questionType: .use, rating: .correct, scoreBefore: 1, scoreAfter: 2)
+        let encounter = EncounterNote(topic: "Counseling", relatedDrug: keptDrug)
+        keepContext.insert(keptDrug); keepContext.insert(otherDrug); keepContext.insert(relationship); keepContext.insert(review); keepContext.insert(encounter)
+        try keepContext.save()
+        XCTAssertEqual(try DrugLibraryMutationService.impact(of: keptDrug, context: keepContext), DrugDeletionImpact(brandCount: 0, relationshipCount: 1, reviewCount: 1, encounterCount: 1))
+
+        try DrugLibraryMutationService.delete(keptDrug, historyPolicy: .keepHistory, context: keepContext)
+
+        XCTAssertEqual(try keepContext.fetchCount(FetchDescriptor<Drug>()), 1)
+        XCTAssertEqual(try keepContext.fetchCount(FetchDescriptor<DrugRelationship>()), 0)
+        XCTAssertEqual(try keepContext.fetchCount(FetchDescriptor<ReviewLog>()), 1)
+        XCTAssertEqual(try keepContext.fetchCount(FetchDescriptor<EncounterNote>()), 1)
+        XCTAssertNil(try XCTUnwrap(keepContext.fetch(FetchDescriptor<ReviewLog>()).first).drug)
+        XCTAssertEqual(try XCTUnwrap(keepContext.fetch(FetchDescriptor<ReviewLog>()).first).drugNameSnapshot, "Metformin")
+        XCTAssertNil(try XCTUnwrap(keepContext.fetch(FetchDescriptor<EncounterNote>()).first).relatedDrug)
+
+        let eraseContainer = try makeContainer()
+        let eraseContext = eraseContainer.mainContext
+        let erasedDrug = Drug(scientificName: "Warfarin")
+        eraseContext.insert(erasedDrug)
+        eraseContext.insert(ReviewLog(drug: erasedDrug, drugNameSnapshot: erasedDrug.displayName, questionType: .warning, rating: .wrong, scoreBefore: 1, scoreAfter: 0))
+        eraseContext.insert(EncounterNote(topic: "Interaction", relatedDrug: erasedDrug))
+        try eraseContext.save()
+
+        try DrugLibraryMutationService.delete(erasedDrug, historyPolicy: .eraseHistory, context: eraseContext)
+
+        XCTAssertEqual(try eraseContext.fetchCount(FetchDescriptor<Drug>()), 0)
+        XCTAssertEqual(try eraseContext.fetchCount(FetchDescriptor<ReviewLog>()), 0)
+        XCTAssertEqual(try eraseContext.fetchCount(FetchDescriptor<EncounterNote>()), 0)
+    }
 }

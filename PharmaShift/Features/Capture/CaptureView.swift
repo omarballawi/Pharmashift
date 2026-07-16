@@ -30,42 +30,22 @@ struct CaptureView: View {
     @State private var message: String?
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
-    @State private var showsTrustedImport = false
-    @State private var showsAIGenerator = false
     @FocusState private var focus: FocusField?
 
     private var canSave: Bool {
         if isUnknown { return !unknownLabel.trimmed.isEmpty || imageData != nil || !additionalImageData.isEmpty || !tradeName.trimmed.isEmpty }
-        return !scientificName.trimmed.isEmpty || !tradeName.trimmed.isEmpty
+        return !scientificName.trimmed.isEmpty
     }
 
     var body: some View {
         Form {
             Section {
-                Button { showsAIGenerator = true } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Label("Generate full card with AI only", systemImage: "sparkles.rectangle.stack.fill")
-                            .font(.headline)
-                        Text("No trusted-source lookup. Eight focused AI requests are merged into one reviewable card.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(theme.tint)
-                .accessibilityIdentifier("capture.generateAI")
-
-                Button { showsTrustedImport = true } label: {
-                    Label("AI package scan + trusted import", systemImage: "camera.viewfinder")
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("capture.trustedImport")
-                Text("Your selected OpenRouter vision model identifies the package, then trusted-source search and grouped DeepSeek formatting build the card for your review.")
-                    .font(.caption)
+                Label("Start with the active ingredient", systemImage: "link")
+                    .font(.headline)
+                Text("Create the shared drug profile first. You can add local brands and package photos from its Brands screen without changing the clinical information.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } header: { Text("Choose how to add") }
+            }
 
             Section {
                 DrugPhotoGalleryView(images: currentImages, height: 150) { removePhoto(at: $0) }
@@ -94,7 +74,7 @@ struct CaptureView: View {
                 }
             }
 
-            Section("Fast details") {
+            Section("Active drug") {
                 Toggle("I do not know yet", isOn: $isUnknown)
                     .accessibilityIdentifier("capture.unknown")
 
@@ -103,7 +83,7 @@ struct CaptureView: View {
                         .focused($focus, equals: .unknownLabel)
                 }
 
-                TextField("Scientific name", text: $scientificName)
+                TextField("Active ingredient (scientific name)", text: $scientificName)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .focused($focus, equals: .scientific)
@@ -138,7 +118,7 @@ struct CaptureView: View {
             Section {
                 Button { save(.open) } label: { Label("Save and open card", systemImage: "rectangle.portrait.and.arrow.right") }
                     .buttonStyle(.borderedProminent)
-                    .tint(theme.tint)
+                    .tint(theme.primaryAction)
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .disabled(!canSave)
                     .accessibilityIdentifier("capture.saveOpen")
@@ -151,8 +131,10 @@ struct CaptureView: View {
             }
         }
         .accessibilityIdentifier("capture.screen")
-        .navigationTitle("Capture")
+        .navigationTitle("Add active drug")
+        .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
+        .scrollContentBackground(.hidden)
         .background(theme.background)
         .task(id: photoItemsLoadID) { await loadPhotoItems() }
         .photosPicker(isPresented: libraryPresentation, selection: $photoItems, maxSelectionCount: 8, matching: .images)
@@ -165,12 +147,6 @@ struct CaptureView: View {
                 appendPhoto(payload)
             }
             .interactiveDismissDisabled()
-        }
-        .sheet(isPresented: $showsTrustedImport) {
-            NavigationStack { DrugImportView() }
-        }
-        .sheet(isPresented: $showsAIGenerator) {
-            NavigationStack { DrugImportView(startsInAIMode: true) }
         }
         .alert("Renlyst", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
@@ -203,7 +179,7 @@ struct CaptureView: View {
             dosageForms: dosageForm.trimmed.isEmpty ? [] : [dosageForm.trimmed],
             strengths: strength.trimmed.isEmpty ? [] : [strength.trimmed],
             shelfLocation: shelfLocation.trimmed,
-            imageData: imageData,
+            imageData: tradeName.trimmed.isEmpty ? imageData : nil,
             timesSeen: 1,
             dateAdded: now,
             lastSeenDate: now,
@@ -211,10 +187,38 @@ struct CaptureView: View {
             captureLabel: unknownLabel.trimmed,
             isUnknown: isUnknown
         )
-        drug.thumbnailData = thumbnailData
-        drug.additionalImageData = additionalImageData
-        drug.additionalThumbnailData = additionalThumbnailData
+        drug.thumbnailData = tradeName.trimmed.isEmpty ? thumbnailData : nil
+        drug.additionalImageData = tradeName.trimmed.isEmpty ? additionalImageData : []
+        drug.additionalThumbnailData = tradeName.trimmed.isEmpty ? additionalThumbnailData : []
+        if !scientificName.trimmed.isEmpty { drug.activeIngredients = [scientificName.trimmed] }
+        drug.canonicalIngredientKey = IngredientIdentity.canonicalKey(names: drug.ingredientNames)
         context.insert(drug)
+        if !tradeName.trimmed.isEmpty {
+            let product = DrugProduct(
+                productKey: IngredientIdentity.productKey(
+                    tradeName: tradeName.trimmed,
+                    manufacturer: "",
+                    strength: strength.trimmed,
+                    dosageForm: dosageForm.trimmed,
+                    ingredientKey: drug.canonicalIngredientKey
+                ),
+                tradeName: tradeName.trimmed,
+                strength: strength.trimmed,
+                marketedStrengthLabel: strength.trimmed,
+                ingredientComponents: drug.ingredientNames.map { IngredientComponent(name: $0, displayStrength: strength.trimmed) },
+                dosageForm: dosageForm.trimmed,
+                shelfLocation: shelfLocation.trimmed,
+                imageData: imageData,
+                additionalImageData: additionalImageData,
+                thumbnailData: thumbnailData,
+                additionalThumbnailData: additionalThumbnailData,
+                sourceName: "Manual capture",
+                profile: drug
+            )
+            context.insert(product)
+            drug.products.append(product)
+            DrugBrandService.synchronizeCompatibilityCache(for: drug)
+        }
         do {
             try context.save()
             savedDrug = drug

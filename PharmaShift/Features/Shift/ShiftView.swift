@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ShiftView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppTheme.self) private var theme
     @Environment(ReviewScheduler.self) private var scheduler
     @Query(sort: \ShiftLog.startedAt, order: .reverse) private var shifts: [ShiftLog]
     @Query(sort: \Drug.dateAdded, order: .reverse) private var drugs: [Drug]
@@ -66,6 +67,7 @@ struct ShiftView: View {
             }
             .padding()
         }
+        .background(theme.background)
         .navigationTitle("Today’s Shift")
         .sheet(isPresented: $showsStart) {
             NavigationStack {

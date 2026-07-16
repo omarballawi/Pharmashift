@@ -43,6 +43,9 @@ enum AIPracticePackStore {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
 }
 
 actor DeepSeekPracticeService {
@@ -59,7 +62,7 @@ actor DeepSeekPracticeService {
             .prefix(8)
         guard !candidates.isEmpty else { throw DrugImportError.invalidQuery }
         let snapshots = candidates.map { drug in
-            "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.tradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.flashcards.prefix(2).joined(separator: " | "))"
+            "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.effectiveTradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.flashcards.prefix(2).joined(separator: " | "))"
         }.joined(separator: "\n")
         let prompt = """
         Return JSON only. Create exactly five short, ADHD-friendly pharmacy learning questions using only these local drug facts. Focus on weak/due drugs. Scientific name and Trade name questions require typed spelling and must have no choices. Every other question must be either four-option MCQ or True/False. Each question must reference sourceDrugID, have a short prompt, exact answer, choices when required, a one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent clinical facts, patient advice, doses, or cases.

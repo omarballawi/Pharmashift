@@ -81,7 +81,7 @@ enum PracticeGenerator {
             let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now)) ?? .now
             eligible = eligible.filter { $0.nextReviewDate < tomorrow }
         }
-        if mode == .imageQuiz { eligible = eligible.filter { $0.imageData != nil } }
+        if mode == .imageQuiz { eligible = eligible.filter { !$0.packageImages.isEmpty } }
         if mode == .classExamples { eligible = eligible.filter { !$0.drugClass.trimmed.isEmpty } }
         guard !eligible.isEmpty else { return [] }
         eligible.sort {
@@ -104,7 +104,7 @@ enum PracticeGenerator {
             else if !drug.masteryWarning { resolvedMode = .drugWarning }
             else { resolvedMode = .counseling }
         } else if mode == .smartSession || mode == .systemSpecific || mode == .dueReview {
-            let rotation: [PracticeMode] = drug.imageData == nil
+            let rotation: [PracticeMode] = drug.packageImages.isEmpty
                 ? [.tradeToScientific, .classExamples, .drugUse, .drugWarning, .counseling]
                 : [.imageQuiz, .classExamples, .drugUse, .drugWarning, .counseling]
             resolvedMode = rotation[index % rotation.count]
@@ -118,7 +118,7 @@ enum PracticeGenerator {
         switch resolvedMode {
         case .scientificToTrade:
             prompt = "Choose a trade name for \(drug.scientificName)."; answer = drug.firstTradeName; questionType = .tradeName
-            candidates = all.compactMap(\.tradeNames.first); image = nil
+            candidates = all.flatMap(\.effectiveTradeNames); image = nil
         case .tradeToScientific:
             prompt = "What is the scientific name for \(drug.firstTradeName)?"; answer = drug.scientificName; questionType = .scientificName
             candidates = all.map(\.scientificName); image = nil
@@ -133,7 +133,7 @@ enum PracticeGenerator {
             candidates = all.compactMap(\.warnings.first); image = nil
         case .imageQuiz:
             prompt = "Which drug package is shown?"; answer = drug.displayName; questionType = .scientificName
-            candidates = all.map(\.displayName); image = drug.imageData
+            candidates = all.map(\.displayName); image = drug.packageImages.first
         case .counseling:
             if let flashcard = drug.importedFlashcardPairs.first {
                 prompt = flashcard.question
@@ -187,7 +187,7 @@ enum PracticeGenerator {
                 explanation: item.explanation,
                 questionType: item.questionType,
                 interaction: item.interaction,
-                imageData: item.questionType == .scientificName ? drug.imageData : nil
+                imageData: item.questionType == .scientificName ? drug.packageImages.first : nil
             )
         }
     }

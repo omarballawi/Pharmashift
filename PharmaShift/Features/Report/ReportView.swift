@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ReportView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppTheme.self) private var theme
     @Query(sort: \Drug.dateAdded) private var drugs: [Drug]
     @Query(sort: \ReviewLog.date) private var reviews: [ReviewLog]
     @Query(sort: \ShiftLog.date) private var shifts: [ShiftLog]
@@ -62,6 +63,7 @@ struct ReportView: View {
             }
             .padding()
         }
+        .background(theme.background)
         .navigationTitle("Report")
         .sheet(item: $selectedReport) { report in
             NavigationStack { ReportEditorView(report: report) }

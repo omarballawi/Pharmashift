@@ -3,20 +3,30 @@ import SwiftData
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case home = "Home"
+    case today = "Today"
     case library = "Library"
-    case capture = "Add"
     case practice = "Practice"
-    case more = "More"
+    case you = "You"
 
     var id: String { rawValue }
     var icon: String {
         switch self {
-        case .home: "sparkles"
+        case .today: "sun.max.fill"
         case .library: "books.vertical.fill"
-        case .capture: "plus.circle.fill"
-        case .practice: "brain.head.profile"
-        case .more: "ellipsis.circle.fill"
+        case .practice: "brain.head.profile.fill"
+        case .you: "person.crop.circle.fill"
+        }
+    }
+}
+
+enum AppSheet: Identifiable {
+    case addHub
+    case capture(Chapter?)
+
+    var id: String {
+        switch self {
+        case .addHub: "add-hub"
+        case .capture(let chapter): "capture-\(chapter?.rawValue ?? "all")"
         }
     }
 }
@@ -24,7 +34,8 @@ enum AppTab: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class AppNavigation {
-    var selection: AppTab = .home
+    var selection: AppTab = .today
+    var presentedSheet: AppSheet?
     var captureChapter: Chapter?
     var libraryChapter: Chapter?
     var reviewChapter: Chapter?
@@ -32,7 +43,11 @@ final class AppNavigation {
 
     func openCapture(chapter: Chapter? = nil) {
         captureChapter = chapter
-        selection = .capture
+        presentedSheet = .capture(chapter)
+    }
+
+    func presentAdd() {
+        presentedSheet = .addHub
     }
 
     func openLibrary(chapter: Chapter? = nil) {
@@ -56,61 +71,179 @@ struct AppShell: View {
         @Bindable var bindableNavigation = navigation
         TabView(selection: $bindableNavigation.selection) {
             NavigationStack { HomeView() }
-                .tabItem { Label(AppTab.home.rawValue, systemImage: AppTab.home.icon) }
-                .tag(AppTab.home)
+                .tabItem { Label(AppTab.today.rawValue, systemImage: AppTab.today.icon) }
+                .tag(AppTab.today)
 
             NavigationStack { LibraryView() }
                 .tabItem { Label(AppTab.library.rawValue, systemImage: AppTab.library.icon) }
                 .tag(AppTab.library)
 
-            NavigationStack { CaptureView() }
-                .tabItem { Label(AppTab.capture.rawValue, systemImage: AppTab.capture.icon) }
-                .tag(AppTab.capture)
-
             NavigationStack { PracticeView() }
                 .tabItem { Label(AppTab.practice.rawValue, systemImage: AppTab.practice.icon) }
                 .tag(AppTab.practice)
 
-            NavigationStack { MoreView() }
-                .tabItem { Label(AppTab.more.rawValue, systemImage: AppTab.more.icon) }
-                .tag(AppTab.more)
+            NavigationStack { YouView() }
+                .tabItem { Label(AppTab.you.rawValue, systemImage: AppTab.you.icon) }
+                .tag(AppTab.you)
         }
         .tint(theme.tint)
         .environment(navigation)
+        .sheet(item: $bindableNavigation.presentedSheet) { sheet in
+            switch sheet {
+            case .addHub:
+                NavigationStack { AddHubView() }
+                    .presentationDetents([.large])
+            case .capture:
+                NavigationStack { CaptureView() }
+                    .presentationDetents([.large])
+            }
+        }
         .task {
             try? DrugLibraryMigrationService.runIfNeeded(context: context)
         }
     }
 }
 
-private struct MoreView: View {
+private struct AddHubView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppTheme.self) private var theme
+
     var body: some View {
         List {
-            Section("Training / التدريب") {
+            Section {
+                NavigationLink {
+                    CaptureView()
+                } label: {
+                    AddRouteRow(
+                        icon: "plus.viewfinder",
+                        title: "Add an active drug",
+                        detail: "Fast manual capture for a new profile",
+                        tint: theme.coral
+                    )
+                }
+                .accessibilityIdentifier("addHub.manualDrug")
+            }
+
+            Section("Optional smart tools") {
+                NavigationLink {
+                    DrugImportView()
+                } label: {
+                    AddRouteRow(
+                        icon: "text.magnifyingglass",
+                        title: "Trusted-source import",
+                        detail: "Review source facts before saving",
+                        tint: theme.aqua
+                    )
+                }
+                .accessibilityIdentifier("addHub.trustedImport")
+                NavigationLink {
+                    DrugImportView(startsInAIMode: true)
+                } label: {
+                    AddRouteRow(
+                        icon: "wand.and.stars",
+                        title: "Generate a full profile",
+                        detail: "Experimental AI workflow with field review",
+                        tint: theme.ink
+                    )
+                }
+                .accessibilityIdentifier("addHub.aiGenerator")
+            }
+
+            Section {
+                Text("To add a brand for an active ingredient you already know, open that drug and choose Brands. The active drug facts stay unchanged.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
+        .navigationTitle("Add to Renlyst")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { dismiss() }
+            }
+        }
+    }
+}
+
+private struct AddRouteRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 42, height: 42)
+                .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+}
+
+private struct YouView: View {
+    @Environment(AppTheme.self) private var theme
+    @Query private var profiles: [LearningProfile]
+
+    private var profile: LearningProfile? { profiles.first }
+    private var progress: Double { min(Double(profile?.completedQuestions ?? 0) / 100, 1) }
+    private var summary: String {
+        let streak = profile?.currentStreak ?? 0
+        let sessions = profile?.completedSessions ?? 0
+        return "\(streak)-day streak · \(sessions) sessions completed"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 16) {
+                    OrbitMark(progress: progress)
+                        .frame(width: 72, height: 72)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your learning space").font(.title3.weight(.semibold))
+                        Text(summary).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+            }
+            Section("Training") {
                 NavigationLink { ShiftView() } label: {
-                    Label("Daily Shift / الوردية اليومية", systemImage: "clock.badge.checkmark")
+                    Label("Daily shift", systemImage: "clock.badge.checkmark")
                 }
                 NavigationLink { ReportView() } label: {
-                    Label("Training Report / تقرير التدريب", systemImage: "chart.bar.doc.horizontal")
+                    Label("Training report", systemImage: "chart.bar.doc.horizontal")
                 }
             }
-            Section("App") {
+            Section("Library & data") {
                 NavigationLink { CommandPaletteView() } label: {
                     Label("Quick search", systemImage: "command.circle.fill")
                 }
                 NavigationLink { BackupDataView() } label: {
-                    Label("Backup & Data", systemImage: "externaldrive.fill")
+                    Label("Backup & data", systemImage: "externaldrive.fill")
                 }
+            }
+            Section("App") {
                 NavigationLink { LearningSettingsView() } label: {
-                    Label("Practice preferences", systemImage: "slider.horizontal.3")
+                    Label("Preferences & AI", systemImage: "slider.horizontal.3")
                 }
                 NavigationLink { AboutView() } label: {
-                    Label("About & Safety / حول التطبيق", systemImage: "info.circle.fill")
+                    Label("About & safety", systemImage: "info.circle.fill")
                 }
             }
         }
-        .navigationTitle("More / المزيد")
-        .accessibilityIdentifier("more.dashboard")
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
+        .navigationTitle("You")
+        .accessibilityIdentifier("you.dashboard")
     }
 }
 
@@ -121,7 +254,7 @@ private struct CommandPaletteView: View {
 
     private var results: [Drug] {
         guard !query.trimmed.isEmpty else { return Array(drugs.prefix(8)) }
-        return drugs.filter { [$0.displayName, $0.tradeNames.joined(separator: " "), $0.drugClass, $0.chapterRaw, $0.notes, $0.arabicExplanation].joined(separator: " ").localizedCaseInsensitiveContains(query) }
+        return drugs.filter { [$0.displayName, $0.effectiveTradeNames.joined(separator: " "), $0.drugClass, $0.chapterRaw, $0.notes, $0.arabicExplanation].joined(separator: " ").localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -143,6 +276,7 @@ private struct CommandPaletteView: View {
 
 private struct LearningSettingsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppTheme.self) private var theme
     @Query private var profiles: [LearningProfile]
     @State private var deepSeekKey = ""
     @State private var keyStatus = DeepSeekKeyStore.shared.savedKeyStatusDescription()
@@ -249,6 +383,8 @@ private struct LearningSettingsView: View {
             }
         }
         .navigationTitle("Practice Preferences")
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
         .accessibilityIdentifier("deepSeek.settings")
         .onAppear { refreshKeyStatus() }
         .alert("AI key", isPresented: $showsKeyStatus) {
@@ -356,6 +492,8 @@ private struct LearningSettingsView: View {
 }
 
 private struct AboutView: View {
+    @Environment(AppTheme.self) private var theme
+
     var body: some View {
         List {
             Section {
@@ -371,6 +509,8 @@ private struct AboutView: View {
                 .padding(.vertical, 6)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
         .navigationTitle("About / حول التطبيق")
     }
 }

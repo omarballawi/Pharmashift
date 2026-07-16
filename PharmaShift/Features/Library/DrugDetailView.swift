@@ -57,7 +57,7 @@ private enum DrugCardPage: String, CaseIterable, Identifiable {
     }
 }
 
-struct DrugDetailView: View {
+private struct LegacyDrugDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppTheme.self) private var theme
@@ -871,7 +871,7 @@ private struct DrugBrandsView: View {
     }
 }
 
-private struct DoseRegimensView: View {
+struct DoseRegimensView: View {
     @Environment(AppTheme.self) private var theme
     let drug: Drug
     @State private var selectedRegimenID = ""
@@ -1130,7 +1130,7 @@ private struct ProductLeafletEditorView: View {
     }
 }
 
-private struct LocalDrugGraphView: View {
+struct LocalDrugGraphView: View {
     @Environment(AppTheme.self) private var theme
     @Query(sort: \Drug.scientificName) private var allDrugs: [Drug]
     let drug: Drug
@@ -1157,10 +1157,19 @@ private struct LocalDrugGraphView: View {
                         context.stroke(path, with: .color(theme.tint.opacity(0.25)), lineWidth: 1.5)
                     }
                 }
-                Text(drug.displayName).font(.caption.bold()).foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(2)
-                    .frame(width: 88, height: 88).background(theme.crystalGradient, in: Circle()).position(center)
+                ZStack {
+                    OrbitMark(progress: Double(drug.masteryCount) / 6)
+                    Text(drug.displayName)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(theme.ink)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .frame(width: 62)
+                }
+                .frame(width: 96, height: 96)
+                .position(center)
                 ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-                    VStack(spacing: 3) { Image(systemName: node.icon); Text(node.label).font(.system(size: 9, weight: .semibold)).lineLimit(2).multilineTextAlignment(.center) }
+                    VStack(spacing: 3) { Image(systemName: node.icon); Text(node.label).font(.caption2.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center) }
                         .foregroundStyle(node.color).frame(width: 84).frame(minHeight: 48).padding(.vertical, 5)
                         .background(node.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 13)).position(position(index, size: proxy.size))
                 }
@@ -1180,7 +1189,7 @@ private struct LocalDrugGraphView: View {
     }
 }
 
-private struct AtomicNotesView: View {
+struct AtomicNotesView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     let drug: Drug

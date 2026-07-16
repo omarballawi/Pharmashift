@@ -132,7 +132,12 @@ struct DrugEditorView: View {
                 Toggle("Unknown drug", isOn: binding(\.isUnknown))
                 TextField("Capture label", text: binding(\.captureLabel))
                 TextField("Scientific name", text: binding(\.scientificName)).autocorrectionDisabled()
-                linesField("Trade names — one per line", keyPath: \.tradeNames)
+                if !drug.effectiveTradeNames.isEmpty {
+                    LabeledContent("Brands", value: drug.effectiveTradeNames.joined(separator: ", "))
+                }
+                Text("Brand names, package photos, and product strengths are managed from the Brands screen so they never rewrite this active-drug profile.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Picker("System / Chapter", selection: chapterBinding) { ForEach(Chapter.allCases) { Text($0.rawValue).tag($0) } }
                 TextField("Class", text: binding(\.drugClass))
                 linesField("Dosage forms — one per line", keyPath: \.dosageForms)
@@ -424,11 +429,12 @@ struct DrugEditorView: View {
     }
 
     private func save() {
-        if !drug.isUnknown && drug.scientificName.trimmed.isEmpty && drug.tradeNames.isEmpty {
-            errorMessage = "Add a scientific or trade name, or keep this card marked Unknown."
+        if !drug.isUnknown && drug.scientificName.trimmed.isEmpty {
+            errorMessage = "Add the active-drug name, or keep this profile marked Unknown."
             return
         }
-        if !drug.scientificName.trimmed.isEmpty || !drug.tradeNames.isEmpty { drug.isUnknown = false }
+        if !drug.scientificName.trimmed.isEmpty { drug.isUnknown = false }
+        DrugBrandService.synchronizeCompatibilityCache(for: drug)
         drug.recalculateConfidence()
         if !drug.generatedReviewQuestions.isEmpty && drug.reviewContentFingerprint != initialReviewFingerprint {
             drug.reviewQuestionsNeedRegeneration = true

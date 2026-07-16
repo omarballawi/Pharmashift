@@ -1,4 +1,161 @@
 import SwiftUI
+import UIKit
+
+struct OrbitMark: View {
+    @Environment(AppTheme.self) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            ZStack {
+                Circle()
+                    .trim(from: 0.08, to: 0.84)
+                    .stroke(theme.coral, style: StrokeStyle(lineWidth: side * 0.16, lineCap: .round))
+                    .rotationEffect(.degrees(-32))
+                Circle()
+                    .trim(from: 0.42, to: 0.96)
+                    .stroke(theme.aqua, style: StrokeStyle(lineWidth: side * 0.12, lineCap: .round))
+                    .rotationEffect(.degrees(24))
+                Circle()
+                    .fill(theme.saffron)
+                    .frame(width: side * 0.14, height: side * 0.14)
+                    .offset(x: side * 0.28, y: -side * 0.18)
+                Circle()
+                    .trim(from: 0, to: min(max(progress, 0.04), 1))
+                    .stroke(theme.ink.opacity(0.18), style: StrokeStyle(lineWidth: side * 0.025, lineCap: .round, dash: [4, 6]))
+                    .rotationEffect(.degrees(-90))
+            }
+            .padding(side * 0.10)
+            .animation(reduceMotion ? nil : RenlystMotion.state, value: progress)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+}
+
+struct RenlystSurface<Content: View>: View {
+    @Environment(AppTheme.self) private var theme
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(16)
+            .background(theme.surface, in: RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous)
+                    .stroke(theme.separator.opacity(0.35), lineWidth: 0.5)
+            }
+    }
+}
+
+struct RenlystSectionHeader: View {
+    let title: String
+    let subtitle: String?
+
+    init(_ title: String, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.title3.weight(.semibold))
+            if let subtitle, !subtitle.trimmed.isEmpty {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct ProductPhoto: View {
+    let data: Data?
+    var size: CGFloat = 56
+
+    var body: some View {
+        Group {
+            if let data, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "shippingbox.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.secondary.opacity(0.08))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: max(10, size * 0.22), style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: max(10, size * 0.22), style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.3), lineWidth: 0.5)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+struct RenlystPrimaryButtonStyle: ButtonStyle {
+    @Environment(AppTheme.self) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .frame(maxWidth: .infinity, minHeight: RenlystLayout.controlHeight)
+            .foregroundStyle(isEnabled ? Color.white : Color(uiColor: .secondaryLabel))
+            .background(
+                isEnabled ? (configuration.isPressed ? theme.inkSolid : theme.primaryAction) : theme.separator.opacity(0.24),
+                in: RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous)
+            )
+            .scaleEffect(configuration.isPressed && isEnabled && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : RenlystMotion.press, value: configuration.isPressed)
+    }
+}
+
+struct RenlystEmptyState: View {
+    let imageName: String
+    let title: String
+    let message: String
+    let actionTitle: String?
+    let action: (() -> Void)?
+
+    init(imageName: String, title: String, message: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.imageName = imageName
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(imageName)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220, maxHeight: 220)
+                .clipShape(RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
+                .accessibilityHidden(true)
+            Text(title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+            Text(message).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(RenlystPrimaryButtonStyle())
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, RenlystLayout.pageInset)
+        .padding(.vertical, 20)
+    }
+}
 
 struct MasteryBadge: View {
     let drug: Drug
@@ -22,7 +179,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 42))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text(title).font(.title3.bold())
             Text(message)

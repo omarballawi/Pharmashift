@@ -1,5 +1,18 @@
 # PharmaShift Delivery Roadmap
 
+## Renlyst 2.0 — Product and Interface Rebuild
+
+- Replace the five-item shell with Today, Library, Practice, and You; move Add into a focused action sheet.
+- Introduce the knowledge-orbit identity, adaptive coral/aqua/ink tokens, generated content artwork, semantic surfaces, and restrained motion.
+- Replace the 12-tab Drug Card with an overview and focused pushed topic screens.
+- Make `DrugProduct` authoritative for brands, backfill legacy trade names idempotently, and synchronize the compatibility cache.
+- Add a manual brand form that inherits ingredient names, edits component strengths and product metadata, requires a package photo, and performs no network or AI request.
+- Add individual brand deletion and whole-profile deletion with Keep History (default) or Erase History.
+- Reorganize knowledge map, compare, shelf quest, Daily Refresh, Mistake Vault, backup, reports, and AI preferences under Library Tools, Practice, and You.
+- Update unit/UI coverage, product/design documentation, version metadata, and Graphify.
+
+Acceptance: manual brand operations never mutate active-drug facts; deletion policies preserve or erase snapshots exactly; the four-section UI remains accessible in light/dark/reduced-motion/RTL contexts; macOS simulator tests pass before a later IPA build.
+
 Phases 1–5 are implemented in the current source. Phase 2 has a verified IPA milestone; the consolidated Phases 3–5 release is awaiting its final simulator/IPA gate.
 
 Every later phase follows the same release gate: update the Graphify knowledge graph, run tests on GitHub's macOS runner, commit and push the complete change, build an unsigned IPA, verify its archive, and commit the generated IPA.

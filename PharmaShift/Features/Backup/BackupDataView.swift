@@ -39,6 +39,7 @@ private struct BackupImportPreview: Identifiable {
 
 struct BackupDataView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppTheme.self) private var theme
     @State private var isWorking = false
     @State private var exportKind: BackupExportKind = .lightweight
     @State private var exportDocument: PharmaShiftExportDocument?
@@ -85,6 +86,8 @@ struct BackupDataView: View {
             }
         }
         .navigationTitle("Backup & Data")
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
         .accessibilityIdentifier("backup.screen")
         .disabled(isWorking)
         .overlay { if isWorking { ProgressView("Preparing…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }

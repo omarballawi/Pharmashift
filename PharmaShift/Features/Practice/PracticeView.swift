@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-struct PracticeView: View {
+private struct LegacyPracticeView: View {
     @Environment(\.modelContext) private var context
     @Environment(ReviewScheduler.self) private var scheduler
     @Environment(AppNavigation.self) private var navigation
@@ -275,7 +275,7 @@ struct PracticeView: View {
     }
 }
 
-private struct DailyRefreshView: View {
+struct DailyRefreshView: View {
     @Environment(ReviewScheduler.self) private var scheduler
     @Query(sort: \Drug.lastReviewed) private var drugs: [Drug]
     @Query(sort: \EncounterNote.date, order: .reverse) private var notes: [EncounterNote]
@@ -335,7 +335,7 @@ private struct DailyRefreshView: View {
     }
 }
 
-private struct MistakeVaultView: View {
+struct MistakeVaultView: View {
     @Query(sort: \ReviewLog.date, order: .reverse) private var logs: [ReviewLog]
 
     private var mistakes: [ReviewLog] { logs.filter { !$0.wasCorrect } }
@@ -388,6 +388,7 @@ struct PracticeSessionView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(ReviewScheduler.self) private var scheduler
+    @Environment(AppTheme.self) private var theme
     @Query(sort: \Drug.nextReviewDate) private var allDrugs: [Drug]
     let initialDrug: Drug?
     let mode: PracticeMode
@@ -432,6 +433,7 @@ struct PracticeSessionView: View {
             }
             .padding()
         }
+        .background(theme.background)
         .navigationTitle(customTitle ?? mode.rawValue)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
@@ -574,7 +576,13 @@ struct PracticeSessionView: View {
 
     private func completion(_ result: PracticeSessionResult) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 52)).foregroundStyle(.green)
+            Image("PracticeComplete")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: 190)
+                .accessibilityHidden(true)
+                .clipShape(RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
+                .accessibilityHidden(true)
             Text("Session complete").font(.largeTitle.bold())
             Text("\(result.correctCount) of \(result.questionCount) correct").font(.title3)
             if !wrongAnswers.isEmpty {

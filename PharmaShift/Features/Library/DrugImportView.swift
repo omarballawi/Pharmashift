@@ -95,7 +95,7 @@ struct DrugImportView: View {
         _detectedText = State(initialValue: initialLeafletText)
         _identity = State(initialValue: UserConfirmedDrugIdentity(
             scientificName: drug?.scientificName ?? "",
-            tradeNames: drug?.tradeNames ?? [],
+            tradeNames: drug?.effectiveTradeNames ?? [],
             strength: drug?.strengths.first ?? "",
             dosageForm: drug?.dosageForms.first ?? "",
             route: drug?.routes.first ?? "",
@@ -110,6 +110,7 @@ struct DrugImportView: View {
             Divider()
             content
         }
+        .background(theme.background)
         .navigationTitle(startsInAIMode ? "Generate with AI" : "Trusted Import")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -204,25 +205,29 @@ struct DrugImportView: View {
     }
 
     private var stageHeader: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(visibleStages, id: \.self) { item in
-                    Label(item.title, systemImage: item.icon)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(item.rawValue <= stage.rawValue ? theme.tint.opacity(0.16) : Color.secondary.opacity(0.1), in: Capsule())
-                        .foregroundStyle(item.rawValue <= stage.rawValue ? theme.tint : .secondary)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(stage.title, systemImage: stage.icon)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("Step \(currentStageNumber) of \(visibleStages.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
+            ProgressView(value: Double(currentStageNumber), total: Double(max(visibleStages.count, 1)))
+                .tint(theme.aqua)
         }
+        .padding(.horizontal, RenlystLayout.pageInset)
+        .padding(.vertical, 12)
         .background(.bar)
     }
 
     private var visibleStages: [ImportStage] {
         startsInAIMode ? [.photo, .confirm, .preview, .challenge] : ImportStage.allCases
+    }
+
+    private var currentStageNumber: Int {
+        (visibleStages.firstIndex(of: stage) ?? 0) + 1
     }
 
     private var cameraPresentation: Binding<Bool> {
@@ -462,12 +467,39 @@ struct DrugImportView: View {
         target.additionalImageData = additionalImageData
         target.additionalThumbnailData = additionalThumbnailData
         target.trustedSourceWasTruncated = importMode == .trusted && trustedPacket?.isTruncated == true
-        let tradeName = importedInfo.identity.tradeNames.first ?? target.firstTradeName
-        let productKey = IngredientIdentity.productKey(tradeName: tradeName, manufacturer: "", strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, ingredientKey: target.canonicalIngredientKey)
-        if !target.products.contains(where: { $0.productKey == productKey }) {
-            let product = DrugProduct(productKey: productKey, tradeName: tradeName, manufacturer: packageRecognition.manufacturer, strength: importedInfo.identity.strength, marketedStrengthLabel: importedInfo.identity.marketedStrengthLabel ?? identity.marketedStrengthLabel, ingredientComponents: components, dosageForm: importedInfo.identity.dosageForm, route: importedInfo.identity.route, country: packageRecognition.country, imageData: imageData, additionalImageData: additionalImageData, thumbnailData: thumbnailData, additionalThumbnailData: additionalThumbnailData, leafletText: detectedText, leafletUpdatedAt: detectedText.trimmed.isEmpty ? nil : .now, sourceName: importedInfo.sourceQuality.sourceName, sourceURL: importedInfo.sourceQuality.sourceURL, profile: target)
-            context.insert(product)
-            target.products.append(product)
+        let tradeName = importedInfo.identity.tradeNames.first?.trimmed ?? ""
+        if !tradeName.isEmpty {
+            let productKey = IngredientIdentity.productKey(tradeName: tradeName, manufacturer: "", strength: importedInfo.identity.strength, dosageForm: importedInfo.identity.dosageForm, ingredientKey: target.canonicalIngredientKey)
+            if let product = target.products.first(where: { $0.productKey == productKey }) {
+                product.manufacturer = packageRecognition.manufacturer.trimmed.isEmpty ? product.manufacturer : packageRecognition.manufacturer
+                product.strength = importedInfo.identity.strength
+                product.marketedStrengthLabel = importedInfo.identity.marketedStrengthLabel ?? identity.marketedStrengthLabel
+                product.ingredientComponents = components
+                product.dosageForm = importedInfo.identity.dosageForm
+                product.route = importedInfo.identity.route
+                product.country = packageRecognition.country.trimmed.isEmpty ? product.country : packageRecognition.country
+                if imageData != nil || !additionalImageData.isEmpty {
+                    product.imageData = imageData
+                    product.additionalImageData = additionalImageData
+                    product.thumbnailData = thumbnailData
+                    product.additionalThumbnailData = additionalThumbnailData
+                }
+                if !detectedText.trimmed.isEmpty {
+                    product.leafletText = detectedText
+                    product.leafletUpdatedAt = .now
+                }
+                product.sourceName = importedInfo.sourceQuality.sourceName
+                product.sourceURL = importedInfo.sourceQuality.sourceURL
+            } else {
+                let product = DrugProduct(productKey: productKey, tradeName: tradeName, manufacturer: packageRecognition.manufacturer, strength: importedInfo.identity.strength, marketedStrengthLabel: importedInfo.identity.marketedStrengthLabel ?? identity.marketedStrengthLabel, ingredientComponents: components, dosageForm: importedInfo.identity.dosageForm, route: importedInfo.identity.route, country: packageRecognition.country, imageData: imageData, additionalImageData: additionalImageData, thumbnailData: thumbnailData, additionalThumbnailData: additionalThumbnailData, leafletText: detectedText, leafletUpdatedAt: detectedText.trimmed.isEmpty ? nil : .now, sourceName: importedInfo.sourceQuality.sourceName, sourceURL: importedInfo.sourceQuality.sourceURL, profile: target)
+                context.insert(product)
+                target.products.append(product)
+            }
+            target.imageData = nil
+            target.thumbnailData = nil
+            target.additionalImageData = []
+            target.additionalThumbnailData = []
+            DrugBrandService.synchronizeCompatibilityCache(for: target)
         }
         do {
             try context.save()

@@ -734,7 +734,7 @@ enum BackupService {
     static func drugCSV(context: ModelContext) throws -> Data {
         let header = ["id", "scientific_name", "trade_names", "chapter", "class", "dosage_forms", "strengths", "indications", "warnings", "notes", "arabic_explanation"]
         let rows = try context.fetch(FetchDescriptor<Drug>()).map { drug in
-            [drug.id.uuidString, drug.scientificName, drug.tradeNames.joined(separator: " | "), drug.chapterRaw, drug.drugClass,
+            [drug.id.uuidString, drug.scientificName, drug.effectiveTradeNames.joined(separator: " | "), drug.chapterRaw, drug.drugClass,
              drug.dosageForms.joined(separator: " | "), drug.strengths.joined(separator: " | "), drug.indications.joined(separator: " | "),
              drug.warnings.joined(separator: " | "), drug.notes, drug.arabicExplanation].map(csvEscape).joined(separator: ",")
         }

@@ -27,6 +27,7 @@ struct CaptureView: View {
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
+    @State private var saveStatus = "Ready"
     @FocusState private var focus: FocusField?
     private let onOpenSavedDrug: (UUID) -> Void
 
@@ -125,6 +126,7 @@ struct CaptureView: View {
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .disabled(!canSave)
                     .accessibilityIdentifier("capture.saveOpen")
+                    .accessibilityValue(saveStatus)
                 Button("Save and review later") { save(.later) }
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .disabled(!canSave)
@@ -158,7 +160,7 @@ struct CaptureView: View {
     }
 
     private func save(_ action: SaveAction) {
-        guard canSave else { return }
+        saveStatus = "Saving"
         let now = Date.now
         let drug = Drug(
             scientificName: scientificName.trimmed,
@@ -210,6 +212,7 @@ struct CaptureView: View {
         }
         do {
             try context.save()
+            saveStatus = "Saved"
             switch action {
             case .open:
                 onOpenSavedDrug(drug.id)
@@ -221,6 +224,7 @@ struct CaptureView: View {
                 message = "Saved to your library and review queue."
             }
         } catch {
+            saveStatus = "Failed"
             message = "Could not save this drug. \(error.localizedDescription)"
         }
     }
@@ -229,6 +233,7 @@ struct CaptureView: View {
         scientificName = ""; tradeName = ""; strength = ""; dosageForm = ""
         chapter = .other; drugClass = ""; shelfLocation = ""; unknownLabel = ""
         isUnknown = false; imageData = nil; thumbnailData = nil; additionalImageData = []; additionalThumbnailData = []; photoItems = []
+        saveStatus = "Ready"
         focus = .scientific
     }
 

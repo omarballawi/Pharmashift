@@ -82,8 +82,16 @@
   "80": "VerificationStatus",
   "81": ".isValid",
   "82": "LibraryCompareView",
+  "83": "LocalDrugGraphView",
+  "84": "HalfLifeBand",
   "85": "DurationBand",
+  "86": "AtomicNotesView",
+  "87": "BackupError",
   "88": "SafetySeverity",
+  "89": "ImportMode",
   "90": "Binding",
-  "91": "LibrarySummaryRow"
+  "91": "LibrarySummaryRow",
+  "92": "Double",
+  "93": "Drug",
+  "94": "Data"
 }

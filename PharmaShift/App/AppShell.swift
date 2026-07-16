@@ -127,10 +127,7 @@ struct AppShell: View {
                 }
                     .presentationDetents([.large])
             case .capture(let chapter):
-                NavigationStack {
-                    CaptureView(initialChapter: chapter) { id in navigation.openDrugAfterCapture(id) }
-                }
-                    .presentationDetents([.large])
+                CaptureSheetView(initialChapter: chapter) { id in navigation.openDrugAfterCapture(id) }
             }
         }
         .task {
@@ -196,7 +193,10 @@ private struct AddHubView: View {
         List {
             Section {
                 NavigationLink {
-                    CaptureView(onOpenSavedDrug: onOpenSavedDrug)
+                    CaptureView { id in
+                        dismiss()
+                        onOpenSavedDrug(id)
+                    }
                 } label: {
                     AddRouteRow(
                         icon: "plus.viewfinder",
@@ -248,6 +248,22 @@ private struct AddHubView: View {
                 Button("Close") { dismiss() }
             }
         }
+    }
+}
+
+private struct CaptureSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    let initialChapter: Chapter?
+    let onOpenSavedDrug: (UUID) -> Void
+
+    var body: some View {
+        NavigationStack {
+            CaptureView(initialChapter: initialChapter) { id in
+                dismiss()
+                onOpenSavedDrug(id)
+            }
+        }
+        .presentationDetents([.large])
     }
 }
 

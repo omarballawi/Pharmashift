@@ -1,16 +1,16 @@
 # Graph Report - pharmashift  (2026-07-17)
 
 ## Corpus Check
-- 54 files · ~462,369 words
+- 54 files · ~462,364 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1608 nodes · 4282 edges · 95 communities (90 shown, 5 thin omitted)
+- 1608 nodes · 4282 edges · 94 communities (89 shown, 5 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 185 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0bd15564`
+- Built from commit: `01d73c04`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -106,7 +106,7 @@
 - [[_COMMUNITY_ImportMode|ImportMode]]
 - [[_COMMUNITY_Binding|Binding]]
 - [[_COMMUNITY_LibrarySummaryRow|LibrarySummaryRow]]
-- [[_COMMUNITY_Drug|Drug]]
+- [[_COMMUNITY_Double|Double]]
 - [[_COMMUNITY_Data|Data]]
 
 ## God Nodes (most connected - your core abstractions)
@@ -136,7 +136,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (95 total, 5 thin omitted)
+## Communities (94 total, 5 thin omitted)
 
 ### Community 0 - "ShiftLog"
 Cohesion: 0.11
@@ -155,16 +155,16 @@ Cohesion: 0.22
 Nodes (5): DrugLibraryMigrationService, DrugProduct, IngredientComponent, IngredientIdentity, ModelContext
 
 ### Community 4 - "String"
-Cohesion: 0.11
-Nodes (17): DrugImportApplier, deepSeekHTTPStatus, DrugImportValidator, ImportSelection, ProfileGenerationGroup, adverseEffects, counselingAndLearning, dosageFormsAndDosing (+9 more)
+Cohesion: 0.10
+Nodes (18): deepSeekHTTPStatus, DrugImportValidator, ImportSelection, ProfileGenerationGroup, adverseEffects, counselingAndLearning, dosageFormsAndDosing, identityAndUses (+10 more)
 
 ### Community 5 - "Chapter"
 Cohesion: 0.11
 Nodes (21): DoseRegimensView, Double, DoseCalculationResult, DoseCalculator, DoseFormulaKind, fixed, mgPerKgPerDay, mgPerKgPerDose (+13 more)
 
 ### Community 6 - "QuestionType"
-Cohesion: 0.14
-Nodes (14): DrugImportView, Bool, Drug, PhotosPickerItem, DeepSeekIdentityResolver, DrugIdentityResolving, ResolvedDrugIdentity, DeepSeekDrugImportService (+6 more)
+Cohesion: 0.12
+Nodes (16): DrugImportView, Bool, Drug, PhotosPickerItem, DeepSeekIdentityResolver, DrugIdentityResolving, ResolvedDrugIdentity, DeepSeekDrugImportService (+8 more)
 
 ### Community 7 - "LibraryView"
 Cohesion: 0.06
@@ -183,8 +183,8 @@ Cohesion: 0.07
 Nodes (30): CodingKeys, adverseReactions, boxedWarning, brandName, clinicalPharmacology, contraindications, dosageAndAdministration, dosageForm (+22 more)
 
 ### Community 11 - "SafetyFlag"
-Cohesion: 0.17
-Nodes (12): NSObject, OSStatus, KeyStoreError, readBackFailed, PromptBuilder, SPLParser, SPLXMLDelegate, String (+4 more)
+Cohesion: 0.20
+Nodes (31): Codable, Equatable, EliminationInfo, EliminationRouteInfo, ProdrugInfo, Flashcard, GeneratedReviewQuestionDTO, ImportedAdverseEffects (+23 more)
 
 ### Community 12 - "DosingFrequency"
 Cohesion: 0.13
@@ -203,12 +203,12 @@ Cohesion: 0.13
 Nodes (17): Error, FileDocument, FileWrapper, BackupDataView, BackupExportKind, complete, csv, lightweight (+9 more)
 
 ### Community 16 - "Codable"
-Cohesion: 0.20
-Nodes (31): Codable, Equatable, EliminationInfo, EliminationRouteInfo, ProdrugInfo, Flashcard, GeneratedReviewQuestionDTO, ImportedAdverseEffects (+23 more)
+Cohesion: 0.27
+Nodes (5): DrugRelationshipRefreshService, DrugSearchRanker, DrugSearchResult, MockDrugSourceProvider, ModelContext
 
 ### Community 17 - "ImageCapture.swift"
-Cohesion: 0.29
-Nodes (7): EliminationPathway, biliaryFecal, mixed, other, pulmonary, renalUrine, unknown
+Cohesion: 0.26
+Nodes (5): CGRect, ImageCompressor, CGSize, Int, UIImage
 
 ### Community 18 - "DurationBand"
 Cohesion: 0.14
@@ -267,12 +267,12 @@ Cohesion: 0.11
 Nodes (17): Accessibility floor, Color, Core flows, Design, Dials, Direction, Drug overview, Imagery and icons (+9 more)
 
 ### Community 33 - "PharmacologyScale"
-Cohesion: 0.37
-Nodes (5): CGRect, ImageCompressor, CGSize, Int, UIImage
+Cohesion: 0.22
+Nodes (10): DrugImagePayload, DrugPhotoGalleryView, DrugPhotoView, DrugThumbnailView, ImageDraft, ImageEditorView, CGFloat, Data (+2 more)
 
 ### Community 34 - "SwiftData"
 Cohesion: 0.22
-Nodes (10): DrugImagePayload, DrugPhotoGalleryView, DrugPhotoView, DrugThumbnailView, ImageDraft, ImageEditorView, CGFloat, Data (+2 more)
+Nodes (8): ClosedRange, Double, OrbitMark, PharmacologyScale, duration, halfLife, onset, Double
 
 ### Community 35 - "LibraryView"
 Cohesion: 0.27
@@ -327,16 +327,16 @@ Cohesion: 0.15
 Nodes (13): DrugCardPage, adverse, brands, counseling, doses, forms, interactions, notes (+5 more)
 
 ### Community 49 - "PracticeQuestion"
-Cohesion: 0.14
-Nodes (28): CoreFoundation, Decodable, Encodable, APIError, Candidate, Choice, DailyMedSearchItem, DailyMedSearchPayload (+20 more)
+Cohesion: 0.12
+Nodes (31): CoreFoundation, Decodable, Encodable, OSStatus, APIError, Candidate, Choice, DailyMedSearchItem (+23 more)
 
 ### Community 50 - "Color"
 Cohesion: 0.12
 Nodes (14): PracticeView, PracticeMode, casePractice, classExamples, counseling, drugUse, drugWarning, dueReview (+6 more)
 
 ### Community 51 - ".generate"
-Cohesion: 0.22
-Nodes (8): ClosedRange, Double, OrbitMark, PharmacologyScale, duration, halfLife, onset, Double
+Cohesion: 0.29
+Nodes (5): Context, CameraPicker, Any, UIImagePickerController, UIViewControllerRepresentable
 
 ### Community 52 - "ImportedExcretionRoute"
 Cohesion: 0.08
@@ -356,7 +356,7 @@ Nodes (12): ImageIO, EmptyStateView, LabeledValue, MasteryBadge, MetricCard, Pha
 
 ### Community 56 - "FocusField"
 Cohesion: 0.09
-Nodes (15): AltibbiProvider, DailyMedProvider, DeepSeekFastDrugGatherService, DrugRelationshipRefreshService, DrugSearchRanker, DrugSearchResult, DrugSourceProvider, DrugSourceProviderFactory (+7 more)
+Nodes (17): NSObject, AltibbiProvider, DailyMedProvider, DeepSeekFastDrugGatherService, DrugSourceProvider, DrugSourceProviderFactory, OpenFDALabelProvider, RxNormProvider (+9 more)
 
 ### Community 57 - "Unit"
 Cohesion: 0.22
@@ -372,7 +372,7 @@ Nodes (9): ProductImagePipeline, ProductPhoto, SafetyRadar, CGFloat, CGPoint, Da
 
 ### Community 60 - "String"
 Cohesion: 0.05
-Nodes (38): ImportedDosingFrequency, fourTimesDaily, onceDaily, other, PRN, threeTimesDaily, twiceDaily, unknown (+30 more)
+Nodes (37): ImportedDosingFrequency, fourTimesDaily, onceDaily, other, PRN, threeTimesDaily, twiceDaily, unknown (+29 more)
 
 ### Community 61 - "CGPoint"
 Cohesion: 0.18
@@ -383,8 +383,8 @@ Cohesion: 0.18
 Nodes (9): BrandProductForm, Binding, Bool, Data, Int, PhotosPickerItem, BrandProductDraft, Bool (+1 more)
 
 ### Community 63 - ".apply"
-Cohesion: 0.29
-Nodes (5): Context, CameraPicker, Any, UIImagePickerController, UIViewControllerRepresentable
+Cohesion: 0.25
+Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
 
 ### Community 64 - "MemoryReviewGrade"
 Cohesion: 0.33
@@ -447,8 +447,8 @@ Cohesion: 0.20
 Nodes (10): CodingKeys, answer, choices, explanation, finishReason, message, prompt, questions (+2 more)
 
 ### Community 79 - "DrugEvidenceQuality"
-Cohesion: 0.25
-Nodes (6): CropGrid, CropViewportState, CGPoint, Path, Shape, UIEdgeInsets
+Cohesion: 0.29
+Nodes (7): EliminationPathway, biliaryFecal, mixed, other, pulmonary, renalUrine, unknown
 
 ### Community 80 - "VerificationStatus"
 Cohesion: 0.22
@@ -498,17 +498,17 @@ Nodes (8): AboutView, AddRouteRow, AppNavigation, AppSheet, addHub, capture, App
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `View` connect `ReportEditorView` to `Chapter`, `QuestionType`, `LibraryView`, `PracticeSessionView`, `ShiftView`, `CaseIterable`, `ModelAndPersistenceTests`, `QuestionType`, `HomeView`, `FocusField`, `.apply`, `SwiftData`, `LibraryView`, `.generate`, `SafetyRadar`, `MemoryReviewGrade`, `DosingFrequency`, `ReportFile.swift`, `HalfLifeBand`, `Color`, `.generate`, `NameKind`, `Unit`, `PhotosPickerItem`, `Bool`, `Bool`, `DoseRegimensView`, `Decoder`, `DrugDetailView.swift`, `AIPracticePayload`, `LocalDrugGraphView`, `DurationBand`, `AtomicNotesView`, `LibrarySummaryRow`, `Drug`, `Data`?**
+- **Why does `View` connect `ReportEditorView` to `Chapter`, `QuestionType`, `LibraryView`, `PracticeSessionView`, `ShiftView`, `CaseIterable`, `ModelAndPersistenceTests`, `QuestionType`, `HomeView`, `FocusField`, `.apply`, `PharmacologyScale`, `SwiftData`, `LibraryView`, `.generate`, `SafetyRadar`, `MemoryReviewGrade`, `DosingFrequency`, `ReportFile.swift`, `HalfLifeBand`, `Color`, `NameKind`, `Unit`, `PhotosPickerItem`, `Bool`, `Bool`, `DoseRegimensView`, `Decoder`, `DrugDetailView.swift`, `AIPracticePayload`, `LocalDrugGraphView`, `DurationBand`, `AtomicNotesView`, `LibrarySummaryRow`, `Double`, `Data`?**
   _High betweenness centrality (0.181) - this node is a cross-community bridge._
 - **Why does `SwiftData` connect `ReviewRating` to `Drug`, `PracticeSessionView`, `.image`, `CaseIterable`, `FocusField`, `DrugImportView.swift`, `Foundation`, `ReportEditorView`, `.apply`, `.generate`, `MemoryReviewGrade`, `HalfLifeBand`, `PracticeQuestion`, `Components.swift`, `CGPoint`, `Decoder`, `LocalDrugGraphView`, `DurationBand`, `LibrarySummaryRow`?**
   _High betweenness centrality (0.076) - this node is a cross-community bridge._
-- **Why does `DrugImportView` connect `QuestionType` to `SwiftData`, `ImageCapture.swift`, `String`, `PracticeSessionView`, `SafetyFlag`, `Codable`, `ModelAndPersistenceTests`, `FocusField`, `Double`, `ReportEditorView`?**
+- **Why does `DrugImportView` connect `QuestionType` to `PharmacologyScale`, `ImageCapture.swift`, `String`, `PracticeSessionView`, `SafetyFlag`, `Codable`, `ImageCapture.swift`, `ModelAndPersistenceTests`, `FocusField`, `ReportEditorView`?**
   _High betweenness centrality (0.052) - this node is a cross-community bridge._
 - **What connects `today`, `library`, `practice` to the rest of the system?**
   _392 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ShiftLog` be split into smaller, more focused modules?**
   _Cohesion score 0.11083743842364532 - nodes in this community are weakly interconnected._
 - **Should `String` be split into smaller, more focused modules?**
-  _Cohesion score 0.10953058321479374 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10452961672473868 - nodes in this community are weakly interconnected._
 - **Should `Chapter` be split into smaller, more focused modules?**
   _Cohesion score 0.11494252873563218 - nodes in this community are weakly interconnected._

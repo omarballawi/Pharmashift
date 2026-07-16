@@ -163,6 +163,30 @@ enum PracticeInteraction: String, Codable {
     case recall
 }
 
+enum QuestionDifficulty: String, Codable, CaseIterable, Identifiable {
+    case foundation = "Foundation"
+    case application = "Apply"
+    case challenge = "Challenge"
+
+    var id: String { rawValue }
+}
+
+enum MemoryAnchorKind: String, Equatable {
+    case mustKnow
+    case use
+    case safety
+    case mechanism
+    case counseling
+    case empty
+}
+
+struct MemoryAnchor: Identifiable, Equatable {
+    let id: String
+    let kind: MemoryAnchorKind
+    let title: String
+    let content: String?
+}
+
 struct PracticeQuestion: Identifiable, Codable, Equatable {
     var id: UUID
     var drugID: UUID?
@@ -175,11 +199,17 @@ struct PracticeQuestion: Identifiable, Codable, Equatable {
     var interaction: PracticeInteraction
     var imageData: Data?
     var caseID: String?
+    var difficulty: QuestionDifficulty?
+    var learningObjective: String?
+    var sourceField: String?
+    var acceptedAnswers: [String]?
 
-    init(id: UUID = UUID(), drugID: UUID?, drugName: String, prompt: String, correctAnswer: String, choices: [String] = [], explanation: String? = nil, questionType: QuestionType, interaction: PracticeInteraction, imageData: Data? = nil, caseID: String? = nil) {
+    init(id: UUID = UUID(), drugID: UUID?, drugName: String, prompt: String, correctAnswer: String, choices: [String] = [], explanation: String? = nil, questionType: QuestionType, interaction: PracticeInteraction, imageData: Data? = nil, caseID: String? = nil, difficulty: QuestionDifficulty? = nil, learningObjective: String? = nil, sourceField: String? = nil, acceptedAnswers: [String]? = nil) {
         self.id = id; self.drugID = drugID; self.drugName = drugName; self.prompt = prompt
         self.correctAnswer = correctAnswer; self.choices = choices; self.explanation = explanation
         self.questionType = questionType; self.interaction = interaction; self.imageData = imageData; self.caseID = caseID
+        self.difficulty = difficulty; self.learningObjective = learningObjective; self.sourceField = sourceField
+        self.acceptedAnswers = acceptedAnswers
     }
 }
 
@@ -1626,6 +1656,39 @@ final class DailyActivity {
     init(id: UUID = UUID(), day: Date, sessionsCompleted: Int = 0, questionsAnswered: Int = 0, correctAnswers: Int = 0, missionCompleted: Bool = false) {
         self.id = id; self.day = day; self.sessionsCompleted = sessionsCompleted
         self.questionsAnswered = questionsAnswered; self.correctAnswers = correctAnswers; self.missionCompleted = missionCompleted
+    }
+}
+
+extension Drug {
+    var memoryAnchors: [MemoryAnchor] {
+        var anchors: [MemoryAnchor] = []
+        var normalizedValues = Set<String>()
+
+        func append(kind: MemoryAnchorKind, title: String, value: String?) {
+            guard anchors.count < 3, let value else { return }
+            let trimmed = value.trimmed
+            let normalized = trimmed.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            guard !trimmed.isEmpty, normalizedValues.insert(normalized).inserted else { return }
+            anchors.append(MemoryAnchor(id: "\(anchors.count)-\(kind.rawValue)", kind: kind, title: title, content: trimmed))
+        }
+
+        for (index, value) in mustKnow.enumerated() {
+            append(kind: .mustKnow, title: index == 0 ? "Must remember" : "Key recall", value: value)
+        }
+        append(kind: .use, title: "Main use", value: indications.first)
+        append(kind: .safety, title: "Safety cue", value: warnings.first ?? contraindications.first)
+        append(kind: .mechanism, title: "How it works", value: mechanism)
+        append(kind: .counseling, title: "Patient cue", value: counselingSentence)
+
+        while anchors.count < 3 {
+            anchors.append(MemoryAnchor(
+                id: "\(anchors.count)-empty",
+                kind: .empty,
+                title: "Memory anchor \(anchors.count + 1)",
+                content: nil
+            ))
+        }
+        return anchors
     }
 }
 

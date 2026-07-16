@@ -829,17 +829,11 @@ private struct DrugBrandsView: View {
                             ProductLeafletEditorView(product: product, drug: drug)
                         } label: {
                             HStack(spacing: 12) {
-                                if let data = product.thumbnailData ?? product.imageData, let image = UIImage(data: data) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 64, height: 64)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                } else {
-                                    Image(systemName: "pills.fill")
-                                        .frame(width: 64, height: 64)
-                                        .background(theme.softTint, in: RoundedRectangle(cornerRadius: 12))
-                                }
+                                ProductPhoto(
+                                    data: product.thumbnailData ?? product.imageData,
+                                    size: 64,
+                                    cacheKey: "legacy-product-\(product.id.uuidString)"
+                                )
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(product.tradeName.trimmed.isEmpty ? "Unnamed product" : product.tradeName).font(.headline)
                                     let details = [product.manufacturer, product.marketedStrengthLabel, product.dosageForm].filter { !$0.trimmed.isEmpty }

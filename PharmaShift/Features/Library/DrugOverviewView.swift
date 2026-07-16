@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-private enum DrugTopic: String, CaseIterable, Identifiable, Hashable {
+enum DrugTopic: String, CaseIterable, Identifiable, Hashable {
     case brands = "Brands & packages"
     case uses = "Uses"
     case dosing = "Forms & dosing"
@@ -53,11 +53,8 @@ struct DrugDetailView: View {
             .padding(.bottom, 28)
         }
         .background(theme.background)
-        .navigationTitle("Drug overview")
+        .navigationTitle(drug.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: DrugTopic.self) { topic in
-            DrugTopicView(drug: drug, topic: topic)
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -76,11 +73,14 @@ struct DrugDetailView: View {
                 DrugDeletionSheet(drug: drug) { dismiss() }
             }
         }
-        .onAppear(perform: markSeen)
+        .task(perform: markSeen)
         .accessibilityIdentifier("drug.overview")
     }
 
-    private func markSeen() {
+    private func markSeen() async {
+        guard drug.lastSeenDate.map({ !Calendar.current.isDateInToday($0) }) ?? true else { return }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
         drug.markSeen()
         try? context.save()
     }
@@ -92,48 +92,60 @@ private struct DrugIdentityHeader: View {
     let drug: Drug
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 14) {
-                    ProductPhoto(data: drug.packageThumbnails.first, size: 80)
-                    details
-                }
-            } else {
-                HStack(alignment: .top, spacing: 16) {
-                    ProductPhoto(data: drug.packageThumbnails.first, size: 92)
-                    details
-                    Spacer(minLength: 0)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 17) {
+                ProductPhoto(data: drug.packageThumbnails.first, size: 96, cacheKey: "drug-\(drug.id.uuidString)-hero")
+                DrugIdentityText(drug: drug)
+                Spacer(minLength: 0)
             }
+            VStack(alignment: .leading, spacing: 15) {
+                ProductPhoto(data: drug.packageThumbnails.first, size: 88, cacheKey: "drug-\(drug.id.uuidString)-hero")
+                DrugIdentityText(drug: drug)
+            }
+        }
+        .padding(18)
+        .background(theme.inkSolid, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            OrbitMark(progress: Double(drug.masteryCount) / 6)
+                .frame(width: 66, height: 66)
+                .padding(12)
+                .opacity(dynamicTypeSize.isAccessibilitySize ? 0 : 0.34)
+                .allowsHitTesting(false)
         }
         .accessibilityElement(children: .combine)
     }
+}
 
-    private var details: some View {
+private struct DrugIdentityText: View {
+    @Environment(AppTheme.self) private var theme
+    let drug: Drug
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(drug.displayName)
                 .font(.system(.title, design: .serif, weight: .semibold))
-                .foregroundStyle(theme.ink)
+                .foregroundStyle(.white)
             Text(drug.ingredientNames.joined(separator: " + "))
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.72))
             if !drug.effectiveTradeNames.isEmpty {
-                Text(drug.effectiveTradeNames.prefix(3).joined(separator: " · "))
+                Text(drug.effectiveTradeNames.prefix(3).joined(separator: "  ·  "))
                     .font(.subheadline)
-                    .foregroundStyle(theme.aqua)
+                    .foregroundStyle(theme.saffron)
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 7) {
                     Label(drug.chapter.rawValue, systemImage: drug.chapter.icon)
-                    Text("\(drug.masteryCount)/6 mastery")
+                    Text("\(drug.masteryCount)/6 connected")
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Label(drug.chapter.rawValue, systemImage: drug.chapter.icon)
-                    Text("\(drug.masteryCount)/6 mastery")
+                    Text("\(drug.masteryCount)/6 connected")
                 }
             }
             .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white.opacity(0.7))
+            .padding(.top, 2)
         }
     }
 }
@@ -143,40 +155,69 @@ private struct DrugSummarySurface: View {
     let drug: Drug
 
     var body: some View {
-        RenlystSurface {
-            VStack(alignment: .leading, spacing: 13) {
-                HStack {
-                    Text("What to remember").font(.headline)
-                    Spacer()
-                    Image(systemName: "bookmark.fill").foregroundStyle(theme.coral)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Three memory anchors").font(.title3.weight(.semibold))
+                    Text("The fastest path back to this drug").font(.subheadline).foregroundStyle(.secondary)
                 }
-                Text(summary)
-                    .font(.body)
-                    .foregroundStyle(summary == fallback ? .secondary : .primary)
-                Divider()
-                HStack(spacing: 0) {
-                    metric(drug.products.count, "Brands")
-                    metric(drug.indications.count, "Uses")
-                    metric(drug.warnings.count + drug.contraindications.count, "Safety")
+                Spacer()
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .foregroundStyle(theme.coral)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(drug.memoryAnchors.enumerated()), id: \.element.id) { index, anchor in
+                    MemoryAnchorRow(number: index + 1, anchor: anchor)
+                    if index < 2 { Divider().padding(.leading, 56) }
                 }
+            }
+            .background(theme.surface, in: RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous)
+                    .stroke(theme.separator.opacity(0.3), lineWidth: 0.5)
             }
         }
     }
+}
 
-    private var fallback: String { "Add a concise summary after reviewing this profile with your supervising pharmacist." }
-    private var summary: String {
-        if let mustKnow = drug.mustKnow.first(where: { !$0.trimmed.isEmpty }) { return mustKnow }
-        if !drug.mechanism.trimmed.isEmpty { return drug.mechanism }
-        if let use = drug.indications.first { return use }
-        return fallback
+private struct MemoryAnchorRow: View {
+    @Environment(AppTheme.self) private var theme
+    let number: Int
+    let anchor: MemoryAnchor
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 13) {
+            Text(number.formatted())
+                .font(.subheadline.monospacedDigit().weight(.bold))
+                .foregroundStyle(anchor.content == nil ? .secondary : .white)
+                .frame(width: 34, height: 34)
+                .background(anchor.content == nil ? theme.separator.opacity(0.18) : anchorColor, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(anchor.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(anchor.content ?? "Add this anchor when you next review the profile.")
+                    .font(.body)
+                    .foregroundStyle(anchor.content == nil ? .secondary : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .accessibilityElement(children: .combine)
     }
 
-    private func metric(_ value: Int, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value.formatted()).font(.headline.monospacedDigit())
-            Text(label).font(.caption).foregroundStyle(.secondary)
+    private var anchorColor: Color {
+        switch anchor.kind {
+        case .safety: theme.coral
+        case .mechanism, .counseling: theme.aqua
+        case .mustKnow, .use: theme.inkSolid
+        case .empty: .secondary
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -186,34 +227,41 @@ private struct DrugTopicsList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            RenlystSectionHeader("Explore this drug", subtitle: "Open one focused topic at a time")
-            VStack(spacing: 0) {
-                ForEach(Array(DrugTopic.allCases.enumerated()), id: \.offset) { index, topic in
-                    NavigationLink(value: topic) {
-                        HStack(spacing: 13) {
+            RenlystSectionHeader("Build the full picture", subtitle: "Each topic is one focused layer")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+                ForEach(DrugTopic.allCases) { topic in
+                    NavigationLink(value: AppRoute.drugTopic(drug.id, topic)) {
+                        VStack(alignment: .leading, spacing: 12) {
                             Image(systemName: topic.icon)
-                                .font(.body.weight(.semibold))
+                                .font(.title3.weight(.semibold))
                                 .foregroundStyle(topic == .brands ? theme.coral : theme.aqua)
-                                .frame(width: 38, height: 38)
-                                .background((topic == .brands ? theme.softTint : theme.softAqua), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                .frame(width: 42, height: 42)
+                                .background((topic == .brands ? theme.softTint : theme.softAqua), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(topic.rawValue).font(.headline)
-                                Text(detail(for: topic)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(detail(for: topic))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                            HStack {
+                                Text("Open").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                Spacer()
+                                Image(systemName: "arrow.up.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                            }
                         }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 62)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
+                        .background(theme.surface, in: RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous)
+                                .stroke(theme.separator.opacity(0.3), lineWidth: 0.5)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    if index < DrugTopic.allCases.count - 1 { Divider().padding(.leading, 65) }
+                    .buttonStyle(RenlystTileButtonStyle())
+                    .accessibilityHint(detail(for: topic))
                 }
-            }
-            .background(theme.surface, in: RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: RenlystLayout.surfaceRadius, style: .continuous)
-                    .stroke(theme.separator.opacity(0.3), lineWidth: 0.5)
             }
         }
     }
@@ -249,7 +297,7 @@ private struct ArabicSummarySurface: View {
     }
 }
 
-private struct DrugTopicView: View {
+struct DrugTopicView: View {
     let drug: Drug
     let topic: DrugTopic
 
@@ -356,7 +404,7 @@ private struct BrandProductRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ProductPhoto(data: product.packageThumbnails.first, size: 56)
+            ProductPhoto(data: product.packageThumbnails.first, size: 56, cacheKey: "product-\(product.id.uuidString)-row")
             VStack(alignment: .leading, spacing: 3) {
                 Text(product.tradeName).font(.headline)
                 Text([product.marketedStrengthLabel, product.dosageForm].filter { !$0.trimmed.isEmpty }.joined(separator: " · "))

@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -77,12 +78,19 @@ struct RenlystSectionHeader: View {
 }
 
 struct ProductPhoto: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let data: Data?
     var size: CGFloat = 56
+    var cacheKey: String?
+    @State private var image: UIImage?
+
+    private var requestID: String {
+        ProductImagePipeline.requestID(data: data, cacheKey: cacheKey, maxDimension: size)
+    }
 
     var body: some View {
-        Group {
-            if let data, let image = UIImage(data: data) {
+        ZStack {
+            if let image {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Image(systemName: "shippingbox.fill")
@@ -99,6 +107,60 @@ struct ProductPhoto: View {
                 .stroke(Color(uiColor: .separator).opacity(0.3), lineWidth: 0.5)
         }
         .accessibilityHidden(true)
+        .animation(reduceMotion ? nil : RenlystMotion.state, value: image != nil)
+        .task(id: requestID) {
+            image = await ProductImagePipeline.shared.image(
+                from: data,
+                cacheKey: cacheKey,
+                maxDimension: size
+            )
+        }
+    }
+}
+
+final class ProductImagePipeline: @unchecked Sendable {
+    static let shared = ProductImagePipeline()
+
+    private let cache = NSCache<NSString, UIImage>()
+
+    private init() {
+        cache.countLimit = 180
+        cache.totalCostLimit = 72 * 1_024 * 1_024
+    }
+
+    static func requestID(data: Data?, cacheKey: String?, maxDimension: CGFloat) -> String {
+        let fingerprint = data.map { "\($0.count)-\($0.prefix(12).base64EncodedString())" } ?? "empty"
+        return "\(cacheKey ?? fingerprint)-\(Int(maxDimension.rounded(.up)))"
+    }
+
+    func image(from data: Data?, cacheKey: String?, maxDimension: CGFloat) async -> UIImage? {
+        guard let data, !data.isEmpty else { return nil }
+        let key = Self.requestID(data: data, cacheKey: cacheKey, maxDimension: maxDimension) as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+
+        let pixelDimension = max(80, Int((maxDimension * 3).rounded(.up)))
+        let decoded = await Task.detached(priority: .userInitiated) {
+            Self.downsample(data: data, maxPixelDimension: pixelDimension)
+        }.value
+
+        if let decoded {
+            let cost = (decoded.cgImage?.bytesPerRow ?? 0) * (decoded.cgImage?.height ?? 0)
+            cache.setObject(decoded, forKey: key, cost: cost)
+        }
+        return decoded
+    }
+
+    private static func downsample(data: Data, maxPixelDimension: Int) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelDimension
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
@@ -117,6 +179,17 @@ struct RenlystPrimaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous)
             )
             .scaleEffect(configuration.isPressed && isEnabled && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : RenlystMotion.press, value: configuration.isPressed)
+    }
+}
+
+struct RenlystTileButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
             .animation(reduceMotion ? nil : RenlystMotion.press, value: configuration.isPressed)
     }
 }

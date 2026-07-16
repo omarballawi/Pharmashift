@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 import SwiftData
 
 enum PracticeMode: String, CaseIterable, Identifiable, Codable {
@@ -58,17 +59,18 @@ enum PracticeGenerator {
             guard !cases.isEmpty else { return [] }
             return (0..<questionCount).map { index in
                 let item = cases[index % cases.count]
-                let choices = multipleChoice(correct: item.expectedIdea, candidates: cases.map(\.expectedIdea), index: index)
                 return PracticeQuestion(
                     drugID: known.first(where: { $0.scientificName.localizedCaseInsensitiveCompare(item.relatedScientificName) == .orderedSame })?.id,
                     drugName: item.relatedScientificName,
-                    prompt: choices.isEmpty ? "True or false: \(item.expectedIdea)" : item.prompt,
-                    correctAnswer: choices.isEmpty ? "True" : item.expectedIdea,
-                    choices: choices.isEmpty ? ["True", "False"] : choices,
+                    prompt: item.prompt,
+                    correctAnswer: item.expectedIdea,
                     explanation: item.expectedIdea,
                     questionType: .casePractice,
-                    interaction: choices.isEmpty ? .trueFalse : .multipleChoice,
-                    caseID: item.id
+                    interaction: .recall,
+                    caseID: item.id,
+                    difficulty: difficulty(for: index),
+                    learningObjective: "Apply a saved drug fact to a short patient situation",
+                    sourceField: "case"
                 )
             }
         }
@@ -90,11 +92,14 @@ enum PracticeGenerator {
             return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
         return (0..<questionCount).map { index in
-            makeQuestion(mode: mode, drug: eligible[index % eligible.count], all: known, index: index)
+            QuestionQualityValidator.sanitized(
+                makeQuestion(mode: mode, drug: eligible[index % eligible.count], all: known, index: index)
+            )
         }
     }
 
     private static func makeQuestion(mode: PracticeMode, drug: Drug, all: [Drug], index: Int) -> PracticeQuestion {
+        let difficulty = difficulty(for: index)
         let resolvedMode: PracticeMode
         if mode == .weakDrug {
             if !drug.masteryScientificName { resolvedMode = .tradeToScientific }
@@ -106,35 +111,101 @@ enum PracticeGenerator {
         } else if mode == .smartSession || mode == .systemSpecific || mode == .dueReview {
             let rotation: [PracticeMode] = drug.packageImages.isEmpty
                 ? [.tradeToScientific, .classExamples, .drugUse, .drugWarning, .counseling]
-                : [.imageQuiz, .classExamples, .drugUse, .drugWarning, .counseling]
+                : [.tradeToScientific, .imageQuiz, .drugUse, .drugWarning, .counseling]
             resolvedMode = rotation[index % rotation.count]
         } else { resolvedMode = mode }
 
-        let prompt: String
-        let answer: String
-        let questionType: QuestionType
-        let candidates: [String]
-        let image: Data?
         switch resolvedMode {
         case .scientificToTrade:
-            prompt = "Choose a trade name for \(drug.scientificName)."; answer = drug.firstTradeName; questionType = .tradeName
-            candidates = all.flatMap(\.effectiveTradeNames); image = nil
+            return PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: "Name one brand of \(drug.scientificName).",
+                correctAnswer: drug.firstTradeName,
+                explanation: "A saved local brand for \(drug.scientificName) is \(drug.firstTradeName).",
+                questionType: .tradeName,
+                interaction: .textEntry,
+                difficulty: difficulty,
+                learningObjective: "Recall brand-to-ingredient identity",
+                sourceField: "products.tradeName",
+                acceptedAnswers: drug.effectiveTradeNames
+            )
         case .tradeToScientific:
-            prompt = "What is the scientific name for \(drug.firstTradeName)?"; answer = drug.scientificName; questionType = .scientificName
-            candidates = all.map(\.scientificName); image = nil
+            return PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: "What is the active ingredient in \(drug.firstTradeName)?",
+                correctAnswer: drug.scientificName,
+                explanation: "\(drug.firstTradeName) is saved under \(drug.scientificName).",
+                questionType: .scientificName,
+                interaction: .textEntry,
+                difficulty: difficulty,
+                learningObjective: "Recall ingredient from a shelf brand",
+                sourceField: "scientificName"
+            )
         case .classExamples:
-            prompt = "Which drug is an example of \(drug.drugClass.isEmpty ? "this recorded class" : drug.drugClass)?"; answer = drug.displayName; questionType = .drugClass
-            candidates = all.map(\.displayName); image = nil
+            return recallQuestion(
+                drug: drug,
+                prompt: "Recall one drug in the \(drug.drugClass) class.",
+                answer: drug.displayName,
+                type: .drugClass,
+                difficulty: difficulty,
+                objective: "Retrieve a class example without ambiguous options",
+                source: "drugClass"
+            )
         case .drugUse:
-            prompt = "What is a main use of \(drug.displayName)?"; answer = drug.indications.first ?? "Complete the indication with your pharmacist."; questionType = .use
-            candidates = all.compactMap(\.indications.first); image = nil
+            let answer = drug.indications.first(where: { !$0.trimmed.isEmpty }) ?? "No verified indication is saved yet."
+            let candidates = sameChapterCandidates(for: drug, in: all).compactMap { $0.indications.first }
+            let choices = multipleChoice(correct: answer, candidates: candidates, index: index)
+            return PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: "Which saved use belongs to \(drug.displayName)?",
+                correctAnswer: answer,
+                choices: choices,
+                explanation: answer,
+                questionType: .use,
+                interaction: choices.isEmpty ? .recall : .multipleChoice,
+                difficulty: difficulty,
+                learningObjective: "Connect the active drug to its main indication",
+                sourceField: "indications"
+            )
         case .drugWarning:
-            prompt = "What is an important warning for \(drug.displayName)?"; answer = drug.warnings.first ?? "Complete the warning with your pharmacist."; questionType = .warning
-            candidates = all.compactMap(\.warnings.first); image = nil
+            let answer = drug.warnings.first(where: { !$0.trimmed.isEmpty })
+                ?? drug.contraindications.first(where: { !$0.trimmed.isEmpty })
+                ?? "No verified warning is saved yet."
+            return recallQuestion(
+                drug: drug,
+                prompt: "Before supplying \(drug.displayName), what key warning must you recall?",
+                answer: answer,
+                type: .warning,
+                difficulty: difficulty,
+                objective: "Retrieve the drug-specific safety cue",
+                source: drug.warnings.isEmpty ? "contraindications" : "warnings"
+            )
         case .imageQuiz:
-            prompt = "Which drug package is shown?"; answer = drug.displayName; questionType = .scientificName
-            candidates = all.map(\.displayName); image = drug.packageImages.first
+            let choices = multipleChoice(
+                correct: drug.displayName,
+                candidates: sameChapterCandidates(for: drug, in: all).map(\.displayName),
+                index: index
+            )
+            return PracticeQuestion(
+                drugID: drug.id,
+                drugName: drug.displayName,
+                prompt: "Which active drug does this package belong to?",
+                correctAnswer: drug.displayName,
+                choices: choices,
+                explanation: "This package is attached to the \(drug.displayName) profile.",
+                questionType: .scientificName,
+                interaction: choices.isEmpty ? .textEntry : .multipleChoice,
+                imageData: drug.packageImages.first,
+                difficulty: difficulty,
+                learningObjective: "Recognize a shelf package and retrieve its active drug",
+                sourceField: "packageImages"
+            )
         case .counseling:
+            let prompt: String
+            let answer: String
             if let flashcard = drug.importedFlashcardPairs.first {
                 prompt = flashcard.question
                 answer = flashcard.answer
@@ -142,43 +213,36 @@ enum PracticeGenerator {
                 prompt = "Recall a patient counseling sentence for \(drug.displayName)."
                 answer = drug.counselingSentence.isEmpty ? "Draft and verify a counseling sentence with your pharmacist." : drug.counselingSentence
             }
-            questionType = .counseling; candidates = []; image = nil
-        case .smartSession, .weakDrug, .dueReview, .systemSpecific, .casePractice:
-            prompt = "Which fact belongs to \(drug.displayName)?"
-            answer = drug.indications.first ?? drug.drugClass
-            questionType = .use
-            candidates = all.compactMap(\.indications.first)
-            image = nil
-        }
-        if resolvedMode != .imageQuiz && (questionType == .scientificName || questionType == .tradeName) {
-            return PracticeQuestion(
-                drugID: drug.id,
-                drugName: drug.displayName,
+            return recallQuestion(
+                drug: drug,
                 prompt: prompt,
-                correctAnswer: answer,
-                explanation: answer,
-                questionType: questionType,
-                interaction: .textEntry,
-                imageData: image
+                answer: answer,
+                type: .counseling,
+                difficulty: difficulty,
+                objective: "Practice a concise patient-facing explanation",
+                source: "counseling"
+            )
+        case .smartSession, .weakDrug, .dueReview, .systemSpecific, .casePractice:
+            return recallQuestion(
+                drug: drug,
+                prompt: "What is the most important fact you would use to identify \(drug.displayName)?",
+                answer: drug.mustKnow.first ?? drug.indications.first ?? drug.drugClass,
+                type: .use,
+                difficulty: difficulty,
+                objective: "Retrieve a high-value identifying fact",
+                source: "mustKnow"
             )
         }
-        let choices = multipleChoice(correct: answer, candidates: candidates, index: index)
-        return PracticeQuestion(
-            drugID: drug.id,
-            drugName: drug.displayName,
-            prompt: choices.isEmpty ? "True or false: \(answer)" : prompt,
-            correctAnswer: choices.isEmpty ? "True" : answer,
-            choices: choices.isEmpty ? ["True", "False"] : choices,
-            explanation: answer,
-            questionType: questionType,
-            interaction: choices.isEmpty ? .trueFalse : .multipleChoice,
-            imageData: image
-        )
     }
 
     static func generatedReview(for drug: Drug) -> [PracticeQuestion] {
         Array(drug.generatedReviewQuestions.prefix(8)).map { item in
-            PracticeQuestion(
+            let difficulty: QuestionDifficulty = switch item.difficulty.lowercased() {
+            case "easy", "foundation": .foundation
+            case "hard", "challenge": .challenge
+            default: .application
+            }
+            return QuestionQualityValidator.sanitized(PracticeQuestion(
                 drugID: drug.id,
                 drugName: drug.displayName,
                 prompt: item.prompt,
@@ -187,20 +251,115 @@ enum PracticeGenerator {
                 explanation: item.explanation,
                 questionType: item.questionType,
                 interaction: item.interaction,
-                imageData: item.questionType == .scientificName ? drug.packageImages.first : nil
-            )
+                imageData: item.questionType == .scientificName ? drug.packageImages.first : nil,
+                difficulty: difficulty,
+                learningObjective: "Recall a generated question from this saved profile",
+                sourceField: item.relatedField
+            ))
         }
     }
 
     private static func multipleChoice(correct: String, candidates: [String], index: Int) -> [String] {
-        let unique = candidates.filter { !$0.trimmed.isEmpty && $0.localizedCaseInsensitiveCompare(correct) != .orderedSame }
+        let unique = candidates.filter {
+            !$0.trimmed.isEmpty
+                && $0.count <= QuestionQualityValidator.maximumChoiceLength
+                && $0.localizedCaseInsensitiveCompare(correct) != .orderedSame
+        }
             .reduce(into: [String]()) { values, item in
                 if !values.contains(where: { $0.localizedCaseInsensitiveCompare(item) == .orderedSame }) { values.append(item) }
             }
         guard unique.count >= 2, !correct.trimmed.isEmpty else { return [] }
-        var values = Array(unique.prefix(3))
+        var values = Array(unique.prefix(3)).map(\.trimmed)
         values.insert(correct, at: index % (values.count + 1))
-        return values
+        let provisional = PracticeQuestion(
+            drugID: nil,
+            drugName: "",
+            prompt: "Saved fact",
+            correctAnswer: correct,
+            choices: values,
+            questionType: .use,
+            interaction: .multipleChoice
+        )
+        return QuestionQualityValidator.isValid(provisional) ? values : []
+    }
+
+    private static func recallQuestion(
+        drug: Drug,
+        prompt: String,
+        answer: String,
+        type: QuestionType,
+        difficulty: QuestionDifficulty,
+        objective: String,
+        source: String
+    ) -> PracticeQuestion {
+        PracticeQuestion(
+            drugID: drug.id,
+            drugName: drug.displayName,
+            prompt: prompt,
+            correctAnswer: answer,
+            explanation: answer,
+            questionType: type,
+            interaction: .recall,
+            difficulty: difficulty,
+            learningObjective: objective,
+            sourceField: source
+        )
+    }
+
+    private static func sameChapterCandidates(for drug: Drug, in all: [Drug]) -> [Drug] {
+        let local = all.filter { $0.id != drug.id && $0.chapter == drug.chapter }
+        return local.count >= 2 ? local : all.filter { $0.id != drug.id }
+    }
+
+    private static func difficulty(for index: Int) -> QuestionDifficulty {
+        switch index {
+        case 0, 1: .foundation
+        case 2, 3: .application
+        default: .challenge
+        }
+    }
+}
+
+enum QuestionQualityValidator {
+    static let maximumChoiceLength = 64
+
+    static func isValid(_ question: PracticeQuestion) -> Bool {
+        guard !question.prompt.trimmed.isEmpty, question.prompt.count <= 180, !question.correctAnswer.trimmed.isEmpty else { return false }
+        if question.prompt.count >= 20,
+           let promptLanguage = NLLanguageRecognizer.dominantLanguage(for: question.prompt),
+           promptLanguage != .english {
+            return false
+        }
+        guard question.interaction == .multipleChoice else { return true }
+        guard (3...4).contains(question.choices.count) else { return false }
+        guard question.choices.allSatisfy({ !$0.trimmed.isEmpty && $0.count <= maximumChoiceLength && !$0.contains("\n") }) else { return false }
+
+        let normalized = question.choices.map(normalize)
+        guard Set(normalized).count == normalized.count else { return false }
+        guard normalized.filter({ $0 == normalize(question.correctAnswer) }).count == 1 else { return false }
+        return languagesAreCoherent(question.choices, expectedFrom: question.correctAnswer)
+    }
+
+    static func sanitized(_ question: PracticeQuestion) -> PracticeQuestion {
+        guard question.interaction == .multipleChoice, !isValid(question) else { return question }
+        var safe = question
+        safe.choices = []
+        safe.interaction = .recall
+        return safe
+    }
+
+    private static func normalize(_ value: String) -> String {
+        value.trimmed
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+    }
+
+    private static func languagesAreCoherent(_ values: [String], expectedFrom answer: String) -> Bool {
+        guard let expected = NLLanguageRecognizer.dominantLanguage(for: answer) else { return true }
+        return values.allSatisfy { value in
+            guard value.count >= 12, let detected = NLLanguageRecognizer.dominantLanguage(for: value) else { return true }
+            return detected == expected
+        }
     }
 }
 

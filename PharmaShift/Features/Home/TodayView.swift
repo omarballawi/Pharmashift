@@ -218,9 +218,9 @@ private struct RecentStudySection: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
                         ForEach(drugs) { drug in
-                            NavigationLink { DrugDetailView(drug: drug) } label: {
+                            NavigationLink(value: AppRoute.drug(drug.id)) {
                                 VStack(alignment: .leading, spacing: 9) {
-                                    ProductPhoto(data: drug.packageThumbnails.first, size: 92)
+                                    ProductPhoto(data: drug.packageThumbnails.first, size: 92, cacheKey: "drug-\(drug.id.uuidString)-recent")
                                     Text(drug.displayName).font(.headline).lineLimit(1)
                                     Text(drug.firstTradeName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }

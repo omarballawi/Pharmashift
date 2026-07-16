@@ -19,6 +19,11 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppRoute: Hashable {
+    case drug(UUID)
+    case drugTopic(UUID, DrugTopic)
+}
+
 enum AppSheet: Identifiable {
     case addHub
     case capture(Chapter?)
@@ -35,6 +40,10 @@ enum AppSheet: Identifiable {
 @Observable
 final class AppNavigation {
     var selection: AppTab = .today
+    var todayPath: [AppRoute] = []
+    var libraryPath: [AppRoute] = []
+    var practicePath: [AppRoute] = []
+    var youPath: [AppRoute] = []
     var presentedSheet: AppSheet?
     var captureChapter: Chapter?
     var libraryChapter: Chapter?
@@ -70,19 +79,27 @@ struct AppShell: View {
     var body: some View {
         @Bindable var bindableNavigation = navigation
         TabView(selection: $bindableNavigation.selection) {
-            NavigationStack { HomeView() }
+            NavigationStack(path: $bindableNavigation.todayPath) {
+                HomeView().withAppDestinations()
+            }
                 .tabItem { Label(AppTab.today.rawValue, systemImage: AppTab.today.icon) }
                 .tag(AppTab.today)
 
-            NavigationStack { LibraryView() }
+            NavigationStack(path: $bindableNavigation.libraryPath) {
+                LibraryView().withAppDestinations()
+            }
                 .tabItem { Label(AppTab.library.rawValue, systemImage: AppTab.library.icon) }
                 .tag(AppTab.library)
 
-            NavigationStack { PracticeView() }
+            NavigationStack(path: $bindableNavigation.practicePath) {
+                PracticeView().withAppDestinations()
+            }
                 .tabItem { Label(AppTab.practice.rawValue, systemImage: AppTab.practice.icon) }
                 .tag(AppTab.practice)
 
-            NavigationStack { YouView() }
+            NavigationStack(path: $bindableNavigation.youPath) {
+                YouView().withAppDestinations()
+            }
                 .tabItem { Label(AppTab.you.rawValue, systemImage: AppTab.you.icon) }
                 .tag(AppTab.you)
         }
@@ -100,6 +117,54 @@ struct AppShell: View {
         }
         .task {
             try? DrugLibraryMigrationService.runIfNeeded(context: context)
+        }
+    }
+}
+
+private extension View {
+    func withAppDestinations() -> some View {
+        navigationDestination(for: AppRoute.self) { route in
+            DrugRouteDestination(route: route)
+        }
+    }
+}
+
+private struct DrugRouteDestination: View {
+    @Environment(AppTheme.self) private var theme
+    @Query private var drugs: [Drug]
+    let route: AppRoute
+
+    init(route: AppRoute) {
+        self.route = route
+        let drugID: UUID = switch route {
+        case .drug(let id), .drugTopic(let id, _): id
+        }
+        _drugs = Query(filter: #Predicate<Drug> { $0.id == drugID })
+    }
+
+    private var drugID: UUID {
+        switch route {
+        case .drug(let id), .drugTopic(let id, _): id
+        }
+    }
+
+    var body: some View {
+        Group {
+            if let drug = drugs.first(where: { $0.id == drugID }) {
+                switch route {
+                case .drug:
+                    DrugDetailView(drug: drug)
+                case .drugTopic(_, let topic):
+                    DrugTopicView(drug: drug, topic: topic)
+                }
+            } else {
+                ContentUnavailableView(
+                    "Drug no longer available",
+                    systemImage: "pills",
+                    description: Text("This profile may have been deleted from the library.")
+                )
+                .background(theme.background)
+            }
         }
     }
 }
@@ -208,12 +273,21 @@ private struct YouView: View {
                     OrbitMark(progress: progress)
                         .frame(width: 72, height: 72)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Your learning space").font(.title3.weight(.semibold))
-                        Text(summary).font(.subheadline).foregroundStyle(.secondary)
+                        Text("Your learning rhythm")
+                            .font(.system(.title2, design: .serif, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(theme.inkSolid, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .accessibilityElement(children: .combine)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
             Section("Training") {
                 NavigationLink { ShiftView() } label: {
@@ -265,7 +339,7 @@ private struct CommandPaletteView: View {
                 Button { navigation.openLibrary() } label: { Label("Open Library", systemImage: "books.vertical.fill") }
             }
             Section(query.trimmed.isEmpty ? "Recent cards" : "Results") {
-                ForEach(results) { drug in NavigationLink { DrugDetailView(drug: drug) } label: { VStack(alignment: .leading) { Text(drug.displayName); Text([drug.firstTradeName, drug.drugClass].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) } } }
+                ForEach(results) { drug in NavigationLink(value: AppRoute.drug(drug.id)) { VStack(alignment: .leading) { Text(drug.displayName); Text([drug.firstTradeName, drug.drugClass].filter { !$0.trimmed.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary) } } }
                 if results.isEmpty { Text("No matching drug or note.").foregroundStyle(.secondary) }
             }
         }

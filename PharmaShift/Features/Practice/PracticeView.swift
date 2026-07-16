@@ -290,7 +290,7 @@ struct DailyRefreshView: View {
                 Text("Your Daily Refresh").font(.largeTitle.bold())
                 Text("A small feed of knowledge that deserves another look.").foregroundStyle(.secondary)
                 ForEach(refreshDrugs) { drug in
-                    NavigationLink { DrugDetailView(drug: drug) } label: {
+                    NavigationLink(value: AppRoute.drug(drug.id)) {
                         HStack(spacing: 12) {
                             DrugThumbnailView(drug: drug, size: 60)
                             VStack(alignment: .leading, spacing: 4) {
@@ -314,7 +314,7 @@ struct DailyRefreshView: View {
                     .padding(15).background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                 }
                 if let drug = drugs.first(where: { !$0.atomicNotes.isEmpty }), let note = drug.atomicNotes.first {
-                    NavigationLink { DrugDetailView(drug: drug) } label: {
+                    NavigationLink(value: AppRoute.drug(drug.id)) {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("From your \(note.kind.rawValue.lowercased())", systemImage: "link.circle.fill").font(.headline).foregroundStyle(.tint)
                             Text(note.text).foregroundStyle(.primary)
@@ -417,8 +417,10 @@ struct PracticeSessionView: View {
                 if let result { completion(result) }
                 else if let question {
                     progress
-                    if let data = question.imageData { DrugPhotoView(data: data, height: 210) }
-                    Text(question.prompt).font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading)
+                    if let data = question.imageData {
+                        DrugPhotoView(data: data, height: 210, cacheKey: "question-\(question.id.uuidString)")
+                    }
+                    PracticeQuestionHeader(question: question)
                     switch question.interaction {
                     case .multipleChoice, .trueFalse:
                         multipleChoice(question)
@@ -427,11 +429,14 @@ struct PracticeSessionView: View {
                     case .recall:
                         recall(question)
                     }
+                    Spacer(minLength: 10)
                 } else {
                     EmptyStateView(icon: "tray", title: "No eligible questions", message: mode == .imageQuiz ? "Add package photos before starting Image Quiz." : "Add more complete Drug Cards for this mode.")
                 }
             }
-            .padding()
+            .padding(.horizontal, RenlystLayout.pageInset)
+            .padding(.vertical, 16)
+            .animation(reduceMotion ? nil : RenlystMotion.state, value: index)
         }
         .background(theme.background)
         .navigationTitle(customTitle ?? mode.rawValue)
@@ -442,31 +447,40 @@ struct PracticeSessionView: View {
     }
 
     private var progress: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("Question \(index + 1) of \(max(questions.count, 1))").font(.caption.weight(.semibold))
+                Text("Question \(index + 1) of \(max(questions.count, 1))")
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("\(Int(Double(index) / Double(max(questions.count, 1)) * 100))%")
-                    .font(.caption.monospacedDigit())
+                Text("\(Int(Double(index + 1) / Double(max(questions.count, 1)) * 100))%")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            ProgressView(value: Double(index), total: Double(max(questions.count, 1))).tint(.accentColor)
+            HStack(spacing: 6) {
+                ForEach(questions.indices, id: \.self) { step in
+                    Capsule()
+                        .fill(step <= index ? theme.coral : theme.separator.opacity(0.28))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 6)
+                        .animation(reduceMotion ? nil : RenlystMotion.state, value: index)
+                }
+            }
         }
         .accessibilityIdentifier("practice.progress")
     }
 
     private func multipleChoice(_ question: PracticeQuestion) -> some View {
         VStack(spacing: 10) {
-            ForEach(question.choices, id: \.self) { choice in
+            ForEach(Array(question.choices.enumerated()), id: \.element) { optionIndex, choice in
                 Button { submitChoice(choice, question: question) } label: {
-                    HStack {
-                        Text(choice).multilineTextAlignment(.leading)
-                        Spacer()
-                        if hasAnswered, choice == question.correctAnswer { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
-                        else if hasAnswered, choice == selectedChoice { Image(systemName: "xmark.circle.fill").foregroundStyle(.red) }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    PracticeChoiceRow(
+                        index: optionIndex,
+                        text: choice,
+                        state: choiceState(choice, question: question)
+                    )
                 }
-                .buttonStyle(.bordered).disabled(hasAnswered)
+                .buttonStyle(RenlystTileButtonStyle())
+                .disabled(hasAnswered)
             }
             if hasAnswered {
                 feedback(question)
@@ -535,8 +549,9 @@ struct PracticeSessionView: View {
             Text(question.correctAnswer)
             if let explanation = question.explanation, explanation != question.correctAnswer { Text(explanation).font(.caption).foregroundStyle(.secondary) }
         }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background((isCorrect ? Color.green : Color.orange).opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+        .padding(15).frame(maxWidth: .infinity, alignment: .leading)
+        .background((isCorrect ? Color.green : Color.orange).opacity(0.10), in: RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous))
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 
     @ViewBuilder private func memoryGradeControls(_ question: PracticeQuestion) -> some View {
@@ -613,6 +628,13 @@ struct PracticeSessionView: View {
         record(rating: rating, response: choice, question: question)
     }
 
+    private func choiceState(_ choice: String, question: PracticeQuestion) -> PracticeChoiceState {
+        guard hasAnswered else { return .idle }
+        if choice.localizedCaseInsensitiveCompare(question.correctAnswer) == .orderedSame { return .correct }
+        if choice == selectedChoice { return .incorrect }
+        return .dimmed
+    }
+
     private func submitRecall(_ rating: ReviewRating, question: PracticeQuestion) {
         guard !hasAnswered else { return }
         record(rating: rating, response: rating.rawValue, question: question)
@@ -621,9 +643,7 @@ struct PracticeSessionView: View {
     private func submitText(_ question: PracticeQuestion) {
         guard !hasAnswered else { return }
         let response = normalizedName(typedResponse)
-        let accepted = [question.correctAnswer]
-            .flatMap { $0.components(separatedBy: ",") }
-            .map { normalizedName($0) }
+        let accepted = (question.acceptedAnswers ?? [question.correctAnswer]).map { normalizedName($0) }
         let rating: ReviewRating = accepted.contains(response) ? .correct : .wrong
         record(rating: rating, response: typedResponse.trimmed, question: question)
     }
@@ -653,11 +673,13 @@ struct PracticeSessionView: View {
         guard hasAnswered else { return }
         if index + 1 >= questions.count {
             let value = PracticeSessionResult(modeRaw: customTitle ?? mode.rawValue, answers: answers)
-            result = value
+            withAnimation(reduceMotion ? nil : RenlystMotion.celebration) { result = value }
             _ = try? LearningProgressService.record(result: value, context: context)
-            if !reduceMotion { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         } else {
-            index += 1; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; memoryGrade = nil
+            withAnimation(reduceMotion ? nil : RenlystMotion.state) {
+                index += 1; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; memoryGrade = nil
+            }
         }
     }
 
@@ -677,5 +699,115 @@ struct PracticeSessionView: View {
         } else {
             questions = providedQuestions ?? PracticeGenerator.generate(mode: mode, drugs: initialDrug.map { [$0] } ?? allDrugs, chapter: chapter)
         }
+    }
+}
+
+private struct PracticeQuestionHeader: View {
+    @Environment(AppTheme.self) private var theme
+    let question: PracticeQuestion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text((question.difficulty ?? .foundation).rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(difficultyColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(difficultyColor.opacity(0.12), in: Capsule())
+                Text(question.questionType.rawValue)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(question.prompt)
+                .font(.title2.weight(.bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if let objective = question.learningObjective, !objective.trimmed.isEmpty {
+                Label(objective, systemImage: "scope")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var difficultyColor: Color {
+        switch question.difficulty ?? .foundation {
+        case .foundation: theme.aqua
+        case .application: theme.saffron
+        case .challenge: theme.coral
+        }
+    }
+}
+
+private enum PracticeChoiceState {
+    case idle
+    case correct
+    case incorrect
+    case dimmed
+}
+
+private struct PracticeChoiceRow: View {
+    @Environment(AppTheme.self) private var theme
+    let index: Int
+    let text: String
+    let state: PracticeChoiceState
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(String(UnicodeScalar(65 + index)!))
+                .font(.subheadline.monospaced().weight(.bold))
+                .frame(width: 32, height: 32)
+                .foregroundStyle(letterForeground)
+                .background(letterBackground, in: Circle())
+            Text(text)
+                .font(.body.weight(.medium))
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+            Spacer(minLength: 8)
+            if state == .correct {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            } else if state == .incorrect {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 5)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous)
+                .stroke(rowBorder, lineWidth: state == .idle || state == .dimmed ? 0.5 : 1.5)
+        }
+        .opacity(state == .dimmed ? 0.58 : 1)
+    }
+
+    private var rowBackground: Color {
+        switch state {
+        case .correct: Color.green.opacity(0.10)
+        case .incorrect: Color.red.opacity(0.08)
+        case .idle, .dimmed: theme.surface
+        }
+    }
+
+    private var rowBorder: Color {
+        switch state {
+        case .correct: .green
+        case .incorrect: .red
+        case .idle, .dimmed: theme.separator.opacity(0.45)
+        }
+    }
+
+    private var letterBackground: Color {
+        switch state {
+        case .correct: .green
+        case .incorrect: .red
+        case .idle, .dimmed: theme.softAqua
+        }
+    }
+
+    private var letterForeground: Color {
+        state == .idle || state == .dimmed ? theme.aqua : .white
     }
 }

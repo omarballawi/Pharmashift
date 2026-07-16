@@ -43,11 +43,14 @@ struct LibraryView: View {
                     brandCount: drugs.reduce(0) { $0 + $1.products.count },
                     dueCount: drugs.filter { $0.nextReviewDate <= .now }.count
                 )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
             Section(filteredDrugs.isEmpty ? "" : resultTitle) {
                 ForEach(filteredDrugs) { drug in
-                    NavigationLink { DrugDetailView(drug: drug) } label: {
+                    NavigationLink(value: AppRoute.drug(drug.id)) {
                         LibraryDrugRow(drug: drug)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -155,28 +158,46 @@ private struct LibrarySummaryRow: View {
     let dueCount: Int
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                summary(value: profileCount, label: "Drugs")
-                Divider().frame(height: 34)
-                summary(value: brandCount, label: "Brands")
-                Divider().frame(height: 34)
-                summary(value: dueCount, label: "Due")
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 17) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your knowledge shelf")
+                        .font(.system(.title2, design: .serif, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("One clinical profile, every local brand attached")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 0) {
+                        summary(value: profileCount, label: "Active drugs")
+                        Divider().frame(height: 36).overlay(.white.opacity(0.18))
+                        summary(value: brandCount, label: "Brands")
+                        Divider().frame(height: 36).overlay(.white.opacity(0.18))
+                        summary(value: dueCount, label: "Due")
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        summary(value: profileCount, label: "Active drugs")
+                        summary(value: brandCount, label: "Brands")
+                        summary(value: dueCount, label: "Due")
+                    }
+                }
             }
-            VStack(spacing: 10) {
-                summary(value: profileCount, label: "Drugs")
-                summary(value: brandCount, label: "Brands")
-                summary(value: dueCount, label: "Due")
-            }
+            .padding(18)
+            OrbitMark(progress: min(1, Double(profileCount) / 24))
+                .frame(width: 78, height: 78)
+                .opacity(0.22)
+                .padding(10)
+                .allowsHitTesting(false)
         }
-        .padding(.vertical, 7)
+        .background(theme.inkSolid, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
     private func summary(value: Int, label: String) -> some View {
         VStack(spacing: 2) {
-            Text(value.formatted()).font(.headline.monospacedDigit()).foregroundStyle(theme.ink)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value.formatted()).font(.title3.monospacedDigit().weight(.bold)).foregroundStyle(.white)
+            Text(label).font(.caption).foregroundStyle(.white.opacity(0.66))
         }
         .frame(maxWidth: .infinity)
     }
@@ -188,7 +209,7 @@ private struct LibraryDrugRow: View {
 
     var body: some View {
         HStack(spacing: 13) {
-            ProductPhoto(data: drug.packageThumbnails.first, size: 58)
+            ProductPhoto(data: drug.packageThumbnails.first, size: 58, cacheKey: "drug-\(drug.id.uuidString)-library")
             VStack(alignment: .leading, spacing: 4) {
                 Text(drug.displayName).font(.headline).lineLimit(1)
                 Text(drug.effectiveTradeNames.prefix(2).joined(separator: " · "))
@@ -230,7 +251,7 @@ struct DrugDeletionSheet: View {
             Form {
                 Section {
                     HStack(spacing: 13) {
-                        ProductPhoto(data: drug.packageThumbnails.first, size: 60)
+                        ProductPhoto(data: drug.packageThumbnails.first, size: 60, cacheKey: "drug-\(drug.id.uuidString)-delete")
                         VStack(alignment: .leading, spacing: 3) {
                             Text(drug.displayName).font(.headline)
                             Text("Delete this entire active-drug profile").font(.subheadline).foregroundStyle(.secondary)
@@ -365,9 +386,9 @@ private struct LibraryKnowledgeMapView: View {
                 if !chapterDrugs.isEmpty {
                     Section {
                         ForEach(chapterDrugs.sorted { $0.displayName < $1.displayName }) { drug in
-                            NavigationLink { DrugDetailView(drug: drug) } label: {
+                            NavigationLink(value: AppRoute.drug(drug.id)) {
                                 HStack {
-                                    ProductPhoto(data: drug.packageThumbnails.first, size: 42)
+                                    ProductPhoto(data: drug.packageThumbnails.first, size: 42, cacheKey: "drug-\(drug.id.uuidString)-map")
                                     Text(drug.displayName)
                                     Spacer()
                                     Text("\(drug.masteryCount)/6").font(.caption.monospacedDigit()).foregroundStyle(.secondary)

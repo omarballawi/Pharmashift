@@ -19,6 +19,66 @@ final class PracticeEngineTests: XCTestCase {
         XCTAssertTrue(questions.allSatisfy { $0.interaction == .textEntry && $0.choices.isEmpty })
     }
 
+    func testSmartFiveRampsDifficultyAndNeverCreatesTautologicalTrueFalse() {
+        let questions = PracticeGenerator.generate(mode: .smartSession, drugs: sampleDrugs())
+        XCTAssertEqual(questions.map(\.difficulty), [.foundation, .foundation, .application, .application, .challenge])
+        XCTAssertFalse(questions.contains { $0.interaction == .trueFalse })
+        XCTAssertTrue(questions.allSatisfy { !$0.prompt.lowercased().hasPrefix("true or false") })
+    }
+
+    func testClassAndWarningQuestionsUseActiveRecallInsteadOfAmbiguousDistractors() {
+        let drugs = sampleDrugs()
+        XCTAssertTrue(PracticeGenerator.generate(mode: .classExamples, drugs: drugs).allSatisfy { $0.interaction == .recall && $0.choices.isEmpty })
+        XCTAssertTrue(PracticeGenerator.generate(mode: .drugWarning, drugs: drugs).allSatisfy { $0.interaction == .recall && $0.choices.isEmpty })
+    }
+
+    func testEveryMultipleChoiceQuestionIsShortUniqueAndHasOneCorrectAnswer() {
+        let questions = PracticeMode.allCases.flatMap { mode in
+            PracticeGenerator.generate(mode: mode, drugs: sampleDrugs(), chapter: mode == .systemSpecific ? .cardiovascular : nil)
+        }
+        for question in questions where question.interaction == .multipleChoice {
+            XCTAssertTrue(QuestionQualityValidator.isValid(question), question.prompt)
+            XCTAssertTrue(question.choices.allSatisfy { $0.count <= QuestionQualityValidator.maximumChoiceLength })
+            XCTAssertEqual(question.choices.filter { $0.localizedCaseInsensitiveCompare(question.correctAnswer) == .orderedSame }.count, 1)
+        }
+    }
+
+    func testValidatorRejectsDuplicateAndOverlongOptions() {
+        let duplicate = PracticeQuestion(
+            drugID: nil,
+            drugName: "Test",
+            prompt: "Which saved use belongs to Test?",
+            correctAnswer: "Hypertension",
+            choices: ["Hypertension", "hypertension", "Angina"],
+            questionType: .use,
+            interaction: .multipleChoice
+        )
+        XCTAssertFalse(QuestionQualityValidator.isValid(duplicate))
+
+        var long = duplicate
+        long.choices = ["Hypertension", String(repeating: "a", count: 65), "Angina"]
+        XCTAssertFalse(QuestionQualityValidator.isValid(long))
+    }
+
+    func testPracticeQuestionDecodesOlderSavedPackWithoutNewMetadata() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","drugID":null,"drugName":"Test","prompt":"Recall the use","correctAnswer":"Answer","choices":[],"explanation":null,"questionType":"Use","interaction":"recall","imageData":null,"caseID":null}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(PracticeQuestion.self, from: json)
+        XCTAssertNil(decoded.difficulty)
+        XCTAssertNil(decoded.learningObjective)
+        XCTAssertNil(decoded.sourceField)
+        XCTAssertNil(decoded.acceptedAnswers)
+    }
+
+    func testMemoryAnchorsAlwaysReturnThreeHonestSlots() {
+        let drug = Drug(scientificName: "Test", indications: ["Use"], warnings: ["Warning"])
+        let anchors = drug.memoryAnchors
+        XCTAssertEqual(anchors.count, 3)
+        XCTAssertEqual(anchors.compactMap(\.content), ["Use", "Warning"])
+        XCTAssertNil(anchors.last?.content)
+    }
+
     func testSystemPracticeUsesOnlyRequestedChapter() {
         let drugs = sampleDrugs()
         let allowed = Set(drugs.filter { $0.chapter == .cardiovascular }.map(\.id))

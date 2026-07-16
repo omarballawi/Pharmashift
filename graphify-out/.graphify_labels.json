@@ -75,7 +75,16 @@
   "73": ".matches",
   "74": "AIPracticePayload",
   "75": "SafetyFlag",
+  "76": "DrugSearchResult",
+  "77": "DrugDetailSheet",
   "78": "DrugEditorSection",
+  "79": "DrugEvidenceQuality",
   "80": "VerificationStatus",
-  "83": "String"
+  "81": ".isValid",
+  "82": "LibraryCompareView",
+  "83": "String",
+  "84": "DrugRelationshipKind",
+  "85": "DurationBand",
+  "86": "MemoryReviewGrade",
+  "87": "DrugDetailView.swift"
 }

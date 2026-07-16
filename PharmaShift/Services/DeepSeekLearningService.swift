@@ -65,7 +65,7 @@ actor DeepSeekPracticeService {
             "id=\(drug.id.uuidString); name=\(drug.displayName); trade=\(drug.effectiveTradeNames.joined(separator: ",")); class=\(drug.drugClass); use=\(drug.indications.prefix(2).joined(separator: " | ")); warning=\(drug.warnings.prefix(2).joined(separator: " | ")); counsel=\(drug.counselingSentence); cards=\(drug.flashcards.prefix(2).joined(separator: " | "))"
         }.joined(separator: "\n")
         let prompt = """
-        Return JSON only. Create exactly five short, ADHD-friendly pharmacy learning questions using only these local drug facts. Focus on weak/due drugs. Scientific name and Trade name questions require typed spelling and must have no choices. Every other question must be either four-option MCQ or True/False. Each question must reference sourceDrugID, have a short prompt, exact answer, choices when required, a one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent clinical facts, patient advice, doses, or cases.
+        Return JSON only. Create exactly five concise active-recall pharmacy questions using only these local drug facts. Focus on weak/due drugs and ramp from foundation to application to challenge. Scientific name and Trade name questions require typed spelling and no choices. Use recall for class, warning, and counseling. A multiple-choice item must have 3 or 4 unique options under 64 characters, exactly one correct answer, and one language only. Each question must reference sourceDrugID, have a short English prompt, exact grounded answer, one-sentence explanation, and questionType from Scientific name, Trade name, Class, Use, Warning, Counseling. Do not invent facts, doses, cases, or patient advice.
         {"questions":[{"sourceDrugID":"UUID","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
         Library:\n\(snapshots)
         """
@@ -75,25 +75,41 @@ actor DeepSeekPracticeService {
             do {
                 let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_100)
                 let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
-                questions = payload.questions.compactMap { item -> PracticeQuestion? in
-                    guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { return nil }
+                questions = payload.questions.enumerated().compactMap { index, item -> PracticeQuestion? in
+                    guard let drug = byID[item.sourceDrugID], !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty,
+                          answerIsGrounded(item.answer, in: drug) else { return nil }
                     let questionType = QuestionType(rawValue: item.questionType) ?? .use
-                    var choices = Array(Set((item.choices ?? [String]()).filter { !$0.trimmed.isEmpty })).sorted()
+                    var choices = unique(item.choices ?? [])
                     let interaction: PracticeInteraction
-                    var prompt = item.prompt.trimmed
-                    var answer = item.answer.trimmed
                     if questionType == .scientificName || questionType == .tradeName {
                         choices = []
                         interaction = .textEntry
-                    } else if choices.count >= 2 && choices.contains(where: { $0.localizedCaseInsensitiveCompare(answer) == .orderedSame }) {
-                        interaction = Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) ? .trueFalse : .multipleChoice
+                    } else if questionType == .use, choices.count >= 3 {
+                        interaction = .multipleChoice
                     } else {
-                        prompt = "True or false: \(answer)"
-                        answer = "True"
-                        choices = ["True", "False"]
-                        interaction = .trueFalse
+                        choices = []
+                        interaction = .recall
                     }
-                    return PracticeQuestion(drugID: drug.id, drugName: drug.displayName, prompt: prompt, correctAnswer: answer, choices: choices, explanation: item.explanation?.trimmed, questionType: questionType, interaction: interaction)
+                    let difficulty: QuestionDifficulty = switch index {
+                    case 0, 1: .foundation
+                    case 2, 3: .application
+                    default: .challenge
+                    }
+                    let question = PracticeQuestion(
+                        drugID: drug.id,
+                        drugName: drug.displayName,
+                        prompt: item.prompt.trimmed,
+                        correctAnswer: item.answer.trimmed,
+                        choices: choices,
+                        explanation: item.explanation?.trimmed,
+                        questionType: questionType,
+                        interaction: interaction,
+                        difficulty: difficulty,
+                        learningObjective: "Recall a grounded fact from this saved profile",
+                        sourceField: questionType.rawValue
+                    )
+                    guard QuestionQualityValidator.isValid(question) else { return nil }
+                    return question
                 }
             } catch {
                 allowsAIRequests = false
@@ -102,7 +118,7 @@ actor DeepSeekPracticeService {
         let local = PracticeGenerator.generate(mode: .smartSession, drugs: Array(candidates))
         appendUnique(local, to: &questions, limit: 5)
         guard !questions.isEmpty else { throw DrugImportError.invalidAIJSON }
-        while questions.count < 5 { questions.append(questions[0]) }
+        guard questions.count >= 5 else { throw DrugImportError.invalidAIJSON }
         questions = Array(questions.prefix(5))
         let fingerprint = candidates.map { "\($0.id.uuidString):\($0.dateAdded.timeIntervalSince1970)" }.joined(separator: "|")
         return AIPracticePack(generatedAt: .now, libraryFingerprint: fingerprint, questions: questions)
@@ -111,7 +127,7 @@ actor DeepSeekPracticeService {
     func makeQuestionSet(for drug: Drug) async throws -> [GeneratedReviewQuestion] {
         let snapshot = "name=\(drug.displayName); trade=\(drug.effectiveTradeNames.joined(separator: ",")); class=\(drug.drugClass); uses=\(drug.indications.joined(separator: " | ")); mechanism=\(drug.mechanism); dose=\(drug.doseRegimens.map { "\($0.indication):\($0.formula.rawValue)" }.joined(separator: " | ")); PK=\(drug.halfLifeText),\(drug.prodrugInfo.explanation),\(drug.eliminationInfo.summary); warnings=\(drug.warnings.joined(separator: " | ")); interactions=\(drug.interactions.joined(separator: " | ")); counseling=\(drug.counselingSentence)"
         let prompt = """
-        Return JSON only. Create exactly 8 concise pharmacy learning questions using only the supplied card. Cover identity, class/mechanism, use, standard dose concepts when present, PK, safety/interactions, and counseling. Scientific name and Trade name require typed spelling and no choices. Every other item must be True/False or four-option MCQ with one exact answer and plausible distractors. Do not invent missing facts.
+        Return JSON only. Create exactly 8 concise active-recall pharmacy questions using only the supplied card. Cover identity, class/mechanism, use, standard dose concepts when present, PK, safety/interactions, and counseling. Scientific name and Trade name require typed spelling and no choices. Use recall for class, warnings, interactions, and counseling. A multiple-choice use item must have 3 or 4 unique options under 64 characters with exactly one correct answer. Prompts must be short English. Do not invent missing facts.
         {"questions":[{"sourceDrugID":"\(drug.id.uuidString)","prompt":"","answer":"","choices":[""],"explanation":"","questionType":"Use"}]}
         Card: \(snapshot)
         """
@@ -120,23 +136,32 @@ actor DeepSeekPracticeService {
             do {
                 let data = try await DeepSeekJSONClient.complete(prompt: prompt, maxTokens: 1_800)
                 let payload = try JSONDecoder().decode(AIPracticePayload.self, from: data)
-                questions = payload.questions.compactMap { item -> GeneratedReviewQuestion? in
-                    guard !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty else { return nil }
+                questions = payload.questions.enumerated().compactMap { index, item -> GeneratedReviewQuestion? in
+                    guard !item.prompt.trimmed.isEmpty, !item.answer.trimmed.isEmpty,
+                          answerIsGrounded(item.answer, in: drug) else { return nil }
                     let type = QuestionType(rawValue: item.questionType) ?? .use
                     var choices = unique(item.choices ?? [])
                     let interaction: PracticeInteraction
                     if type == .scientificName || type == .tradeName { choices = []; interaction = .textEntry }
-                    else if Set(choices.map { $0.lowercased() }) == Set(["true", "false"]) { interaction = .trueFalse }
-                    else if choices.count >= 2, choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) {
+                    else if type == .use, choices.count >= 3, choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) {
                         choices = Array(choices.prefix(4))
                         interaction = .multipleChoice
                     } else {
-                        choices = ["True", "False"]
-                        interaction = .trueFalse
+                        choices = []
+                        interaction = .recall
                     }
-                    let answer = interaction == .trueFalse && !choices.contains(where: { $0.localizedCaseInsensitiveCompare(item.answer) == .orderedSame }) ? "True" : item.answer.trimmed
-                    let prompt = answer == "True" && !item.prompt.lowercased().contains("true or false") ? "True or false: \(item.answer.trimmed)" : item.prompt.trimmed
-                    return GeneratedReviewQuestion(prompt: prompt, choices: choices, correctAnswer: answer, explanation: item.explanation?.trimmed ?? item.answer.trimmed, questionType: type, interaction: interaction, relatedField: type.rawValue, difficulty: "medium")
+                    let practice = PracticeQuestion(
+                        drugID: drug.id,
+                        drugName: drug.displayName,
+                        prompt: item.prompt.trimmed,
+                        correctAnswer: item.answer.trimmed,
+                        choices: choices,
+                        explanation: item.explanation?.trimmed,
+                        questionType: type,
+                        interaction: interaction
+                    )
+                    guard QuestionQualityValidator.isValid(practice) else { return nil }
+                    return GeneratedReviewQuestion(prompt: practice.prompt, choices: practice.choices, correctAnswer: practice.correctAnswer, explanation: item.explanation?.trimmed ?? item.answer.trimmed, questionType: type, interaction: interaction, relatedField: type.rawValue, difficulty: index < 3 ? "foundation" : (index < 6 ? "application" : "challenge"))
                 }
             } catch {
                 allowsAIRequests = false
@@ -145,12 +170,6 @@ actor DeepSeekPracticeService {
         let fallback = fallbackQuestionSet(for: drug)
         for item in fallback where questions.count < 8 && !questions.contains(where: { $0.prompt.localizedCaseInsensitiveCompare(item.prompt) == .orderedSame }) {
             questions.append(item)
-        }
-        while questions.count < 8, let item = fallback.first ?? questions.first {
-            var copy = item
-            copy.id = UUID()
-            copy.prompt = "Review: " + copy.prompt
-            questions.append(copy)
         }
         guard !questions.isEmpty else { throw DrugImportError.invalidAIJSON }
         return Array(questions.prefix(8))
@@ -183,6 +202,25 @@ actor DeepSeekPracticeService {
         values.map(\.trimmed).filter { !$0.isEmpty }.reduce(into: []) { result, value in
             if !result.contains(where: { $0.localizedCaseInsensitiveCompare(value) == .orderedSame }) { result.append(value) }
         }
+    }
+
+    private func answerIsGrounded(_ answer: String, in drug: Drug) -> Bool {
+        let normalized = answer.trimmed
+        guard !normalized.isEmpty else { return false }
+        let corpus = [
+            drug.scientificName,
+            drug.displayName,
+            drug.effectiveTradeNames.joined(separator: " | "),
+            drug.drugClass,
+            drug.indications.joined(separator: " | "),
+            drug.mechanism,
+            drug.warnings.joined(separator: " | "),
+            drug.contraindications.joined(separator: " | "),
+            drug.interactions.joined(separator: " | "),
+            drug.counselingSentence,
+            drug.flashcards.joined(separator: " | ")
+        ].joined(separator: " | ")
+        return corpus.localizedCaseInsensitiveContains(normalized)
     }
 }
 

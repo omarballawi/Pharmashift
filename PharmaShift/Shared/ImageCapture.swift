@@ -438,10 +438,16 @@ private struct CropGrid: Shape {
 struct DrugPhotoView: View {
     let data: Data?
     var height: CGFloat = 180
+    var cacheKey: String?
+    @State private var image: UIImage?
+
+    private var requestID: String {
+        ProductImagePipeline.requestID(data: data, cacheKey: cacheKey, maxDimension: height * 4 / 3)
+    }
 
     var body: some View {
-        Group {
-            if let data, let image = UIImage(data: data) {
+        ZStack {
+            if let image {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 ZStack {
@@ -456,6 +462,13 @@ struct DrugPhotoView: View {
         }
         .frame(maxWidth: .infinity).frame(height: height).clipped()
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .task(id: requestID) {
+            image = await ProductImagePipeline.shared.image(
+                from: data,
+                cacheKey: cacheKey,
+                maxDimension: height * 4 / 3
+            )
+        }
     }
 }
 
@@ -500,17 +513,10 @@ struct DrugThumbnailView: View {
     var size: CGFloat = 64
 
     var body: some View {
-        Group {
-            if let data = drug.thumbnailData ?? drug.imageData, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    LinearGradient(colors: [.teal.opacity(0.18), .blue.opacity(0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: drug.chapter.icon).foregroundStyle(.teal)
-                }
-            }
-        }
-        .frame(width: size, height: size).clipped()
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+        ProductPhoto(
+            data: drug.thumbnailData ?? drug.imageData,
+            size: size,
+            cacheKey: "drug-\(drug.id.uuidString)-thumbnail"
+        )
     }
 }

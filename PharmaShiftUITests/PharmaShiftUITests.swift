@@ -59,6 +59,23 @@ final class PharmaShiftUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Safety"].waitForExistence(timeout: 5))
     }
 
+    func testEveryDrugTopicPushesOnceAndOneBackReturnsToOverview() {
+        let app = XCUIApplication()
+        app.launch()
+        addDrug(named: "Navigation Test Drug", in: app)
+
+        let topics = ["Brands & packages", "Uses", "Forms & dosing", "Safety", "Pharmacology", "Counseling & Arabic", "Sources, notes & mastery"]
+        for topic in topics {
+            let link = app.buttons[topic]
+            scrollToHittable(link, in: app, maximumSwipes: 10)
+            XCTAssertTrue(link.waitForExistence(timeout: 5), topic)
+            link.tap()
+            XCTAssertTrue(app.navigationBars[topic].waitForExistence(timeout: 5), topic)
+            app.navigationBars[topic].buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.navigationBars["Navigation Test Drug"].waitForExistence(timeout: 5), topic)
+        }
+    }
+
     func testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep() {
         let app = XCUIApplication()
         app.launchArguments.append("-mockDrugImport")

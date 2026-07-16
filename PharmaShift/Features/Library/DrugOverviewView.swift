@@ -73,7 +73,7 @@ struct DrugDetailView: View {
                 DrugDeletionSheet(drug: drug) { dismiss() }
             }
         }
-        .task(perform: markSeen)
+        .task { await markSeen() }
         .accessibilityIdentifier("drug.overview")
     }
 
@@ -191,7 +191,7 @@ private struct MemoryAnchorRow: View {
         HStack(alignment: .top, spacing: 13) {
             Text(number.formatted())
                 .font(.subheadline.monospacedDigit().weight(.bold))
-                .foregroundStyle(anchor.content == nil ? .secondary : .white)
+                .foregroundStyle(anchor.content == nil ? Color(uiColor: .secondaryLabel) : Color.white)
                 .frame(width: 34, height: 34)
                 .background(anchor.content == nil ? theme.separator.opacity(0.18) : anchorColor, in: Circle())
             VStack(alignment: .leading, spacing: 4) {

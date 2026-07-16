@@ -10,7 +10,7 @@ on:
       - Renlyst.ipa
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: unsigned-ipa-${{ github.workflow }}-${{ github.ref }}
@@ -151,3 +151,18 @@ jobs:
           path: Renlyst.ipa
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish Renlyst 2.1 release
+        if: github.ref == 'refs/heads/codex/renlyst-2-rebuild'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v2.1.0 >/dev/null 2>&1; then
+            gh release upload v2.1.0 Renlyst.ipa --clobber
+          else
+            gh release create v2.1.0 Renlyst.ipa \
+              --target "$GITHUB_SHA" \
+              --title "Renlyst 2.1" \
+              --notes "Navigation and performance rebuild, three memory anchors, verified active-recall questions, manual brand and profile deletion workflows, cohesive native UI, and purposeful motion. The IPA is unsigned for sideloading."
+          fi

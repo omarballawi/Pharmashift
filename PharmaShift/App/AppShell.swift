@@ -45,13 +45,11 @@ final class AppNavigation {
     var practicePath: [AppRoute] = []
     var youPath: [AppRoute] = []
     var presentedSheet: AppSheet?
-    var captureChapter: Chapter?
     var libraryChapter: Chapter?
     var reviewChapter: Chapter?
     var requestedPracticeMode: PracticeMode?
 
     func openCapture(chapter: Chapter? = nil) {
-        captureChapter = chapter
         presentedSheet = .capture(chapter)
     }
 
@@ -110,8 +108,8 @@ struct AppShell: View {
             case .addHub:
                 NavigationStack { AddHubView() }
                     .presentationDetents([.large])
-            case .capture:
-                NavigationStack { CaptureView() }
+            case .capture(let chapter):
+                NavigationStack { CaptureView(initialChapter: chapter) }
                     .presentationDetents([.large])
             }
         }

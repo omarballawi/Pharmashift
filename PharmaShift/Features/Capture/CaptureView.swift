@@ -9,7 +9,6 @@ struct CaptureView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(AppTheme.self) private var theme
-    @Environment(AppNavigation.self) private var navigation
     @State private var scientificName = ""
     @State private var tradeName = ""
     @State private var strength = ""
@@ -31,6 +30,10 @@ struct CaptureView: View {
     @State private var savedDrug: Drug?
     @State private var opensSavedDrug = false
     @FocusState private var focus: FocusField?
+
+    init(initialChapter: Chapter? = nil) {
+        _chapter = State(initialValue: initialChapter ?? .other)
+    }
 
     private var canSave: Bool {
         if isUnknown { return !unknownLabel.trimmed.isEmpty || imageData != nil || !additionalImageData.isEmpty || !tradeName.trimmed.isEmpty }
@@ -153,17 +156,6 @@ struct CaptureView: View {
         } message: { Text(message ?? "") }
         .navigationDestination(isPresented: $opensSavedDrug) {
             if let savedDrug { DrugDetailView(drug: savedDrug) }
-        }
-        .onAppear {
-            if let requested = navigation.captureChapter {
-                chapter = requested
-                navigation.captureChapter = nil
-            }
-        }
-        .onChange(of: navigation.captureChapter) { _, requested in
-            guard let requested else { return }
-            chapter = requested
-            navigation.captureChapter = nil
         }
         .onChange(of: isUnknown) { _, value in focus = value ? .unknownLabel : .scientific }
     }

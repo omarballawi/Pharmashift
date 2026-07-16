@@ -27,12 +27,12 @@ struct CaptureView: View {
     @State private var lastImageSource: ImageAcquisitionSource?
     @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
-    @State private var savedDrug: Drug?
-    @State private var opensSavedDrug = false
     @FocusState private var focus: FocusField?
+    private let onOpenSavedDrug: (UUID) -> Void
 
-    init(initialChapter: Chapter? = nil) {
+    init(initialChapter: Chapter? = nil, onOpenSavedDrug: @escaping (UUID) -> Void) {
         _chapter = State(initialValue: initialChapter ?? .other)
+        self.onOpenSavedDrug = onOpenSavedDrug
     }
 
     private var canSave: Bool {
@@ -154,9 +154,6 @@ struct CaptureView: View {
         .alert("Renlyst", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
-        .navigationDestination(isPresented: $opensSavedDrug) {
-            if let savedDrug { DrugDetailView(drug: savedDrug) }
-        }
         .onChange(of: isUnknown) { _, value in focus = value ? .unknownLabel : .scientific }
     }
 
@@ -213,10 +210,9 @@ struct CaptureView: View {
         }
         do {
             try context.save()
-            savedDrug = drug
             switch action {
             case .open:
-                opensSavedDrug = true
+                onOpenSavedDrug(drug.id)
             case .another:
                 reset()
                 message = "Saved. Ready for another drug."

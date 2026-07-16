@@ -62,6 +62,22 @@ final class AppNavigation {
         selection = .library
     }
 
+    func openDrugAfterCapture(_ id: UUID) {
+        let destinationTab = selection
+        presentedSheet = nil
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard let self else { return }
+            let route = AppRoute.drug(id)
+            switch destinationTab {
+            case .today: todayPath.append(route)
+            case .library: libraryPath.append(route)
+            case .practice: practicePath.append(route)
+            case .you: youPath.append(route)
+            }
+        }
+    }
+
     func startReview(chapter: Chapter? = nil, mode: PracticeMode? = nil) {
         reviewChapter = chapter
         requestedPracticeMode = mode ?? (chapter == nil ? .tradeToScientific : .systemSpecific)
@@ -106,10 +122,14 @@ struct AppShell: View {
         .sheet(item: $bindableNavigation.presentedSheet) { sheet in
             switch sheet {
             case .addHub:
-                NavigationStack { AddHubView() }
+                NavigationStack {
+                    AddHubView { id in navigation.openDrugAfterCapture(id) }
+                }
                     .presentationDetents([.large])
             case .capture(let chapter):
-                NavigationStack { CaptureView(initialChapter: chapter) }
+                NavigationStack {
+                    CaptureView(initialChapter: chapter) { id in navigation.openDrugAfterCapture(id) }
+                }
                     .presentationDetents([.large])
             }
         }
@@ -170,12 +190,13 @@ private struct DrugRouteDestination: View {
 private struct AddHubView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppTheme.self) private var theme
+    let onOpenSavedDrug: (UUID) -> Void
 
     var body: some View {
         List {
             Section {
                 NavigationLink {
-                    CaptureView()
+                    CaptureView(onOpenSavedDrug: onOpenSavedDrug)
                 } label: {
                     AddRouteRow(
                         icon: "plus.viewfinder",

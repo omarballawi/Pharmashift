@@ -43,7 +43,8 @@ struct ShelfQuestView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: RenlystLayout.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 8) {
-                    OrbitMark(symbol: chapter.icon, tint: theme.aqua)
+                    OrbitMark(progress: 0.64)
+                        .frame(width: 72, height: 72)
                     Text("Today’s Shelf Quest")
                         .font(.largeTitle.bold())
                     Text("Find real packages, capture them, then connect what is easiest to confuse.")

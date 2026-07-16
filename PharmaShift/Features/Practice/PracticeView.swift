@@ -654,7 +654,7 @@ struct PracticeSessionView: View {
         if index + 1 >= questions.count {
             let value = PracticeSessionResult(modeRaw: customTitle ?? mode.rawValue, answers: answers)
             result = value
-            try? LearningProgressService.record(result: value, context: context)
+            _ = try? LearningProgressService.record(result: value, context: context)
             if !reduceMotion { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         } else {
             index += 1; selectedChoice = nil; typedResponse = ""; answerRevealed = false; hasAnswered = false; memoryGrade = nil

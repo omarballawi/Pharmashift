@@ -48,25 +48,31 @@ jobs:
 
   ui-test:
     if: github.event_name != 'workflow_dispatch'
-    name: UI · ${{ matrix.test }}
+    name: UI · ${{ matrix.shard }}
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
-        test:
-          - testHomeDashboardAndFastCaptureAreReachable
-          - testOnePageDrugProfileExpandsPharmacologyAndSafety
-          - testEveryDrugTopicPushesOnceAndOneBackReturnsToOverview
-          - testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep
-          - testPhotoLibraryButtonPresentsLibraryInsteadOfCamera
-          - testBackupAndDataFlowIsReachable
-          - testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch
-          - testTrustedImportReachesSourceChooser
-          - testGeneratedPreviewAllowsSelectiveFields
-          - testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress
-          - testManualBrandAndDeletionControlsAreReachable
+        include:
+          - shard: navigation-and-profile
+            tests: >-
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testHomeDashboardAndFastCaptureAreReachable
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testOnePageDrugProfileExpandsPharmacologyAndSafety
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testEveryDrugTopicPushesOnceAndOneBackReturnsToOverview
+          - shard: capture-and-import
+            tests: >-
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testPhotoLibraryButtonPresentsLibraryInsteadOfCamera
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testStandaloneAIGeneratorReachesFieldReviewWithoutSourceStep
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testTrustedImportReachesSourceChooser
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testGeneratedPreviewAllowsSelectiveFields
+          - shard: learning-data-and-deletion
+            tests: >-
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testBackupAndDataFlowIsReachable
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testDeepSeekSaveDoesNotAlsoClearAndPersistsAcrossRelaunch
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testFocusModeShowsOneActionAndPracticeHasFiveQuestionProgress
+              -only-testing:PharmaShiftUITests/PharmaShiftUITests/testManualBrandAndDeletionControlsAreReachable
 
     steps:
       - name: Check out project
@@ -89,7 +95,7 @@ jobs:
               -configuration Debug \
               -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
               -derivedDataPath build/UITestDerivedData \
-              -only-testing:PharmaShiftUITests/PharmaShiftUITests/${{ matrix.test }} \
+              ${{ matrix.tests }} \
               test
           }
           if ! run_ui_test; then

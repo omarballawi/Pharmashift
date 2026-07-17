@@ -1,7 +1,7 @@
 # Graph Report - pharmashift  (2026-07-17)
 
 ## Corpus Check
-- 54 files · ~462,411 words
+- 54 files · ~462,413 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bf67e6d5`
+- Built from commit: `494643e5`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -199,12 +199,12 @@ Cohesion: 0.14
 Nodes (11): Final Release Gate, PharmaShift Delivery Roadmap, Phase 2 - Visual Pharmacology and Safety, Phase 3 - Backup, Restore, and Export, Phase 4 - Drug Information Import, Phase 5 - Focus, Practice, and Motivation, Renlyst 2.0 — Product and Interface Rebuild, Renlyst (+3 more)
 
 ### Community 15 - "CaseIterable"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (17): Error, FileDocument, FileWrapper, BackupDataView, BackupExportKind, complete, csv, lightweight (+9 more)
 
 ### Community 16 - "Codable"
-Cohesion: 0.27
-Nodes (5): DrugRelationshipRefreshService, DrugSearchRanker, DrugSearchResult, MockDrugSourceProvider, ModelContext
+Cohesion: 0.16
+Nodes (13): NSObject, OSStatus, KeyStoreError, readBackFailed, NameKind, brand, generic, SPLParser (+5 more)
 
 ### Community 17 - "ImageCapture.swift"
 Cohesion: 0.37
@@ -295,7 +295,7 @@ Cohesion: 0.26
 Nodes (9): RecentStudySection, RecommendedActionCard, CGFloat, Drug, Int, String, Void, TodayHero (+1 more)
 
 ### Community 41 - "DosingFrequency"
-Cohesion: 0.25
+Cohesion: 0.22
 Nodes (7): BackupImportPreviewView, Int, Void, BackupRestoreMode, merge, replace, BackupRestoreSummary
 
 ### Community 42 - "SafetyRadar"
@@ -327,8 +327,8 @@ Cohesion: 0.15
 Nodes (13): DrugCardPage, adverse, brands, counseling, doses, forms, interactions, notes (+5 more)
 
 ### Community 49 - "PracticeQuestion"
-Cohesion: 0.12
-Nodes (31): CoreFoundation, Decodable, Encodable, OSStatus, APIError, Candidate, Choice, DailyMedSearchItem (+23 more)
+Cohesion: 0.17
+Nodes (25): CoreFoundation, Decodable, Encodable, APIError, Candidate, Choice, DailyMedSearchItem, DailyMedSearchPayload (+17 more)
 
 ### Community 50 - "Color"
 Cohesion: 0.12
@@ -356,7 +356,7 @@ Nodes (12): ImageIO, EmptyStateView, LabeledValue, MasteryBadge, MetricCard, Pha
 
 ### Community 56 - "FocusField"
 Cohesion: 0.09
-Nodes (17): NSObject, AltibbiProvider, DailyMedProvider, DeepSeekFastDrugGatherService, DrugSourceProvider, DrugSourceProviderFactory, OpenFDALabelProvider, RxNormProvider (+9 more)
+Nodes (15): AltibbiProvider, DailyMedProvider, DeepSeekFastDrugGatherService, DrugRelationshipRefreshService, DrugSearchRanker, DrugSearchResult, DrugSourceProvider, DrugSourceProviderFactory (+7 more)
 
 ### Community 57 - "Unit"
 Cohesion: 0.22
@@ -502,7 +502,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.181) - this node is a cross-community bridge._
 - **Why does `SwiftData` connect `SwiftData` to `Drug`, `PracticeSessionView`, `.image`, `CaseIterable`, `FocusField`, `DrugImportView.swift`, `Foundation`, `ReportEditorView`, `ReviewRating`, `.generate`, `MemoryReviewGrade`, `HalfLifeBand`, `PracticeQuestion`, `Components.swift`, `CGPoint`, `.apply`, `Decoder`, `DrugSearchResult`, `DurationBand`?**
   _High betweenness centrality (0.076) - this node is a cross-community bridge._
-- **Why does `DrugImportView` connect `QuestionType` to `PharmacologyScale`, `ImageCapture.swift`, `String`, `PracticeSessionView`, `SafetyFlag`, `Codable`, `ReportEditorView`, `ModelAndPersistenceTests`, `FocusField`, `Void`?**
+- **Why does `DrugImportView` connect `QuestionType` to `PharmacologyScale`, `ImageCapture.swift`, `String`, `PracticeSessionView`, `SafetyFlag`, `ReportEditorView`, `ModelAndPersistenceTests`, `FocusField`, `Void`?**
   _High betweenness centrality (0.052) - this node is a cross-community bridge._
 - **What connects `today`, `library`, `practice` to the rest of the system?**
   _392 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -125,15 +125,17 @@ struct CaptureView: View {
                     Label("Save and open card", systemImage: "rectangle.portrait.and.arrow.right")
                         .frame(maxWidth: .infinity, minHeight: RenlystLayout.controlHeight)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            guard canSave, !isSaving else { return }
-                            save(.open)
-                        }
                 }
                 .buttonStyle(RenlystPrimaryButtonStyle())
-                    .disabled(!canSave || isSaving)
-                    .accessibilityIdentifier("capture.saveOpen")
-                    .accessibilityValue(saveStatus)
+                .disabled(!canSave || isSaving)
+                .accessibilityIdentifier("capture.saveOpen")
+                .accessibilityValue(saveStatus)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        guard canSave, !isSaving else { return }
+                        save(.open)
+                    }
+                )
                 Button("Save and review later") { save(.later) }
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .disabled(!canSave || isSaving)

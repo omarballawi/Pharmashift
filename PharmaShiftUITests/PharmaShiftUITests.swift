@@ -24,6 +24,33 @@ final class PharmaShiftUITests: XCTestCase {
         }
     }
 
+    private func bringTopicCardIntoView(_ element: XCUIElement, in app: XCUIApplication, maximumDrags: Int = 12) {
+        let visibleTop = app.frame.minY + 110
+        let visibleBottom = app.frame.maxY - 120
+
+        for _ in 0..<maximumDrags {
+            if element.exists {
+                let frame = element.frame
+                if element.isHittable, frame.minY >= visibleTop, frame.maxY <= visibleBottom { return }
+                dragPage(in: app, upward: frame.midY >= app.frame.midY)
+            } else {
+                // Topic cards begin below the identity and memory-anchor surfaces.
+                // A short drag avoids skipping the first row as a full swipe can.
+                dragPage(in: app, upward: true)
+            }
+        }
+    }
+
+    private func dragPage(in app: XCUIApplication, upward: Bool) {
+        let startY: CGFloat = upward ? 0.76 : 0.34
+        let endY: CGFloat = upward ? 0.52 : 0.58
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
+            .press(
+                forDuration: 0.05,
+                thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
+            )
+    }
+
     private func openManualDrugCapture(in app: XCUIApplication) {
         let add = app.buttons["today.add"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
@@ -84,8 +111,9 @@ final class PharmaShiftUITests: XCTestCase {
         let topics = ["Brands & packages", "Uses", "Forms & dosing", "Safety", "Pharmacology", "Counseling & Arabic", "Sources, notes & mastery"]
         for topic in topics {
             let link = app.buttons[topic]
-            scrollToHittable(link, in: app, maximumSwipes: 10)
+            bringTopicCardIntoView(link, in: app)
             XCTAssertTrue(link.waitForExistence(timeout: 5), topic)
+            XCTAssertTrue(link.isHittable, topic)
             link.tap()
             XCTAssertTrue(app.navigationBars[topic].waitForExistence(timeout: 5), topic)
             app.navigationBars[topic].buttons.element(boundBy: 0).tap()
@@ -239,7 +267,8 @@ final class PharmaShiftUITests: XCTestCase {
         app.launch()
         addDrug(named: "Omeprazole", in: app)
         let brands = app.buttons["Brands & packages"]
-        scrollToHittable(brands, in: app, maximumSwipes: 6)
+        bringTopicCardIntoView(brands, in: app)
+        XCTAssertTrue(brands.isHittable)
         brands.tap()
         app.buttons["brands.add"].tap()
         XCTAssertTrue(app.textFields["brand.name"].waitForExistence(timeout: 5))

@@ -75,12 +75,12 @@
   "73": ".matches",
   "74": "AIPracticePayload",
   "75": "SafetyFlag",
+  "76": "Binding",
   "77": "DrugDetailSheet",
+  "78": "Bool",
   "80": "VerificationStatus",
   "81": ".isValid",
   "83": "LocalDrugGraphView",
   "87": "BackupError",
-  "90": "Binding",
-  "92": "LibrarySummaryRow",
-  "94": "Data"
+  "90": "Binding"
 }

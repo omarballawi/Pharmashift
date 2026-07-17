@@ -78,9 +78,18 @@
   "76": "Binding",
   "77": "DrugDetailSheet",
   "78": "Bool",
+  "79": "MemoryAnchorKind",
   "80": "VerificationStatus",
   "81": ".isValid",
+  "82": "ImportStage",
   "83": "LocalDrugGraphView",
+  "84": "DrugLibraryMutationService.swift",
+  "85": "AppTab",
+  "86": "ExcretionRoute",
   "87": "BackupError",
-  "90": "Binding"
+  "88": "Bool",
+  "89": "Int",
+  "90": "Binding",
+  "91": "String",
+  "92": "NameKind"
 }

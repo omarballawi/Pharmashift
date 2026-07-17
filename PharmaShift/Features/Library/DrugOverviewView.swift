@@ -13,6 +13,17 @@ enum DrugTopic: String, CaseIterable, Identifiable, Hashable {
     case sources = "Sources, notes & mastery"
 
     var id: String { rawValue }
+    var accessibilityIdentifier: String {
+        switch self {
+        case .brands: "drug.topic.brands"
+        case .uses: "drug.topic.uses"
+        case .dosing: "drug.topic.dosing"
+        case .safety: "drug.topic.safety"
+        case .pharmacology: "drug.topic.pharmacology"
+        case .counseling: "drug.topic.counseling"
+        case .sources: "drug.topic.sources"
+        }
+    }
     var icon: String {
         switch self {
         case .brands: "shippingbox.fill"
@@ -260,6 +271,7 @@ private struct DrugTopicsList: View {
                         }
                     }
                     .buttonStyle(RenlystTileButtonStyle())
+                    .accessibilityIdentifier(topic.accessibilityIdentifier)
                     .accessibilityHint(detail(for: topic))
                 }
             }

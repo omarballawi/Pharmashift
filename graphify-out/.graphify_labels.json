@@ -92,5 +92,7 @@
   "90": "Binding",
   "91": "LibrarySummaryRow",
   "92": "Double",
-  "94": "Data"
+  "93": "Void",
+  "94": "Data",
+  "95": "AppSheet"
 }

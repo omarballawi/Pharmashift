@@ -178,6 +178,7 @@ struct RenlystPrimaryButtonStyle: ButtonStyle {
                 isEnabled ? (configuration.isPressed ? theme.inkSolid : theme.primaryAction) : theme.separator.opacity(0.24),
                 in: RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous)
             )
+            .contentShape(RoundedRectangle(cornerRadius: RenlystLayout.compactRadius, style: .continuous))
             .scaleEffect(configuration.isPressed && isEnabled && !reduceMotion ? 0.985 : 1)
             .animation(reduceMotion ? nil : RenlystMotion.press, value: configuration.isPressed)
     }

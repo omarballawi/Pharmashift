@@ -28,6 +28,7 @@ struct CaptureView: View {
     @State private var pendingCameraDraft: ImageDraft?
     @State private var message: String?
     @State private var saveStatus = "Ready"
+    @State private var isSaving = false
     @FocusState private var focus: FocusField?
     private let onOpenSavedDrug: (UUID) -> Void
 
@@ -124,17 +125,21 @@ struct CaptureView: View {
                     Label("Save and open card", systemImage: "rectangle.portrait.and.arrow.right")
                         .frame(maxWidth: .infinity, minHeight: RenlystLayout.controlHeight)
                         .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard canSave, !isSaving else { return }
+                            save(.open)
+                        }
                 }
-                    .buttonStyle(RenlystPrimaryButtonStyle())
-                    .disabled(!canSave)
+                .buttonStyle(RenlystPrimaryButtonStyle())
+                    .disabled(!canSave || isSaving)
                     .accessibilityIdentifier("capture.saveOpen")
                     .accessibilityValue(saveStatus)
                 Button("Save and review later") { save(.later) }
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .disabled(!canSave)
+                    .disabled(!canSave || isSaving)
                 Button("Add another") { save(.another) }
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .disabled(!canSave)
+                    .disabled(!canSave || isSaving)
             }
         }
         .accessibilityIdentifier("capture.screen")
@@ -162,6 +167,8 @@ struct CaptureView: View {
     }
 
     private func save(_ action: SaveAction) {
+        guard !isSaving else { return }
+        isSaving = true
         saveStatus = "Saving"
         let now = Date.now
         let drug = Drug(
@@ -226,6 +233,7 @@ struct CaptureView: View {
                 message = "Saved to your library and review queue."
             }
         } catch {
+            isSaving = false
             saveStatus = "Failed"
             message = "Could not save this drug. \(error.localizedDescription)"
         }
@@ -235,6 +243,7 @@ struct CaptureView: View {
         scientificName = ""; tradeName = ""; strength = ""; dosageForm = ""
         chapter = .other; drugClass = ""; shelfLocation = ""; unknownLabel = ""
         isUnknown = false; imageData = nil; thumbnailData = nil; additionalImageData = []; additionalThumbnailData = []; photoItems = []
+        isSaving = false
         saveStatus = "Ready"
         focus = .scientific
     }

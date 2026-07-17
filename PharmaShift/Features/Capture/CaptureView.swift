@@ -130,12 +130,6 @@ struct CaptureView: View {
                 .disabled(!canSave || isSaving)
                 .accessibilityIdentifier("capture.saveOpen")
                 .accessibilityValue(saveStatus)
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        guard canSave, !isSaving else { return }
-                        save(.open)
-                    }
-                )
                 Button("Save and review later") { save(.later) }
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .disabled(!canSave || isSaving)

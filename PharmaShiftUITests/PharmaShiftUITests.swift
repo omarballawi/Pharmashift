@@ -8,6 +8,22 @@ final class PharmaShiftUITests: XCTestCase {
         }
     }
 
+    private func centerForTap(_ element: XCUIElement, in app: XCUIApplication, maximumSwipes: Int = 4) {
+        scrollToHittable(element, in: app, maximumSwipes: maximumSwipes)
+        for _ in 0..<maximumSwipes {
+            guard element.exists else { return }
+            let frame = element.frame
+            let visibleTop = app.frame.minY + 120
+            let visibleBottom = app.frame.maxY - 140
+            if element.isHittable, frame.minY >= visibleTop, frame.maxY <= visibleBottom { return }
+            if frame.midY >= app.frame.midY {
+                app.swipeUp()
+            } else {
+                app.swipeDown()
+            }
+        }
+    }
+
     private func openManualDrugCapture(in app: XCUIApplication) {
         let add = app.buttons["today.add"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
@@ -26,8 +42,9 @@ final class PharmaShiftUITests: XCTestCase {
         scientific.typeText(name)
         if app.keyboards.buttons["Return"].exists { app.keyboards.buttons["Return"].tap() }
         let save = app.buttons["capture.saveOpen"]
-        scrollToHittable(save, in: app, maximumSwipes: 5)
+        centerForTap(save, in: app, maximumSwipes: 5)
         XCTAssertTrue(save.isEnabled)
+        XCTAssertTrue(save.isHittable, "Save control was not centered for tapping. Frame: \(save.frame)")
         save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["drug.overview"].waitForExistence(timeout: 5))
     }

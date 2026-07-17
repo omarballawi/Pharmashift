@@ -20,8 +20,8 @@
     "semantic_hash": ""
   },
   "PharmaShiftUITests/PharmaShiftUITests.swift": {
-    "mtime": 1784241742.8683312,
-    "ast_hash": "26bfd78a3fba4c41c633103c7bfd2613",
+    "mtime": 1784249440.574294,
+    "ast_hash": "910d28c7b7adb90f60f281e41387a926",
     "semantic_hash": ""
   },
   "PharmaShift/App/AppShell.swift": {
@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "PharmaShift/Features/Capture/CaptureView.swift": {
-    "mtime": 1784248549.2203364,
-    "ast_hash": "017c879c255c112cc71aff9a40b9ce7b",
+    "mtime": 1784249440.5695865,
+    "ast_hash": "2053c41bb3868b565239aaa8645c9feb",
     "semantic_hash": ""
   },
   "PharmaShift/Features/Home/HomeView.swift": {

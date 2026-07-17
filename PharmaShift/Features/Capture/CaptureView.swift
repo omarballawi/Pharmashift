@@ -120,7 +120,11 @@ struct CaptureView: View {
             }
 
             Section {
-                Button { save(.open) } label: { Label("Save and open card", systemImage: "rectangle.portrait.and.arrow.right") }
+                Button { save(.open) } label: {
+                    Label("Save and open card", systemImage: "rectangle.portrait.and.arrow.right")
+                        .frame(maxWidth: .infinity, minHeight: RenlystLayout.controlHeight)
+                        .contentShape(Rectangle())
+                }
                     .buttonStyle(RenlystPrimaryButtonStyle())
                     .disabled(!canSave)
                     .accessibilityIdentifier("capture.saveOpen")
